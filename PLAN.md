@@ -2,6 +2,39 @@
 
 A tiny, self-use Git GUI for Mac. Local web app. Read-mostly viewer with a few action buttons.
 
+## Why this exists
+
+I (the user) work on a Mac in the Cursor IDE. The new agents window does not
+load VSCode extensions, so my usual Git Graph is gone. lazygit is "a faster
+CLI", not a GUI — it doesn't translate git's concepts into something I can
+glance at. Existing GUIs (GitUp / Fork / Sublime Merge) are either too old
+or too full of features I don't want.
+
+So this is a single-user tool. Every design call should optimize for
+"one person, one Mac, this one repo at a time". If a feature would help
+strangers, that is not a reason to build it.
+
+## What I actually want
+
+Must have:
+- See all branches and recent commits at a glance
+- Click a branch → check it out
+- Click a commit → check it out (detached HEAD is fine)
+
+Nice to have (but typing the command is not painful):
+- Push current branch to `origin`
+
+Occasional:
+- Click a commit → see which files changed and the diff
+
+## Out of scope (do not add these)
+
+- rebase / cherry-pick / merge / stash UI — these I delegate to an AI agent;
+  keep them out of the GUI on purpose
+- multi-repo management, settings panels, themes, plugins
+- anything that requires a build step on the frontend
+- anything that requires packaging / distribution / auto-update
+
 ## Stack
 
 - **Runtime:** Bun (native TS + JSX, fast cold start, no toolchain ceremony)
@@ -10,10 +43,6 @@ A tiny, self-use Git GUI for Mac. Local web app. Read-mostly viewer with a few a
 - **Styling:** plain CSS in a single `<style>` block
 - **Git access:** `Bun.spawn` shelling out to the system `git` binary
 - **Distribution:** clone repo, `bun install`, `bun run dev`. No packaging.
-
-Non-goals (carry over from product brief):
-- No rebase / cherry-pick / merge / stash UI
-- No multi-repo, no settings, no themes, no plugins
 
 ## Architecture (one paragraph)
 
