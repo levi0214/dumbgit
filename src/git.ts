@@ -26,16 +26,23 @@ export function getCurrentRepo(): string {
 
 async function spawnGit(
   args: string[],
+  cwd: string = repoRoot,
 ): Promise<{ code: number; stdout: string; stderr: string }> {
   const proc = Bun.spawn(['git', ...args], {
     stdout: 'pipe',
     stderr: 'pipe',
-    cwd: repoRoot,
+    cwd,
   })
   const stdout = await new Response(proc.stdout).text()
   const stderr = await new Response(proc.stderr).text()
   const code = await proc.exited
   return { code, stdout, stderr }
+}
+
+/** Probe `dir` without changing the current repo. */
+export async function isGitRepo(dir: string): Promise<boolean> {
+  const { code } = await spawnGit(['rev-parse', '--git-dir'], dir)
+  return code === 0
 }
 
 async function gitOrThrow(args: string[]): Promise<string> {

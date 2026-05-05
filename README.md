@@ -41,6 +41,10 @@ Then it's just `cd repo && dumbgit`.
 If the cwd isn't a Git working tree, dumbgit prints a single `git` error
 and exits with code 1.
 
+One server, one current repo: switching the repo from any tab also
+changes what every other tab sees on the next request. If you really
+need two side-by-side, start a second instance on another port.
+
 ## What you get
 
 - HEAD line, colored `git log --graph` (ANSI lanes from Git), last 50 commits

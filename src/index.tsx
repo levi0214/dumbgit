@@ -15,6 +15,7 @@ import {
   getCurrentRepo,
   gitDir,
   headInfo,
+  isGitRepo,
   logGraphRows,
   push,
   setCurrentRepo,
@@ -51,15 +52,6 @@ function initialRepoFromArgv(): string {
   const raw = pos[0]
   if (!raw) return process.cwd()
   return path.resolve(expandUser(raw))
-}
-
-async function isGitRepo(dir: string): Promise<boolean> {
-  const proc = Bun.spawn(['git', 'rev-parse', '--git-dir'], {
-    cwd: dir,
-    stdout: 'pipe',
-    stderr: 'pipe',
-  })
-  return (await proc.exited) === 0
 }
 
 async function loadGraph(): Promise<GraphFragmentProps> {
@@ -110,6 +102,8 @@ try {
   console.error(`run dumbgit from inside a git working tree`)
   process.exit(1)
 }
+
+bumpRecent(getCurrentRepo())
 
 async function attachWatcher() {
   state.closeWatch?.()
@@ -174,14 +168,13 @@ app.post('/api/repo', async (c) => {
   await attachWatcher()
   bumpRecent(candidate)
   const graph = await loadGraph()
-  const root = getCurrentRepo()
 
   return c.html(
     <Fragment>
-      <RepoBar root={root} recents={loadRecents()} oob />
+      <RepoBar root={candidate} recents={loadRecents()} oob />
       <GraphFragment {...graph} swapOob />
       <DiffPanel state="empty" swapOob />
-      <StatusOob info={`opened ${path.basename(root)}`} />
+      <StatusOob info={`opened ${path.basename(candidate)}`} />
     </Fragment>,
     200,
   )
