@@ -1,0 +1,17 @@
+{
+  "name": "dumbgit",
+  "module": "src/index.tsx",
+  "type": "module",
+  "scripts": {
+    "dev": "bun run src/index.tsx"
+  },
+  "devDependencies": {
+    "bun-types": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "hono": "^4.12.17"
+  }
+}

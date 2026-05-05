@@ -26,7 +26,7 @@ dumbgit/
   package.json
   tsconfig.json
   src/
-    index.ts        # Hono app + route registrations + server start
+    index.tsx       # Hono app + route registrations + server start (Bun needs .tsx for JSX)
     git.ts          # thin wrappers around `git` CLI; returns typed data
     views/
       layout.tsx    # full-page shell (head, htmx script, css)
@@ -46,7 +46,7 @@ Each step is small enough to plan and execute on its own. We will produce a sepa
 
 - `bun init`, add Hono, configure `tsconfig.json` for JSX (`jsxImportSource: "hono/jsx"`)
 - `bun run dev` boots Hono on `localhost:7777`, prints the URL
-- `/` returns a "hello dumbgit" SSR'd page so we can verify JSX + htmx loading
+- `/` returns a "hello dumbgit" SSR'd page so we can verify JSX + htmx loading (`src/index.tsx`; Bun only parses JSX in `.tsx`)
 
 ### 2. Git wrapper (`src/git.ts`)
 
