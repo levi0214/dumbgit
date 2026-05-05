@@ -40,61 +40,59 @@ Stay under ~500 lines total for the first cut.
 
 ## Steps
 
-Each step is small enough to plan and execute on its own. We will produce a separate detailed plan for each before doing the work.
+Steps are vertical slices, not layers. Every step ends with a working version
+of dumbgit you can actually use. Stop at any step and you still have a tool.
 
-### 1. Project skeleton
+Each step gets its own detailed execution plan when we start it.
 
-- `bun init`, add Hono, configure `tsconfig.json` for JSX (`jsxImportSource: "hono/jsx"`)
-- `bun run dev` boots Hono on `localhost:7777`, prints the URL
-- `/` returns a "hello dumbgit" SSR'd page so we can verify JSX + htmx loading (`src/index.tsx`; Bun only parses JSX in `.tsx`)
+### Step 1 — Skeleton ✅
 
-### 2. Git wrapper (`src/git.ts`)
+`bun init`, Hono on `localhost:7777`, `src/index.tsx` SSR's a "hello dumbgit"
+page that loads htmx. Verifies the entire toolchain (Bun, JSX, Hono, htmx CDN)
+works end-to-end.
 
-Minimal surface, one function per question:
+Done. Commit `17d6cbf`.
 
-- `listBranches()` → `{ name, isCurrent, sha }[]`
-- `headInfo()` → `{ kind: "branch" | "detached", name?, sha }`
-- `logGraph(limit = 50)` → raw colored text from `git log --graph --oneline --all --decorate --color=always -n <limit>`, plus a parsed `{ sha, refs[] }` per line for click targets
-- `commitDetails(sha)` → `{ subject, author, date, files: { path, status }[], diff: string }`
-- `checkoutBranch(name)` / `checkoutCommit(sha)` / `push()` → `{ ok, stderr }`
+### Step 2 — Viewer (read-only)
 
-All of these are `Bun.spawn` calls. No streaming, no progress bars. If git fails, return its stderr verbatim.
+After this step you can open `http://localhost:7777` and see your repo at a
+glance. Pure viewer, no buttons. This already covers the most common use case
+("just let me see what's going on").
 
-### 3. Main page (`/`) — graph + branches + empty diff panel
+- `src/git.ts`: `headInfo()`, `listBranches()`, `logGraph(limit = 50)` via `Bun.spawn`
+- `src/views/layout.tsx`: full page shell (head, htmx script, css, dark monospace)
+- `src/views/graph.tsx`: header showing `HEAD @ <branch>` or `HEAD detached @ <sha>`,
+  branches list, and a `<pre>` of the parsed `git log --graph --oneline --all --decorate`
+- `GET /` renders the whole page; `GET /fragment/graph` returns just the graph block (used by step 3)
+- `R` key + a small "↻" button refresh the graph fragment
 
-- Two-column layout: left = branches list + log graph; right = diff panel (empty placeholder until a commit is clicked)
-- Header shows `HEAD @ <branch>` or `HEAD detached @ <sha>` so detached state is impossible to miss
-- Graph rendered as a `<pre>` of the parsed log; each line wraps the sha in a clickable element
-- Branches list: clicking a branch fires `hx-post="/api/checkout/branch/:name"` with `hx-target="#main"` to swap in a re-rendered page fragment
-- A "↻ Refresh" button + `hx-trigger="visibilitychange from:document"` so focusing the window also refreshes
+Decide here: `--color=never` and apply our own CSS classes from line content,
+vs. `--color=always` plus a tiny ANSI→HTML converter. Lean toward the former.
 
-### 4. Action endpoints
+### Step 3 — Navigator (the must-have actions)
 
-- `POST /api/checkout/branch/:name` → run checkout, re-render graph + header, return as HTML fragment
-- `POST /api/checkout/commit/:sha` → same, but to a sha (detached HEAD)
-- `POST /api/push` → run `git push`, return a status toast fragment with stderr if non-zero
-- All endpoints return HTML fragments (no JSON), since htmx swaps HTML directly
+After this step, clicking a branch or commit checks it out. This is the point
+where dumbgit covers all three must-haves from the brief.
 
-### 5. Diff panel
+- Extend `src/git.ts`: `checkoutBranch(name)`, `checkoutCommit(sha)` returning `{ ok, stderr }`
+- `POST /api/checkout/branch/:name`, `POST /api/checkout/commit/:sha`
+- Each endpoint runs the action, then returns the re-rendered graph fragment for `hx-target="#graph"`
+- Wire branches list and graph sha-elements with htmx (`hx-post`, `hx-target="#graph"`, `hx-swap="outerHTML"`)
+- `src/views/status.tsx`: a small `#status` slot. Failures (e.g. dirty working tree)
+  return the raw git stderr into this slot. No wrapping, no hand-holding.
 
-- `GET /api/diff/:sha` → renders `commitDetails(sha)` as: subject + meta line, file list, then a colorized `<pre>` of the unified diff
-- Clicking a sha in the graph fires `hx-get="/api/diff/:sha"` with `hx-target="#diff"`
-- ANSI color from git → HTML: tiny inline converter for the few escape codes git emits, or pass `--color=never` and apply CSS classes ourselves. Decide during this step.
+Defer to AI agent: stash, force-checkout, anything beyond plain `git checkout`.
 
-### 6. Polish
+### Step 4 — Inspector & ship (diff, push, launcher)
 
-- Error handling: any git error becomes a small red toast fragment swapped into a `#status` slot, showing raw stderr. No swallowing.
-- Keyboard: `R` for refresh, `Esc` to clear diff panel selection. Optional, only if it's a few lines.
-- Styling: monospace everywhere, dark default, ~3 colors total. No CSS framework.
+After this step, dumbgit is feature-complete for the brief. Add diff viewing,
+push, and a one-command launcher so you can actually use it day to day.
 
-### 7. Launcher
-
-- `bun run dumbgit` starts the server in the cwd and runs `open http://localhost:7777` so a browser window pops up
-- Print one line on stdout: the URL and how to quit (`Ctrl-C`)
-- That's it — no daemon, no PID file, no menubar icon
-
-## Open questions (defer to their step)
-
-- Step 2: do we want `--color=always` and HTML-escape the ANSI, or `--color=never` and re-color in CSS? Probably the latter is cleaner, decide when we get there.
-- Step 3: when checkout fails because the working tree is dirty, do we just show stderr, or do we offer a one-click "git stash && retry"? Initial answer: just show stderr. Stash is on the "AI agent does it" list.
-- Step 7: detect "is this a git repo?" on startup and print a clear error if not. Trivial, do it in step 7.
+- Extend `src/git.ts`: `commitDetails(sha)` → `{ subject, author, date, files[], diff }`; `push()` → `{ ok, stderr }`
+- `src/views/diff.tsx`: subject + meta line, file list, unified diff in a `<pre>`
+- `GET /api/diff/:sha` returns the diff fragment; sha-elements in the graph fire `hx-get` with `hx-target="#diff"`
+- `POST /api/push` runs `git push`, returns a status fragment (success or stderr)
+- "Push" button in the header
+- Launcher: `bun run dumbgit` (script in `package.json`) starts the server in `process.cwd()` and runs `open http://localhost:7777`. Prints one line: URL and "Ctrl-C to quit"
+- On startup, check `git rev-parse --git-dir`; if not a repo, print a clear error and exit non-zero
+- Optional polish if cheap: `Esc` clears the diff panel; press `P` to push
