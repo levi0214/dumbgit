@@ -74,6 +74,34 @@ body {
   border-bottom: 1px solid var(--border);
   background: #2d2d30;
   color: var(--accent);
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.head-dot {
+  color: #3ddc6c;
+  font-size: 10px;
+  line-height: 1;
+  text-shadow: 0 0 6px rgba(61, 220, 108, 0.7);
+}
+.head-label {
+  font-weight: 700;
+  color: #ffffff;
+}
+.head-sep {
+  color: var(--muted);
+}
+.head-sha {
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 12px;
+}
+.branch-current-dot {
+  color: #3ddc6c;
+  font-size: 8px;
+  margin-right: 4px;
+  vertical-align: 1px;
+  text-shadow: 0 0 5px rgba(61, 220, 108, 0.7);
 }
 .worktree-panel {
   border-bottom: 1px solid var(--border);
@@ -228,13 +256,13 @@ body {
 .branch-prefix {
   flex-shrink: 0;
   font-size: 12px;
-  font-weight: 600;
   color: #9cdcfe;
   background: rgba(156, 220, 254, 0.12);
   border-radius: 3px;
   padding: 0 5px;
 }
 .log-row-head .branch-prefix {
+  font-weight: 700;
   color: #ffffff;
   background: rgba(86, 156, 214, 0.35);
 }

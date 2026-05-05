@@ -219,6 +219,11 @@ function GraphCommitLine(props: { row: GraphCommitRow }) {
       <div class="msg-cell">
         {branchPrefix ? (
           <span class="branch-prefix" title={`branch: ${branchPrefix}`}>
+            {isHead ? (
+              <span class="branch-current-dot" aria-hidden="true">
+                ●
+              </span>
+            ) : null}
             {branchPrefix}
             <span class="branch-sep"> · </span>
           </span>
@@ -267,12 +272,20 @@ function GraphOtherLine(props: { ansi: string; betweenInHistory: boolean }) {
   )
 }
 
-function headLine(head: HeadInfo): string {
-  const short = head.sha.slice(0, 7)
-  if (head.kind === 'branch') {
-    return `HEAD @ ${head.name} · ${short}`
-  }
-  return `HEAD detached @ ${short}`
+function HeadLine(props: { head: HeadInfo }) {
+  const short = props.head.sha.slice(0, 7)
+  const label =
+    props.head.kind === 'branch' ? props.head.name : '(detached)'
+  return (
+    <>
+      <span class="head-dot" aria-hidden="true">
+        ●
+      </span>
+      <span class="head-label">{label}</span>
+      <span class="head-sep"> · </span>
+      <code class="head-sha">{short}</code>
+    </>
+  )
 }
 
 function LogLines(props: { rows: GraphRow[] }) {
@@ -310,7 +323,9 @@ export function GraphFragment(props: GraphFragmentProps) {
 
   return (
     <div id="graph" class="graph-root">
-      <div class="graph-head">{headLine(head)}</div>
+      <div class="graph-head">
+        <HeadLine head={head} />
+      </div>
       <WorkTreeFragment {...worktree} />
       <div class="graph-body">
         <LogLines rows={rows} />
