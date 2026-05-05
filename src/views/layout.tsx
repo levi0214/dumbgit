@@ -1,3 +1,4 @@
+/** @jsxImportSource hono/jsx */
 import { raw } from 'hono/html'
 
 const CSS = `
@@ -7,6 +8,8 @@ const CSS = `
   --muted: #858585;
   --accent: #569cd6;
   --border: #333;
+  --error: #f48771;
+  --success: #6a9955;
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; min-height: 100%; }
@@ -18,12 +21,14 @@ body {
   color: var(--fg);
 }
 .page {
-  max-width: 1200px;
+  max-width: 1700px;
   margin: 0 auto;
   padding: 12px 16px 24px;
 }
 .toolbar {
   margin-bottom: 12px;
+  display: flex;
+  gap: 8px;
 }
 .toolbar button {
   font: inherit;
@@ -38,6 +43,15 @@ body {
   border-color: var(--accent);
   color: var(--accent);
 }
+.main-grid {
+  display: grid;
+  grid-template-columns: minmax(420px, 1fr) minmax(420px, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+@media (max-width: 1000px) {
+  .main-grid { grid-template-columns: 1fr; }
+}
 .graph-root {
   border: 1px solid var(--border);
   border-radius: 6px;
@@ -50,7 +64,7 @@ body {
 .graph-root.graph-error .msg {
   margin: 0;
   white-space: pre-wrap;
-  color: #f48771;
+  color: var(--error);
 }
 .graph-head {
   padding: 8px 12px;
@@ -62,7 +76,7 @@ body {
   display: grid;
   grid-template-columns: 220px 1fr;
   min-height: 200px;
-  max-height: calc(100vh - 120px);
+  max-height: calc(100vh - 140px);
 }
 .branch-list {
   margin: 0;
@@ -117,31 +131,125 @@ body {
 .sha-btn:hover {
   color: #9cdcfe;
 }
+.msg-btn {
+  font: inherit;
+  border: none;
+  background: transparent;
+  color: var(--fg);
+  cursor: pointer;
+  padding: 0;
+  text-align: left;
+  white-space: pre;
+}
+.msg-btn:hover {
+  color: var(--accent);
+}
 .log-lines.empty {
   color: var(--muted);
 }
 .status-slot {
   margin-bottom: 8px;
 }
-.status-slot .status-inner {
+.status-inner {
   margin: 0;
   padding: 8px 12px;
   border-radius: 4px;
-  border: 1px solid #f48771;
-  background: #3c2020;
-  color: #f48771;
   white-space: pre-wrap;
   font-family: inherit;
   font-size: 12px;
 }
+.status-error {
+  border: 1px solid var(--error);
+  background: #3c2020;
+  color: var(--error);
+}
+.status-info {
+  border: 1px solid var(--success);
+  background: #1f2d1f;
+  color: var(--success);
+}
+.diff-panel {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #252526;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 140px);
+}
+.diff-empty {
+  padding: 16px;
+  color: var(--muted);
+}
+.diff-panel.diff-error .diff-body {
+  color: var(--error);
+}
+.diff-head {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  background: #2d2d30;
+}
+.diff-subject {
+  color: var(--accent);
+  word-break: break-word;
+}
+.diff-meta {
+  color: var(--muted);
+  font-size: 11px;
+}
+.diff-files {
+  margin: 0;
+  padding: 8px 12px;
+  list-style: none;
+  border-bottom: 1px solid var(--border);
+  max-height: 30vh;
+  overflow-y: auto;
+}
+.diff-files li {
+  display: flex;
+  gap: 8px;
+}
+.file-status {
+  display: inline-block;
+  width: 1.5em;
+  flex-shrink: 0;
+  color: var(--muted);
+}
+.file-A { color: var(--success); }
+.file-D { color: var(--error); }
+.file-M { color: #dcdcaa; }
+.file-R { color: var(--accent); }
+.file-path { word-break: break-all; }
+.diff-body {
+  margin: 0;
+  padding: 10px 12px;
+  overflow: auto;
+  white-space: pre;
+  font-family: inherit;
+  font-size: 12px;
+  flex: 1;
+  min-height: 0;
+}
 `
 
-const REFRESH_KEY_SCRIPT = `
+const EMPTY_DIFF_HTML =
+  '<div id="diff" class="diff-panel diff-empty">(select a commit message to see its diff)</div>'
+
+const KEY_SCRIPT =
+  `const EMPTY_DIFF = ${JSON.stringify(EMPTY_DIFF_HTML)};` +
+  `
 document.addEventListener('keydown', function (e) {
   if (e.target.closest('input, textarea')) return;
-  if (e.key === 'r' || e.key === 'R') {
+  const k = e.key;
+  if (k === 'r' || k === 'R') {
     e.preventDefault();
     document.getElementById('refresh-btn')?.click();
+  } else if (k === 'p' || k === 'P') {
+    e.preventDefault();
+    document.getElementById('push-btn')?.click();
+  } else if (k === 'Escape') {
+    const d = document.getElementById('diff');
+    if (d) d.outerHTML = EMPTY_DIFF;
   }
 });
 `
@@ -161,13 +269,13 @@ export function Layout(props: { children: JSX.Element }) {
       </head>
       <body>
         {props.children}
-        <script>{raw(REFRESH_KEY_SCRIPT)}</script>
+        <script>{raw(KEY_SCRIPT)}</script>
       </body>
     </html>
   )
 }
 
-export function RefreshToolbar() {
+export function Toolbar() {
   return (
     <div class="toolbar">
       <button
@@ -179,6 +287,15 @@ export function RefreshToolbar() {
         hx-swap="outerHTML"
       >
         ↻ refresh
+      </button>
+      <button
+        type="button"
+        id="push-btn"
+        title="Push current branch to origin (P)"
+        hx-post="/api/push"
+        hx-swap="none"
+      >
+        ↑ push
       </button>
     </div>
   )

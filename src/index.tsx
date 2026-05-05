@@ -1,16 +1,21 @@
+/** @jsxImportSource hono/jsx */
 import { Fragment } from 'hono/jsx'
 import { Hono } from 'hono'
 import {
   GitError,
   checkoutBranch,
   checkoutCommit,
+  commitDetails,
+  ensureGitRepo,
   headInfo,
   listBranches,
   logGraph,
+  push,
 } from './git'
 import { GraphFragment } from './views/graph'
 import type { GraphFragmentProps } from './views/graph'
-import { Layout, RefreshToolbar } from './views/layout'
+import { DiffPanel } from './views/diff'
+import { Layout, Toolbar } from './views/layout'
 import { StatusOob } from './views/status'
 
 const PORT = 7777
@@ -32,6 +37,15 @@ async function loadGraph(): Promise<GraphFragmentProps> {
   }
 }
 
+try {
+  await ensureGitRepo()
+} catch (e) {
+  const msg = e instanceof Error ? e.message : String(e)
+  console.error(`dumbgit: ${msg}`)
+  console.error(`run dumbgit from inside a git working tree`)
+  process.exit(1)
+}
+
 const app = new Hono()
 
 app.get('/', async (c) => {
@@ -39,9 +53,12 @@ app.get('/', async (c) => {
   return c.html(
     <Layout>
       <div class="page">
-        <RefreshToolbar />
+        <Toolbar />
         <div id="status" class="status-slot"></div>
-        <GraphFragment {...graph} />
+        <div class="main-grid">
+          <GraphFragment {...graph} />
+          <DiffPanel state="empty" />
+        </div>
       </div>
     </Layout>,
     200,
@@ -60,7 +77,7 @@ app.post('/api/checkout/branch', async (c) => {
     return c.html(
       <Fragment>
         <GraphFragment {...graph} />
-        <StatusOob stderr="missing branch name" />
+        <StatusOob error="missing branch name" />
       </Fragment>,
       200,
     )
@@ -70,7 +87,7 @@ app.post('/api/checkout/branch', async (c) => {
   return c.html(
     <Fragment>
       <GraphFragment {...next} />
-      <StatusOob stderr={r.ok ? undefined : r.stderr} />
+      <StatusOob error={r.ok ? undefined : r.stderr} />
     </Fragment>,
     200,
   )
@@ -83,7 +100,7 @@ app.post('/api/checkout/commit', async (c) => {
     return c.html(
       <Fragment>
         <GraphFragment {...graph} />
-        <StatusOob stderr="missing commit sha" />
+        <StatusOob error="missing commit sha" />
       </Fragment>,
       200,
     )
@@ -93,14 +110,37 @@ app.post('/api/checkout/commit', async (c) => {
   return c.html(
     <Fragment>
       <GraphFragment {...next} />
-      <StatusOob stderr={r.ok ? undefined : r.stderr} />
+      <StatusOob error={r.ok ? undefined : r.stderr} />
     </Fragment>,
     200,
   )
 })
 
-console.log(`http://localhost:${PORT}`)
+app.get('/api/diff/:sha', async (c) => {
+  const sha = c.req.param('sha')
+  const r = await commitDetails(sha)
+  if (!r.ok) {
+    return c.html(<DiffPanel state="error" sha={sha} stderr={r.stderr} />, 200)
+  }
+  return c.html(<DiffPanel state="loaded" sha={sha} details={r.value} />, 200)
+})
+
+app.post('/api/push', async (c) => {
+  const r = await push()
+  if (r.ok) {
+    return c.html(<StatusOob info={r.message} />, 200)
+  }
+  return c.html(<StatusOob error={r.stderr} />, 200)
+})
+
+console.log(`dumbgit on http://localhost:${PORT}  (ctrl-c to quit)`)
 Bun.serve({
   port: PORT,
   fetch: app.fetch,
 })
+
+if (process.argv.includes('--open')) {
+  setTimeout(() => {
+    Bun.spawn(['open', `http://localhost:${PORT}`])
+  }, 200)
+}

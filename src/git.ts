@@ -124,3 +124,73 @@ export async function checkoutCommit(
     stderr: stderr.trim() || `git switch --detach failed (${code})`,
   }
 }
+
+export type CommitFile = { status: string; path: string }
+export type CommitDetails = {
+  subject: string
+  author: string
+  date: string
+  files: CommitFile[]
+  diff: string
+}
+
+export async function commitDetails(
+  sha: string,
+): Promise<{ ok: true; value: CommitDetails } | { ok: false; stderr: string }> {
+  const meta = await spawnGit(['log', '-1', '--format=%s%n%an%n%ai', sha])
+  if (meta.code !== 0) {
+    return { ok: false, stderr: meta.stderr.trim() || `git log failed (${meta.code})` }
+  }
+  const [subject = '', author = '', date = ''] = meta.stdout.trimEnd().split('\n')
+
+  const fileShow = await spawnGit([
+    'show',
+    '--name-status',
+    '--format=',
+    '--no-color',
+    sha,
+  ])
+  if (fileShow.code !== 0) {
+    return {
+      ok: false,
+      stderr: fileShow.stderr.trim() || `git show --name-status failed (${fileShow.code})`,
+    }
+  }
+  const files: CommitFile[] = []
+  for (const line of fileShow.stdout.split('\n')) {
+    if (!line.trim()) continue
+    const tabs = line.split('\t')
+    const status = tabs[0] ?? ''
+    const path = tabs.slice(1).join(' → ')
+    if (path) files.push({ status, path })
+  }
+
+  const patch = await spawnGit(['show', '--format=', '--no-color', sha])
+  if (patch.code !== 0) {
+    return {
+      ok: false,
+      stderr: patch.stderr.trim() || `git show failed (${patch.code})`,
+    }
+  }
+
+  return {
+    ok: true,
+    value: { subject, author, date, files, diff: patch.stdout.trimEnd() },
+  }
+}
+
+export async function push(): Promise<
+  { ok: true; message: string } | { ok: false; stderr: string }
+> {
+  const { code, stdout, stderr } = await spawnGit(['push'])
+  const out = stderr.trim() || stdout.trim() || '(no output)'
+  if (code === 0) return { ok: true, message: out }
+  return { ok: false, stderr: out }
+}
+
+export async function ensureGitRepo(): Promise<void> {
+  const { code, stderr } = await spawnGit(['rev-parse', '--git-dir'])
+  if (code !== 0) {
+    throw new GitError(stderr.trim() || 'not a git repository', code)
+  }
+}

@@ -3,7 +3,8 @@
   "module": "src/index.tsx",
   "type": "module",
   "scripts": {
-    "dev": "bun run src/index.tsx"
+    "dev": "bun run src/index.tsx",
+    "dumbgit": "bun run src/index.tsx --open"
   },
   "devDependencies": {
     "bun-types": "latest"

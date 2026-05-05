@@ -112,16 +112,26 @@ where dumbgit covers all three must-haves from the brief.
 
 Defer to AI agent: stash, force-checkout, anything beyond plain `git checkout`.
 
-### Step 4 — Inspector & ship (diff, push, launcher)
+### Step 4 — Inspector & ship (diff, push, launcher) ✅
 
-After this step, dumbgit is feature-complete for the brief. Add diff viewing,
-push, and a one-command launcher so you can actually use it day to day.
+dumbgit is now feature-complete for the brief. Diff viewer on the right,
+push from the toolbar, and a one-command launcher.
 
-- Extend `src/git.ts`: `commitDetails(sha)` → `{ subject, author, date, files[], diff }`; `push()` → `{ ok, stderr }`
-- `src/views/diff.tsx`: subject + meta line, file list, unified diff in a `<pre>`
-- `GET /api/diff/:sha` returns the diff fragment; sha-elements in the graph fire `hx-get` with `hx-target="#diff"`
-- `POST /api/push` runs `git push`, returns a status fragment (success or stderr)
-- "Push" button in the header
-- Launcher: `bun run dumbgit` (script in `package.json`) starts the server in `process.cwd()` and runs `open http://localhost:7777`. Prints one line: URL and "Ctrl-C to quit"
-- On startup, check `git rev-parse --git-dir`; if not a repo, print a clear error and exit non-zero
-- Optional polish if cheap: `Esc` clears the diff panel; press `P` to push
+- `src/git.ts` adds `commitDetails(sha)`, `push()`, `ensureGitRepo()`
+- `src/views/diff.tsx`: subject + meta line + file list + unified diff `<pre>`
+- `GET /api/diff/:sha` → `DiffPanel`; the message portion of each log line
+  triggers `hx-get` into `#diff` (the SHA itself stays as checkout from step 3,
+  since "click commit → checkout" is the must-have)
+- `POST /api/push` runs `git push` and returns only a `StatusOob` (info on
+  success, error on failure). `hx-swap="none"` on the button lets the OOB do all the work.
+- Toolbar: refresh + push side by side
+- Launcher: `bun run dumbgit` starts the server and opens the browser; `dev`
+  stays open-less for development. The opening uses an `--open` argv flag
+  consumed by `index.tsx`.
+- On startup, `ensureGitRepo()` runs `git rev-parse --git-dir` and exits 1
+  with a single error line if the cwd is not inside a git working tree.
+- Keyboard polish: `R` refresh, `P` push, `Esc` clears the diff panel
+- Every JSX file carries a `/** @jsxImportSource hono/jsx */` pragma. Bun 1.0
+  resolves `tsconfig.json` relative to the cwd, not the source file, so
+  `bun run /path/to/dumbgit/src/index.tsx` from another repo would otherwise
+  fall back to React. The pragma makes JSX runtime selection cwd-independent.

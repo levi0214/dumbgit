@@ -1,3 +1,4 @@
+/** @jsxImportSource hono/jsx */
 import type { Branch, HeadInfo } from '../git'
 
 export type GraphFragmentProps =
@@ -12,7 +13,7 @@ function headLine(head: HeadInfo): string {
   return `HEAD detached @ ${short}`
 }
 
-/** First plausible abbreviated/full commit hash on an `git log --oneline --graph` line. */
+/** First plausible abbreviated/full commit hash on a `git log --oneline --graph` line. */
 function splitCommitLine(
   line: string,
 ): { before: string; sha: string; after: string } | null {
@@ -29,20 +30,31 @@ function GraphLogLine(props: { line: string }) {
   const parts = splitCommitLine(props.line)
   if (!parts) return <>{props.line}</>
 
-  const url = `/api/checkout/commit?sha=${encodeURIComponent(parts.sha)}`
+  const checkoutUrl = `/api/checkout/commit?sha=${encodeURIComponent(parts.sha)}`
+  const diffUrl = `/api/diff/${encodeURIComponent(parts.sha)}`
   return (
     <>
       {parts.before}
       <button
         type="button"
         class="sha-btn"
-        hx-post={url}
+        title="checkout this commit (detached HEAD)"
+        hx-post={checkoutUrl}
         hx-target="#graph"
         hx-swap="outerHTML"
       >
         {parts.sha}
       </button>
-      {parts.after}
+      <button
+        type="button"
+        class="msg-btn"
+        title="show diff"
+        hx-get={diffUrl}
+        hx-target="#diff"
+        hx-swap="outerHTML"
+      >
+        {parts.after}
+      </button>
     </>
   )
 }
