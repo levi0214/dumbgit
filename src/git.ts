@@ -13,8 +13,6 @@ export type HeadInfo =
   | { kind: 'branch'; name: string; sha: string }
   | { kind: 'detached'; sha: string }
 
-export type Branch = { name: string; isCurrent: boolean; sha: string }
-
 async function spawnGit(
   args: string[],
 ): Promise<{ code: number; stdout: string; stderr: string }> {
@@ -46,61 +44,81 @@ export async function headInfo(): Promise<HeadInfo> {
   return { kind: 'detached', sha }
 }
 
-export async function listBranches(): Promise<Branch[]> {
-  const { code, stdout, stderr } = await spawnGit([
-    'for-each-ref',
-    'refs/heads/',
-    '--sort=-committerdate',
-    '--format=%(HEAD)\t%(refname:short)\t%(objectname:short)',
-  ])
-  if (code !== 0) {
-    throw new GitError(stderr.trim() || 'git for-each-ref failed', code)
-  }
-
-  const branches: Branch[] = []
-  for (const line of stdout.split('\n')) {
-    if (!line.trim()) continue
-    const [head, name, sha] = line.split('\t')
-    if (!name || !sha) continue
-    branches.push({
-      name: name.trim(),
-      sha: sha.trim(),
-      isCurrent: head.trim() === '*',
-    })
-  }
-
-  branches.sort((a, b) => {
-    if (a.isCurrent) return -1
-    if (b.isCurrent) return 1
-    return a.name.localeCompare(b.name)
-  })
-
-  return branches
+/** Strip SGR sequences so we can regex-match hashes and decorations. */
+export function stripAnsi(s: string): string {
+  return s.replace(/\x1b\[[0-9;:]*m/g, '')
 }
 
-export async function logGraph(limit = 50): Promise<string> {
+export type GraphCommitRow = {
+  graphAnsi: string
+  hashAnsi: string
+  decorateRaw: string
+  subject: string
+  author: string
+  date: string
+}
+
+export type GraphRow =
+  | { kind: 'commit'; row: GraphCommitRow }
+  | { kind: 'other'; ansi: string }
+
+/** Graph lines from `git log --graph`, ANSI-colored lanes preserved in `graphAnsi` / `hashAnsi`. */
+export async function logGraphRows(limit = 50): Promise<GraphRow[]> {
   const { code, stdout, stderr } = await spawnGit([
     'log',
     '--graph',
-    '--oneline',
     '--all',
-    '--decorate',
-    '--no-color',
+    '--pretty=format:\x1f%C(auto)%h\x1f%d\x1f%s\x1f%an\x1f%ai\x1f',
+    '--decorate=short',
+    '--color=always',
     '-n',
     String(limit),
   ])
 
-  if (code === 0) return stdout.replace(/\n+$/, '')
-
-  const err = stderr.trim()
-  if (
-    err.includes('does not have any commits yet') ||
-    err.includes('does not have any commits')
-  ) {
-    return ''
+  if (code !== 0) {
+    const err = stderr.trim()
+    if (
+      err.includes('does not have any commits yet') ||
+      err.includes('does not have any commits')
+    ) {
+      return []
+    }
+    throw new GitError(err || 'git log failed', code)
   }
 
-  throw new GitError(err || 'git log failed', code)
+  const text = stdout.replace(/\n+$/, '')
+  const rows: GraphRow[] = []
+
+  for (const line of text.split('\n')) {
+    if (!line.trim()) continue
+    const parts = line.split('\x1f')
+    if (parts.length >= 6) {
+      const graphAnsi = parts[0] ?? ''
+      const hashAnsi = parts[1] ?? ''
+      const decorateRaw = parts[2] ?? ''
+      const subject = parts[3] ?? ''
+      const author = parts[4] ?? ''
+      const date = parts[5] ?? ''
+      const hashPlain = stripAnsi(hashAnsi).trim()
+      if (/^[a-f0-9]{7,40}$/i.test(hashPlain)) {
+        rows.push({
+          kind: 'commit',
+          row: {
+            graphAnsi,
+            hashAnsi,
+            decorateRaw,
+            subject,
+            author,
+            date,
+          },
+        })
+        continue
+      }
+    }
+    rows.push({ kind: 'other', ansi: line })
+  }
+
+  return rows
 }
 
 export async function checkoutBranch(

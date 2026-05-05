@@ -6,6 +6,28 @@ export type DiffPanelProps =
   | { state: 'loaded'; sha: string; details: CommitDetails }
   | { state: 'error'; sha: string; stderr: string }
 
+function diffLineClass(line: string): string {
+  if (line.startsWith('+++ ') || line.startsWith('--- ')) return 'diff-meta-line'
+  if (line.startsWith('@@')) return 'diff-hunk'
+  if (line.startsWith('+')) return 'diff-add'
+  if (line.startsWith('-')) return 'diff-del'
+  return 'diff-ctx'
+}
+
+function DiffBody(props: { text: string }) {
+  const lines = props.text.split('\n')
+  return (
+    <pre class="diff-body">
+      {lines.map((line, i) => (
+        <span key={i} class={diffLineClass(line)}>
+          {line}
+          {'\n'}
+        </span>
+      ))}
+    </pre>
+  )
+}
+
 export function DiffPanel(props: DiffPanelProps) {
   if (props.state === 'empty') {
     return (
@@ -27,6 +49,13 @@ export function DiffPanel(props: DiffPanelProps) {
   }
 
   const { sha, details } = props
+  const body =
+    details.diff.trim().length > 0 ? (
+      <DiffBody text={details.diff} />
+    ) : (
+      <pre class="diff-body">(no diff)</pre>
+    )
+
   return (
     <div id="diff" class="diff-panel">
       <div class="diff-head">
@@ -47,7 +76,7 @@ export function DiffPanel(props: DiffPanelProps) {
           ))}
         </ul>
       )}
-      <pre class="diff-body">{details.diff || '(no diff)'}</pre>
+      {body}
     </div>
   )
 }

@@ -10,8 +10,7 @@ import {
   ensureGitRepo,
   gitDir,
   headInfo,
-  listBranches,
-  logGraph,
+  logGraphRows,
   push,
   workTreeSummary,
 } from './git'
@@ -28,10 +27,9 @@ const PORT = 7777
 async function loadGraph(): Promise<GraphFragmentProps> {
   try {
     const head = await headInfo()
-    const branches = await listBranches()
-    const log = await logGraph(50)
+    const rows = await logGraphRows(50)
     const worktree = await workTreeSummary()
-    return { ok: true, head, branches, log, worktree }
+    return { ok: true, head, rows, worktree }
   } catch (e) {
     const stderr =
       e instanceof GitError

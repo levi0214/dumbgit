@@ -40,8 +40,8 @@ and exits with code 1.
 
 ## What you get
 
-- HEAD line, branch list, `git log --graph` of the last 50 commits
-- Click a branch → `git switch <branch>`
+- HEAD line, colored `git log --graph` (ANSI lanes from Git), last 50 commits
+- Ref pills on each commit (`HEAD ->`, branches, remotes, tags) → `git switch <ref>`
 - Click a commit SHA → `git switch --detach <sha>`
 - Click a commit message → diff panel on the right
 - `↑ push` button → `git push` (status shown inline; no graph re-render)
@@ -70,7 +70,7 @@ src/
   watch.ts        fs.watch on .git/refs with debounce
   views/
     layout.tsx    page shell, css, htmx + SSE + poll bootstrap
-    graph.tsx    branches + log + embedded #worktree
+    graph.tsx    colored graph log + ref pills + embedded #worktree
     worktree.tsx staged / unstaged / untracked lists
     diff.tsx     right-side commit diff panel
     status.tsx   small status / error fragment (oob swap)

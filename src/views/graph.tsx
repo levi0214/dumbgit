@@ -1,41 +1,208 @@
 /** @jsxImportSource hono/jsx */
-import type { Branch, HeadInfo, WorkTreeSummary } from '../git'
+import {
+  stripAnsi,
+  type GraphCommitRow,
+  type GraphRow,
+  type HeadInfo,
+  type WorkTreeSummary,
+} from '../git'
 import { WorkTreeFragment } from './worktree'
 
 export type GraphFragmentProps =
-  | { ok: true; head: HeadInfo; branches: Branch[]; log: string; worktree: WorkTreeSummary }
+  | { ok: true; head: HeadInfo; rows: GraphRow[]; worktree: WorkTreeSummary }
   | { ok: false; stderr: string }
 
-function headLine(head: HeadInfo): string {
-  const short = head.sha.slice(0, 7)
-  if (head.kind === 'branch') {
-    return `HEAD @ ${head.name} · ${short}`
+const FG: Record<number, string> = {
+  30: '#808080',
+  31: '#f48771',
+  32: '#6a9955',
+  33: '#dcdcaa',
+  34: '#569cd6',
+  35: '#c586c0',
+  36: '#4ec9b0',
+  37: '#d4d4d4',
+  90: '#808080',
+  91: '#f48771',
+  92: '#89d185',
+  93: '#e5e510',
+  94: '#6796e6',
+  95: '#d670d6',
+  96: '#4ec9b0',
+  97: '#ffffff',
+}
+
+function cssToObj(s: string): Record<string, string> | undefined {
+  const o: Record<string, string> = {}
+  for (const chunk of s.split(';')) {
+    const idx = chunk.indexOf(':')
+    if (idx === -1) continue
+    const k = chunk.slice(0, idx).trim()
+    const v = chunk.slice(idx + 1).trim()
+    if (k) o[k] = v
   }
-  return `HEAD detached @ ${short}`
+  return Object.keys(o).length ? o : undefined
 }
 
-/** First plausible abbreviated/full commit hash on a `git log --oneline --graph` line. */
-function splitCommitLine(
-  line: string,
-): { before: string; sha: string; after: string } | null {
-  const re = /\b([a-f0-9]{7,40})\b/i
-  const m = line.match(re)
-  if (!m || m.index === undefined) return null
-  const sha = m[1]
-  const before = line.slice(0, m.index)
-  const after = line.slice(m.index + sha.length)
-  return { before, sha, after }
+/** Split `%d` / parentheses list on commas not inside nested parens. */
+function splitDec(inner: string): string[] {
+  const parts: string[] = []
+  let cur = ''
+  let depth = 0
+  for (let i = 0; i < inner.length; i++) {
+    const ch = inner[i]
+    if (ch === '(') depth++
+    else if (ch === ')') depth--
+    else if (ch === ',' && depth === 0) {
+      const t = cur.trim()
+      if (t) parts.push(t)
+      cur = ''
+      continue
+    }
+    cur += ch
+  }
+  const t = cur.trim()
+  if (t) parts.push(t)
+  return parts
 }
 
-function GraphLogLine(props: { line: string }) {
-  const parts = splitCommitLine(props.line)
-  if (!parts) return <>{props.line}</>
+function decorationRefs(decorateRaw: string): string[] {
+  const plain = stripAnsi(decorateRaw).trim()
+  if (!plain) return []
+  const inner = plain.replace(/^\(/, '').replace(/\)$/, '').trim()
+  if (!inner) return []
+  return splitDec(inner)
+}
 
-  const checkoutUrl = `/api/checkout/commit?sha=${encodeURIComponent(parts.sha)}`
-  const diffUrl = `/api/diff/${encodeURIComponent(parts.sha)}`
+/** Argument for `git switch <ref>` (branch, remote ref, tag name, …). */
+function refForCheckout(tokenPlain: string): string | null {
+  const s = tokenPlain.trim()
+  const hm = s.match(/^HEAD\s*->\s*(.+)$/i)
+  if (hm) return hm[1].trim()
+  if (!s) return null
+  if (/^tag:/i.test(s)) return s.replace(/^tag:\s*/i, '').trim() || null
+  return s
+}
+
+function pillClass(tokenPlain: string): string {
+  if (/HEAD\s*->/i.test(tokenPlain)) return 'ref-pill ref-pill-head'
+  if (/^tag:/i.test(tokenPlain)) return 'ref-pill ref-pill-tag'
+  if (tokenPlain.includes('/')) return 'ref-pill ref-pill-remote'
+  return 'ref-pill ref-pill-branch'
+}
+
+function parseAnsi(s: string): { style?: Record<string, string>; text: string }[] {
+  const out: { style?: Record<string, string>; text: string }[] = []
+  let i = 0
+  let bold = false
+  let fg: number | undefined
+
+  const styleObj = (): Record<string, string> | undefined => {
+    const parts: string[] = []
+    if (bold) parts.push('font-weight:700')
+    if (fg !== undefined && FG[fg]) parts.push(`color:${FG[fg]}`)
+    const css = parts.join(';')
+    return cssToObj(css)
+  }
+
+  let buf = ''
+  let curStyle = styleObj()
+
+  const flush = () => {
+    if (!buf) return
+    out.push({ style: curStyle, text: buf })
+    buf = ''
+  }
+
+  while (i < s.length) {
+    if (s[i] === '\x1b' && s[i + 1] === '[') {
+      const end = s.indexOf('m', i)
+      if (end === -1) {
+        buf += s.slice(i)
+        break
+      }
+      const seq = s.slice(i + 2, end)
+      i = end + 1
+      flush()
+      const codes =
+        seq === ''
+          ? [0]
+          : seq
+              .split(';')
+              .map((x) => parseInt(x, 10))
+              .filter((c) => !Number.isNaN(c))
+      for (const c of codes) {
+        if (c === 0) {
+          bold = false
+          fg = undefined
+        } else if (c === 1) bold = true
+        else if (c === 22) bold = false
+        else if ((c >= 30 && c <= 37) || (c >= 90 && c <= 97)) fg = c
+        else if (c === 39) fg = undefined
+      }
+      curStyle = styleObj()
+      continue
+    }
+    buf += s[i]
+    i++
+  }
+  flush()
+  return out
+}
+
+function AnsiSpans(props: { ansi: string }) {
   return (
     <>
-      {parts.before}
+      {parseAnsi(props.ansi).map((p, idx) =>
+        p.style ? (
+          <span key={idx} style={p.style}>
+            {p.text}
+          </span>
+        ) : (
+          <span key={idx}>{p.text}</span>
+        ),
+      )}
+    </>
+  )
+}
+
+function RefPills(props: { decorateRaw: string }) {
+  const tokens = decorationRefs(props.decorateRaw)
+  if (tokens.length === 0) return null
+  return (
+    <span class="graph-pills">
+      {tokens.map((t, idx) => {
+        const ref = refForCheckout(t)
+        if (!ref) return null
+        return (
+          <button
+            key={idx}
+            type="button"
+            class={pillClass(t)}
+            title={`git switch ${ref}`}
+            hx-post={`/api/checkout/branch?name=${encodeURIComponent(ref)}`}
+            hx-target="#graph"
+            hx-swap="outerHTML"
+          >
+            {t}
+          </button>
+        )
+      })}
+    </span>
+  )
+}
+
+function GraphCommitLine(props: { row: GraphCommitRow }) {
+  const { graphAnsi, hashAnsi, decorateRaw, subject } = props.row
+  const sha = stripAnsi(hashAnsi).trim()
+  const isHead = stripAnsi(decorateRaw).includes('HEAD ->')
+  const checkoutUrl = `/api/checkout/commit?sha=${encodeURIComponent(sha)}`
+  const diffUrl = `/api/diff/${encodeURIComponent(sha)}`
+
+  return (
+    <div class={`log-row ${isHead ? 'log-row-head' : ''}`}>
+      <span class="graph-prefix">
+        <AnsiSpans ansi={graphAnsi} />
+      </span>
       <button
         type="button"
         class="sha-btn"
@@ -44,7 +211,7 @@ function GraphLogLine(props: { line: string }) {
         hx-target="#graph"
         hx-swap="outerHTML"
       >
-        {parts.sha}
+        <AnsiSpans ansi={hashAnsi} />
       </button>
       <button
         type="button"
@@ -54,26 +221,45 @@ function GraphLogLine(props: { line: string }) {
         hx-target="#diff"
         hx-swap="outerHTML"
       >
-        {parts.after}
+        {subject}
       </button>
-    </>
+      <RefPills decorateRaw={decorateRaw} />
+    </div>
   )
 }
 
-function LogLines(props: { log: string }) {
-  const { log } = props
-  if (!log.trim()) {
+function GraphOtherLine(props: { ansi: string }) {
+  return (
+    <div class="log-row log-row-other">
+      <span class="graph-prefix-wide">
+        <AnsiSpans ansi={props.ansi} />
+      </span>
+    </div>
+  )
+}
+
+function headLine(head: HeadInfo): string {
+  const short = head.sha.slice(0, 7)
+  if (head.kind === 'branch') {
+    return `HEAD @ ${head.name} · ${short}`
+  }
+  return `HEAD detached @ ${short}`
+}
+
+function LogLines(props: { rows: GraphRow[] }) {
+  if (props.rows.length === 0) {
     return <div class="log-lines empty">(no commits yet)</div>
   }
 
-  const lines = log.split('\n')
   return (
     <div class="log-lines">
-      {lines.map((line) => (
-        <span class="log-line">
-          <GraphLogLine line={line} />
-        </span>
-      ))}
+      {props.rows.map((r, i) =>
+        r.kind === 'commit' ? (
+          <GraphCommitLine key={i} row={r.row} />
+        ) : (
+          <GraphOtherLine key={i} ansi={r.ansi} />
+        ),
+      )}
     </div>
   )
 }
@@ -87,32 +273,14 @@ export function GraphFragment(props: GraphFragmentProps) {
     )
   }
 
-  const { head, branches, log, worktree } = props
+  const { head, rows, worktree } = props
 
   return (
     <div id="graph" class="graph-root">
       <div class="graph-head">{headLine(head)}</div>
       <WorkTreeFragment {...worktree} />
       <div class="graph-body">
-        <aside>
-          <ul class="branch-list">
-            {branches.map((b) => (
-              <li class={b.isCurrent ? 'current' : ''}>
-                <button
-                  type="button"
-                  class="branch-row-btn"
-                  hx-post={`/api/checkout/branch?name=${encodeURIComponent(b.name)}`}
-                  hx-target="#graph"
-                  hx-swap="outerHTML"
-                >
-                  <span class="branch-name">{b.name}</span>
-                  <span class="branch-sha">{b.sha.slice(0, 7)}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        </aside>
-        <LogLines log={log} />
+        <LogLines rows={rows} />
       </div>
     </div>
   )
