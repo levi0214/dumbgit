@@ -174,7 +174,7 @@ app.post('/api/repo', async (c) => {
       <RepoBar root={candidate} recents={loadRecents()} oob />
       <GraphFragment {...graph} swapOob />
       <DiffPanel state="empty" swapOob />
-      <StatusOob info={`opened ${path.basename(candidate)}`} />
+      <StatusOob />
     </Fragment>,
     200,
   )
