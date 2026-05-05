@@ -616,19 +616,69 @@ body {
   gap: 6px;
   flex-wrap: wrap;
   justify-content: flex-end;
-  align-items: center;
+  align-items: flex-start;
+}
+.diff-branch-details {
+  position: relative;
+  display: inline-block;
+}
+.diff-branch-details > summary {
+  list-style: none;
+}
+.diff-branch-details > summary::-webkit-details-marker {
+  display: none;
+}
+.diff-branch-summary {
+  display: inline-block;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: #2d2d2d;
+  color: var(--fg);
+  white-space: nowrap;
+  user-select: none;
+}
+.diff-branch-summary:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.diff-branch-details[open] > .diff-branch-summary {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.diff-branch-panel {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 15;
+  min-width: 15rem;
+  max-width: min(22rem, 85vw);
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #252526;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.45);
 }
 .diff-branch-form {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
   margin: 0;
+}
+.diff-branch-panel-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
 }
 .diff-branch-input {
   font: inherit;
   font-size: 11px;
-  min-width: 11em;
-  max-width: min(22em, 40vw);
+  width: 100%;
+  box-sizing: border-box;
   padding: 4px 8px;
   border: 1px solid var(--border);
   border-radius: 4px;
@@ -825,10 +875,50 @@ document.body.addEventListener('htmx:afterRequest', function (e) {
   if (!e.detail.successful) return;
   var xhr = e.detail.xhr;
   var url = (xhr && xhr.responseURL) || '';
-  if (url.indexOf('/api/repo') === -1) return;
-  var det = document.querySelector('details.repo-bar-details');
-  if (det) det.removeAttribute('open');
+  if (url.indexOf('/api/repo') !== -1) {
+    var rd = document.querySelector('details.repo-bar-details');
+    if (rd) rd.removeAttribute('open');
+  }
+  if (url.indexOf('/api/branch/create') !== -1) {
+    var elt = e.detail.elt;
+    var bd = elt && elt.closest && elt.closest('details.diff-branch-details');
+    if (bd) {
+      bd.removeAttribute('open');
+      var f = bd.querySelector('form.diff-branch-form');
+      if (f) f.reset();
+    }
+  }
 });
+
+document.body.addEventListener('toggle', function (e) {
+  var t = e.target;
+  if (!t || !t.matches || !t.matches('details.diff-branch-details')) return;
+  if (!t.open) return;
+  var inp = t.querySelector('.diff-branch-input');
+  if (inp) requestAnimationFrame(function () { inp.focus(); });
+}, true);
+
+document.body.addEventListener('click', function (e) {
+  var btn = e.target.closest('.diff-branch-cancel');
+  if (!btn) return;
+  var det = btn.closest('details.diff-branch-details');
+  if (!det) return;
+  det.removeAttribute('open');
+  var fo = det.querySelector('form.diff-branch-form');
+  if (fo) fo.reset();
+});
+
+document.addEventListener('keydown', function (e) {
+  if (e.key !== 'Escape') return;
+  var inp = e.target && e.target.closest && e.target.closest('.diff-branch-input');
+  if (!inp) return;
+  var det = inp.closest('details.diff-branch-details');
+  if (!det || !det.open) return;
+  e.preventDefault();
+  det.removeAttribute('open');
+  var fo = det.querySelector('form.diff-branch-form');
+  if (fo) fo.reset();
+}, true);
 
 document.addEventListener('keydown', function (e) {
   if (e.target.closest('input, textarea')) return;
