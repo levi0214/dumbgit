@@ -323,6 +323,12 @@ body {
   font-size: 14px;
   letter-spacing: 0.5px;
 }
+.graph-prefix .graph-node,
+.graph-prefix-wide .graph-node {
+  font-weight: 600;
+  font-size: 0.82em;
+  opacity: 0.92;
+}
 .graph-prefix-wide {
   white-space: pre;
   font-family: inherit;

@@ -178,8 +178,8 @@ function laneColor(col: number): string {
 
 /**
  * Render the `git --graph` prefix with per-column colored lanes.
- * `*` (the commit node) stays full color and bold; connector glyphs
- * (`|`, `/`, `\`, `_`) are dimmed so commit nodes pop out of the topology.
+ * Git uses `*` for the commit node; we swap it for a round bullet so the
+ * graph reads quieter than a bold asterisk. Connector glyphs stay dimmed.
  */
 function GraphLaneSpans(props: { ansi: string }) {
   const text = stripAnsi(props.ansi)
@@ -191,10 +191,15 @@ function GraphLaneSpans(props: { ansi: string }) {
       continue
     }
     const color = laneColor(i)
-    const styleStr =
-      ch === '*'
-        ? `color:${color};font-weight:800`
-        : `color:${color};font-weight:600;opacity:0.45`
+    if (ch === '*') {
+      out.push(
+        <span key={i} class="graph-node" style={`color:${color}`}>
+          {'\u2022'}
+        </span>,
+      )
+      continue
+    }
+    const styleStr = `color:${color};font-weight:600;opacity:0.45`
     out.push(
       <span key={i} style={styleStr}>
         {ch}
