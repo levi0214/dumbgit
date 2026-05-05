@@ -166,13 +166,13 @@ function AnsiSpans(props: { ansi: string }) {
 }
 
 const LANE_PALETTE = [
-  '#4ec9ff', // bright blue
-  '#89d185', // bright green
-  '#e98ee8', // bright magenta
-  '#f5d76e', // warm yellow
-  '#5fe6c8', // cyan
-  '#ff9d7a', // orange
-  '#c7b8ff', // lavender
+  '#3aafff', // vivid blue
+  '#3ddc6c', // vivid green
+  '#ff5cd5', // hot pink
+  '#ffd633', // vivid yellow
+  '#28e6c8', // vivid cyan
+  '#ff7a3d', // vivid orange
+  '#9d7aff', // vivid purple
 ]
 
 /**
@@ -202,7 +202,9 @@ function GraphLaneSpans(props: { ansi: string }) {
     }
     const color = laneColor(i)
     const styleStr =
-      ch === '*' ? `color:${color};font-weight:700` : `color:${color}`
+      ch === '*'
+        ? `color:${color};font-weight:800`
+        : `color:${color};font-weight:700`
     out.push(
       <span key={i} style={styleStr}>
         {ch}

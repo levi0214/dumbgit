@@ -159,10 +159,14 @@ body {
   flex-shrink: 0;
   white-space: pre;
   font-family: inherit;
+  font-size: 14px;
+  letter-spacing: 0.5px;
 }
 .graph-prefix-wide {
   white-space: pre;
   font-family: inherit;
+  font-size: 14px;
+  letter-spacing: 0.5px;
   overflow-x: auto;
 }
 .graph-pills {
