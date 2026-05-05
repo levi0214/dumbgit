@@ -157,6 +157,15 @@ body {
 .log-row-head {
   border-left-color: var(--accent);
   background: rgba(86, 156, 214, 0.09);
+  font-weight: 600;
+}
+.row-current-dot {
+  flex-shrink: 0;
+  color: #3ddc6c;
+  font-size: 9px;
+  line-height: 1;
+  align-self: center;
+  text-shadow: 0 0 6px rgba(61, 220, 108, 0.7);
 }
 .log-row-commit.log-row-viewing {
   box-shadow: inset 3px 0 0 0 var(--accent);
@@ -241,7 +250,6 @@ body {
   padding: 0 5px;
 }
 .log-row-head .branch-prefix {
-  font-weight: 700;
   color: #ffffff;
   background: rgba(86, 156, 214, 0.35);
 }

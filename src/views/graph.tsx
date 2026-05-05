@@ -60,11 +60,13 @@ function branchPrefixFromDecorations(decorateRaw: string): string | null {
   for (const t of tokens) {
     const plain = stripAnsi(t).trim()
     if (/^tag:/i.test(plain)) continue
+    if (/^HEAD$/i.test(plain)) continue
     if (!plain.includes('/') && plain) return plain
   }
   for (const t of tokens) {
     const plain = stripAnsi(t).trim()
     if (/^tag:/i.test(plain)) continue
+    if (/^HEAD$/i.test(plain)) continue
     if (plain.includes('/') && plain) return plain
   }
   return null
@@ -156,6 +158,8 @@ function RefPills(props: {
   return (
     <span class="graph-pills">
       {tokens.map((t, idx) => {
+        const plain = stripAnsi(t).trim()
+        if (/^HEAD$/i.test(plain)) return null
         if (refPillRedundantWithBranchPrefix(t, props.branchPrefix)) return null
         const ref = refForCheckout(t)
         if (!ref) return null
@@ -199,7 +203,9 @@ function relTimeAgo(iso: string): string {
 function GraphCommitLine(props: { row: GraphCommitRow }) {
   const { graphAnsi, shaFull, shaShort, decorateRaw, subject, date, inHistory } =
     props.row
-  const isHead = stripAnsi(decorateRaw).includes('HEAD ->')
+  const decoPlain = stripAnsi(decorateRaw)
+  const isHead =
+    decoPlain.includes('HEAD ->') || /(^|[(,\s])HEAD([),\s]|$)/.test(decoPlain)
   const branchPrefix = branchPrefixFromDecorations(decorateRaw)
   const diffUrl = `/api/commit/${encodeURIComponent(shaFull)}`
   const cls = [
@@ -216,6 +222,11 @@ function GraphCommitLine(props: { row: GraphCommitRow }) {
       <span class="graph-prefix">
         <GraphLaneSpans ansi={graphAnsi} />
       </span>
+      {isHead ? (
+        <span class="row-current-dot" aria-hidden="true" title="current">
+          ●
+        </span>
+      ) : null}
       <div class="msg-cell">
         {branchPrefix ? (
           <span class="branch-prefix" title={`branch: ${branchPrefix}`}>
