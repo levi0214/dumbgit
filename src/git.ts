@@ -56,11 +56,25 @@ export type GraphCommitRow = {
   subject: string
   author: string
   date: string
+  /** True iff this commit is reachable from current HEAD. */
+  inHistory: boolean
 }
 
 export type GraphRow =
   | { kind: 'commit'; row: GraphCommitRow }
-  | { kind: 'other'; ansi: string }
+  | { kind: 'other'; ansi: string; betweenInHistory: boolean }
+
+/** Set of short (7-char) hashes reachable from HEAD. Empty on failure. */
+async function reachableShortShas(): Promise<Set<string>> {
+  const { code, stdout } = await spawnGit(['rev-list', 'HEAD'])
+  if (code !== 0) return new Set()
+  const set = new Set<string>()
+  for (const line of stdout.split('\n')) {
+    const t = line.trim()
+    if (t.length >= 7) set.add(t.slice(0, 7))
+  }
+  return set
+}
 
 /** Graph lines from `git log --graph`, ANSI-colored lanes preserved in `graphAnsi` / `hashAnsi`. */
 export async function logGraphRows(limit = 50): Promise<GraphRow[]> {
@@ -86,8 +100,12 @@ export async function logGraphRows(limit = 50): Promise<GraphRow[]> {
     throw new GitError(err || 'git log failed', code)
   }
 
+  const reachable = await reachableShortShas()
   const text = stdout.replace(/\n+$/, '')
-  const rows: GraphRow[] = []
+  type Tmp =
+    | { kind: 'commit'; row: GraphCommitRow }
+    | { kind: 'other'; ansi: string }
+  const tmp: Tmp[] = []
 
   for (const line of text.split('\n')) {
     if (!line.trim()) continue
@@ -101,7 +119,7 @@ export async function logGraphRows(limit = 50): Promise<GraphRow[]> {
       const date = parts[5] ?? ''
       const hashPlain = stripAnsi(hashAnsi).trim()
       if (/^[a-f0-9]{7,40}$/i.test(hashPlain)) {
-        rows.push({
+        tmp.push({
           kind: 'commit',
           row: {
             graphAnsi,
@@ -110,13 +128,32 @@ export async function logGraphRows(limit = 50): Promise<GraphRow[]> {
             subject,
             author,
             date,
+            inHistory: reachable.size === 0 ? true : reachable.has(hashPlain),
           },
         })
         continue
       }
     }
-    rows.push({ kind: 'other', ansi: line })
+    tmp.push({ kind: 'other', ansi: line })
   }
+
+  /**
+   * A connector row inherits the in-history flag from the commit row IMMEDIATELY
+   * ABOVE it (i.e. its source). `git log --graph` reads top-to-bottom newest →
+   * oldest, so the lanes flowing down through a connector belong to the row above.
+   */
+  const rows: GraphRow[] = tmp.map((t, i) => {
+    if (t.kind === 'commit') return t
+    let prevInHistory = true
+    for (let j = i - 1; j >= 0; j--) {
+      const x = tmp[j]
+      if (x.kind === 'commit') {
+        prevInHistory = x.row.inHistory
+        break
+      }
+    }
+    return { kind: 'other', ansi: t.ansi, betweenInHistory: prevInHistory }
+  })
 
   return rows
 }

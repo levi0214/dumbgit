@@ -151,6 +151,12 @@ body {
   border-left-color: var(--accent);
   background: rgba(86, 156, 214, 0.09);
 }
+.log-row-dim {
+  opacity: 0.38;
+}
+.log-row-dim:hover {
+  opacity: 0.85;
+}
 .log-row-other {
   padding-top: 1px;
   padding-bottom: 1px;

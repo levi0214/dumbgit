@@ -241,14 +241,21 @@ function RefPills(props: { decorateRaw: string }) {
 }
 
 function GraphCommitLine(props: { row: GraphCommitRow }) {
-  const { graphAnsi, hashAnsi, decorateRaw, subject } = props.row
+  const { graphAnsi, hashAnsi, decorateRaw, subject, inHistory } = props.row
   const sha = stripAnsi(hashAnsi).trim()
   const isHead = stripAnsi(decorateRaw).includes('HEAD ->')
   const checkoutUrl = `/api/checkout/commit?sha=${encodeURIComponent(sha)}`
   const diffUrl = `/api/diff/${encodeURIComponent(sha)}`
+  const cls = [
+    'log-row',
+    isHead ? 'log-row-head' : '',
+    inHistory ? '' : 'log-row-dim',
+  ]
+    .filter(Boolean)
+    .join(' ')
 
   return (
-    <div class={`log-row ${isHead ? 'log-row-head' : ''}`}>
+    <div class={cls}>
       <span class="graph-prefix">
         <GraphLaneSpans ansi={graphAnsi} />
       </span>
@@ -277,9 +284,10 @@ function GraphCommitLine(props: { row: GraphCommitRow }) {
   )
 }
 
-function GraphOtherLine(props: { ansi: string }) {
+function GraphOtherLine(props: { ansi: string; betweenInHistory: boolean }) {
+  const cls = `log-row log-row-other ${props.betweenInHistory ? '' : 'log-row-dim'}`
   return (
-    <div class="log-row log-row-other">
+    <div class={cls.trim()}>
       <span class="graph-prefix-wide">
         <GraphLaneSpans ansi={props.ansi} />
       </span>
@@ -306,7 +314,11 @@ function LogLines(props: { rows: GraphRow[] }) {
         r.kind === 'commit' ? (
           <GraphCommitLine key={i} row={r.row} />
         ) : (
-          <GraphOtherLine key={i} ansi={r.ansi} />
+          <GraphOtherLine
+            key={i}
+            ansi={r.ansi}
+            betweenInHistory={r.betweenInHistory}
+          />
         ),
       )}
     </div>
