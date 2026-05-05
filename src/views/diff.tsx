@@ -93,17 +93,17 @@ export function DiffPanel(props: DiffPanelProps) {
             hx-target="#graph"
             hx-swap="outerHTML"
           >
-            + branch from here…
+            new branch
           </button>
           <button
             type="button"
             class="diff-checkout-btn"
-            title="git switch --detach to this commit (HEAD will detach)"
+            title="git switch --detach to this commit"
             hx-post={checkoutUrl}
             hx-target="#graph"
             hx-swap="outerHTML"
           >
-            ↗ checkout (detached)
+            checkout
           </button>
         </div>
       </div>

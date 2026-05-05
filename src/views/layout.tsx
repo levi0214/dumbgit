@@ -62,12 +62,9 @@ body {
 }
 .main-grid {
   display: grid;
-  grid-template-columns: minmax(420px, 1fr) minmax(420px, 1fr);
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
   gap: 12px;
   align-items: start;
-}
-@media (max-width: 1000px) {
-  .main-grid { grid-template-columns: 1fr; }
 }
 .graph-root {
   border: 1px solid var(--border);
@@ -411,11 +408,11 @@ body {
   border-bottom: 1px solid var(--border);
   background: #2d2d30;
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   grid-template-areas:
-    "subject actions"
+    "subject subject"
     "meta    actions";
-  align-items: center;
+  align-items: baseline;
   gap: 4px 12px;
 }
 .diff-subject {
@@ -432,6 +429,8 @@ body {
   grid-area: actions;
   display: flex;
   gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 .diff-checkout-btn,
 .diff-branch-btn {
