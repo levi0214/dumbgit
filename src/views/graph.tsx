@@ -166,13 +166,13 @@ function AnsiSpans(props: { ansi: string }) {
 }
 
 const LANE_PALETTE = [
-  '#569cd6', // blue
-  '#6a9955', // green
-  '#c586c0', // magenta
-  '#dcdcaa', // yellow
-  '#4ec9b0', // cyan
-  '#f48771', // orange
-  '#b0a6e0', // lavender
+  '#4ec9ff', // bright blue
+  '#89d185', // bright green
+  '#e98ee8', // bright magenta
+  '#f5d76e', // warm yellow
+  '#5fe6c8', // cyan
+  '#ff9d7a', // orange
+  '#c7b8ff', // lavender
 ]
 
 /**
@@ -200,11 +200,11 @@ function GraphLaneSpans(props: { ansi: string }) {
       out.push(<span key={i}> </span>)
       continue
     }
-    const isNode = ch === '*'
-    const style: Record<string, string> = { color: laneColor(i) }
-    if (isNode) style['font-weight'] = '700'
+    const color = laneColor(i)
+    const styleStr =
+      ch === '*' ? `color:${color};font-weight:700` : `color:${color}`
     out.push(
-      <span key={i} style={style}>
+      <span key={i} style={styleStr}>
         {ch}
       </span>,
     )
