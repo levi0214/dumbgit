@@ -284,7 +284,9 @@ body {
   color: #3ddc6c;
   font-size: 9px;
   line-height: 1;
-  align-self: center;
+  align-self: baseline;
+  position: relative;
+  top: -1px;
   text-shadow: 0 0 6px rgba(61, 220, 108, 0.7);
 }
 .log-row-detached {
