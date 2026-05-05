@@ -90,15 +90,14 @@ After this step you can open `http://localhost:7777` and see your repo at a
 glance. Pure viewer, no buttons. This already covers the most common use case
 ("just let me see what's going on").
 
-- `src/git.ts`: `headInfo()`, `listBranches()`, `logGraph(limit = 50)` via `Bun.spawn`
+- `src/git.ts`: `headInfo()`, `logGraphRows()` via `Bun.spawn` (ANSI `--graph`; `\x1f`-delimited fields)
 - `src/views/layout.tsx`: full page shell (head, htmx script, css, dark monospace)
 - `src/views/graph.tsx`: header showing `HEAD @ <branch>` or `HEAD detached @ <sha>`,
-  branches list, and a `<pre>` of the parsed `git log --graph --oneline --all --decorate`
+  colored `git log --graph` (ANSI lanes) with clickable SHA / message / ref pills
 - `GET /` renders the whole page; `GET /fragment/graph` returns just the graph block (used by step 3)
 - `R` key + a small "↻" button refresh the graph fragment
 
-Decide here: `--color=never` and apply our own CSS classes from line content,
-vs. `--color=always` plus a tiny ANSI→HTML converter. Lean toward the former.
+Decided (later iteration): `--color=always` plus a small ANSI→span mapper (~80 LOC).
 
 ### Step 3 — Navigator (the must-have actions)
 
@@ -108,7 +107,7 @@ where dumbgit covers all three must-haves from the brief.
 - Extend `src/git.ts`: `checkoutBranch(name)`, `checkoutCommit(sha)` returning `{ ok, stderr }`
 - `POST /api/checkout/branch/:name`, `POST /api/checkout/commit/:sha`
 - Each endpoint runs the action, then returns the re-rendered graph fragment for `hx-target="#graph"`
-- Wire branches list and graph sha-elements with htmx (`hx-post`, `hx-target="#graph"`, `hx-swap="outerHTML"`)
+- Wire graph SHA buttons, message buttons, and ref pills with htmx (`hx-post`, `hx-target="#graph"`, `hx-swap="outerHTML"`)
 - `src/views/status.tsx`: a small `#status` slot. Failures (e.g. dirty working tree)
   return the raw git stderr into this slot. No wrapping, no hand-holding.
 
