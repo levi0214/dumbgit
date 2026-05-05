@@ -102,3 +102,25 @@ export async function logGraph(limit = 50): Promise<string> {
 
   throw new GitError(err || 'git log failed', code)
 }
+
+export async function checkoutBranch(
+  name: string,
+): Promise<{ ok: true } | { ok: false; stderr: string }> {
+  const { code, stderr } = await spawnGit(['switch', name])
+  if (code === 0) return { ok: true }
+  return {
+    ok: false,
+    stderr: stderr.trim() || `git switch failed (${code})`,
+  }
+}
+
+export async function checkoutCommit(
+  sha: string,
+): Promise<{ ok: true } | { ok: false; stderr: string }> {
+  const { code, stderr } = await spawnGit(['switch', '--detach', sha])
+  if (code === 0) return { ok: true }
+  return {
+    ok: false,
+    stderr: stderr.trim() || `git switch --detach failed (${code})`,
+  }
+}

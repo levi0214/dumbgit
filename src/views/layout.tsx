@@ -72,13 +72,23 @@ body {
   overflow-y: auto;
 }
 .branch-list li {
-  padding: 4px 12px;
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
+  padding: 0;
 }
 .branch-list li.current {
   background: #094771;
+}
+.branch-row-btn {
+  all: unset;
+  display: flex;
+  width: 100%;
+  box-sizing: border-box;
+  cursor: pointer;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 12px;
+}
+.branch-row-btn:hover .branch-name {
+  color: var(--accent);
 }
 .branch-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .branch-sha { color: var(--muted); flex-shrink: 0; }
@@ -86,13 +96,43 @@ body {
   margin: 0;
   padding: 10px 12px;
   overflow: auto;
-  white-space: pre;
   font-family: inherit;
   font-size: 12px;
   color: var(--fg);
 }
+.log-line {
+  display: block;
+  white-space: pre;
+}
+.sha-btn {
+  font: inherit;
+  border: none;
+  background: transparent;
+  color: var(--accent);
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.sha-btn:hover {
+  color: #9cdcfe;
+}
 .log-lines.empty {
   color: var(--muted);
+}
+.status-slot {
+  margin-bottom: 8px;
+}
+.status-slot .status-inner {
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: 4px;
+  border: 1px solid #f48771;
+  background: #3c2020;
+  color: #f48771;
+  white-space: pre-wrap;
+  font-family: inherit;
+  font-size: 12px;
 }
 `
 

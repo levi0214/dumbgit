@@ -1,15 +1,8 @@
-import type { HeadInfo } from '../git'
+import type { Branch, HeadInfo } from '../git'
 
 export type GraphFragmentProps =
   | { ok: true; head: HeadInfo; branches: Branch[]; log: string }
   | { ok: false; stderr: string }
-
-function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-}
 
 function headLine(head: HeadInfo): string {
   const short = head.sha.slice(0, 7)
@@ -19,35 +12,93 @@ function headLine(head: HeadInfo): string {
   return `HEAD detached @ ${short}`
 }
 
+/** First plausible abbreviated/full commit hash on an `git log --oneline --graph` line. */
+function splitCommitLine(
+  line: string,
+): { before: string; sha: string; after: string } | null {
+  const re = /\b([a-f0-9]{7,40})\b/i
+  const m = line.match(re)
+  if (!m || m.index === undefined) return null
+  const sha = m[1]
+  const before = line.slice(0, m.index)
+  const after = line.slice(m.index + sha.length)
+  return { before, sha, after }
+}
+
+function GraphLogLine(props: { line: string }) {
+  const parts = splitCommitLine(props.line)
+  if (!parts) return <>{props.line}</>
+
+  const url = `/api/checkout/commit?sha=${encodeURIComponent(parts.sha)}`
+  return (
+    <>
+      {parts.before}
+      <button
+        type="button"
+        class="sha-btn"
+        hx-post={url}
+        hx-target="#graph"
+        hx-swap="outerHTML"
+      >
+        {parts.sha}
+      </button>
+      {parts.after}
+    </>
+  )
+}
+
+function LogLines(props: { log: string }) {
+  const { log } = props
+  if (!log.trim()) {
+    return <div class="log-lines empty">(no commits yet)</div>
+  }
+
+  const lines = log.split('\n')
+  return (
+    <div class="log-lines">
+      {lines.map((line) => (
+        <span class="log-line">
+          <GraphLogLine line={line} />
+        </span>
+      ))}
+    </div>
+  )
+}
+
 export function GraphFragment(props: GraphFragmentProps) {
   if (!props.ok) {
     return (
       <div id="graph" class="graph-root graph-error">
-        <p class="msg">{escapeHtml(props.stderr)}</p>
+        <p class="msg">{props.stderr}</p>
       </div>
     )
   }
 
   const { head, branches, log } = props
-  const logEmpty = !log.trim()
 
   return (
     <div id="graph" class="graph-root">
-      <div class="graph-head">{escapeHtml(headLine(head))}</div>
+      <div class="graph-head">{headLine(head)}</div>
       <div class="graph-body">
         <aside>
           <ul class="branch-list">
             {branches.map((b) => (
               <li class={b.isCurrent ? 'current' : ''}>
-                <span class="branch-name">{escapeHtml(b.name)}</span>
-                <span class="branch-sha">{escapeHtml(b.sha.slice(0, 7))}</span>
+                <button
+                  type="button"
+                  class="branch-row-btn"
+                  hx-post={`/api/checkout/branch?name=${encodeURIComponent(b.name)}`}
+                  hx-target="#graph"
+                  hx-swap="outerHTML"
+                >
+                  <span class="branch-name">{b.name}</span>
+                  <span class="branch-sha">{b.sha.slice(0, 7)}</span>
+                </button>
               </li>
             ))}
           </ul>
         </aside>
-        <pre class={logEmpty ? 'log-lines empty' : 'log-lines'}>
-          {logEmpty ? '(no commits yet)' : escapeHtml(log)}
-        </pre>
+        <LogLines log={log} />
       </div>
     </div>
   )
