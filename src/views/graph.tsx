@@ -15,6 +15,8 @@ export type GraphFragmentProps =
       head: HeadInfo
       rows: GraphRow[]
       worktree: WorkTreeSummary
+      /** Absolute repo root; tags #worktree so stale polls cannot overwrite after repo switch. */
+      repoPath: string
       swapOob?: boolean
     }
   | { ok: false; stderr: string; swapOob?: boolean }
@@ -525,7 +527,7 @@ export function GraphFragment(props: GraphFragmentProps) {
           ↑ push
         </button>
       </div>
-      <WorkTreeFragment {...worktree} />
+      <WorkTreeFragment {...worktree} repoPath={props.repoPath} />
       <div class="graph-body">
         <LogLines
           rows={rows}

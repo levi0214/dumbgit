@@ -20,13 +20,19 @@ function markLabel(mark: string): string {
   return MARK_LABELS[head] ?? mark
 }
 
-export function WorkTreeFragment(props: WorkTreeSummary) {
-  const { staged, unstaged, untracked } = props
+export function WorkTreeFragment(
+  props: WorkTreeSummary & { repoPath: string },
+) {
+  const { staged, unstaged, untracked, repoPath } = props
   const total = staged.length + unstaged.length + untracked.length
 
   if (total === 0) {
     return (
-      <div id="worktree" class="worktree-panel worktree-clean-panel">
+      <div
+        id="worktree"
+        class="worktree-panel worktree-clean-panel"
+        data-repo={repoPath}
+      >
         <span class="worktree-clean">no changes</span>
       </div>
     )
@@ -38,7 +44,7 @@ export function WorkTreeFragment(props: WorkTreeSummary) {
     : [...staged, ...unstaged, ...untracked]
 
   return (
-    <div id="worktree" class="worktree-panel">
+    <div id="worktree" class="worktree-panel" data-repo={repoPath}>
       <div class="worktree-body">
         {hasStaged ? (
           <Section title="ready to commit" entries={staged} />

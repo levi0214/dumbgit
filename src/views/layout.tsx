@@ -858,6 +858,30 @@ function syncViewingHighlight() {
 
 document.addEventListener('DOMContentLoaded', syncViewingHighlight);
 
+document.body.addEventListener('htmx:beforeSwap', function (e) {
+  var t = e.detail.target;
+  if (!t || t.id !== 'worktree') return;
+  var xhr = e.detail.xhr;
+  if (!xhr || xhr.status !== 200) return;
+  var url = xhr.responseURL || '';
+  if (url.indexOf('/fragment/worktree') === -1) return;
+  var bar = document.querySelector('.repo-bar-summary');
+  var curRoot = bar ? String(bar.getAttribute('title') || '').trim() : '';
+  if (!curRoot) return;
+  try {
+    var txt = xhr.responseText || '';
+    var doc = new DOMParser().parseFromString(txt, 'text/html');
+    var nw = doc.getElementById('worktree');
+    var respRoot = nw ? String(nw.getAttribute('data-repo') || '').trim() : '';
+    if (!respRoot) return;
+    if (respRoot !== curRoot) {
+      e.detail.shouldSwap = false;
+    }
+  } catch (err) {
+    /* allow swap */
+  }
+});
+
 document.body.addEventListener('htmx:afterSwap', function (e) {
   var t = e.detail && e.detail.target;
   if (!t || !t.id) return;

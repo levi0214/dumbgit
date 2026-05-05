@@ -59,7 +59,13 @@ async function loadGraph(): Promise<GraphFragmentProps> {
     const head = await headInfo()
     const rows = await logGraphRows(50)
     const worktree = await workTreeSummary()
-    return { ok: true, head, rows, worktree }
+    return {
+      ok: true,
+      head,
+      rows,
+      worktree,
+      repoPath: getCurrentRepo(),
+    }
   } catch (e) {
     const stderr =
       e instanceof GitError
@@ -136,13 +142,15 @@ app.get('/', async (c) => {
 })
 
 app.get('/fragment/graph', async (c) => {
+  c.header('Cache-Control', 'no-store')
   const graph = await loadGraph()
   return c.html(<GraphFragment {...graph} />, 200)
 })
 
 app.get('/fragment/worktree', async (c) => {
+  c.header('Cache-Control', 'no-store')
   const wt = await workTreeSummary()
-  return c.html(<WorkTreeFragment {...wt} />, 200)
+  return c.html(<WorkTreeFragment {...wt} repoPath={getCurrentRepo()} />, 200)
 })
 
 app.post('/api/repo', async (c) => {
