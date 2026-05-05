@@ -33,6 +33,17 @@ import { WorkTreeFragment } from './views/worktree'
 
 const PORT = 7777
 
+/** Initial / expanded `git log -n` depth (ASCII graph needs full re-fetch each time). */
+const GRAPH_COMMIT_DEFAULT = 50
+const GRAPH_COMMIT_STEP = 50
+const GRAPH_COMMIT_MAX = 500
+
+function clampGraphCommitLimit(n: number): number {
+  if (!Number.isFinite(n)) return GRAPH_COMMIT_DEFAULT
+  const floored = Math.floor(n)
+  return Math.min(GRAPH_COMMIT_MAX, Math.max(10, floored))
+}
+
 function expandUser(p: string): string {
   if (p.startsWith('~/')) return path.join(os.homedir(), p.slice(2))
   if (p === '~') return os.homedir()
@@ -54,17 +65,30 @@ function initialRepoFromArgv(): string {
   return path.resolve(expandUser(raw))
 }
 
-async function loadGraph(): Promise<GraphFragmentProps> {
+async function loadGraph(limit?: number): Promise<GraphFragmentProps> {
+  const graphCommitLimit = clampGraphCommitLimit(limit ?? GRAPH_COMMIT_DEFAULT)
   try {
     const head = await headInfo()
-    const rows = await logGraphRows(50)
+    const rows = await logGraphRows(graphCommitLimit)
     const worktree = await workTreeSummary()
+    const commitRows = rows.filter((r) => r.kind === 'commit').length
+    const graphNextLimit = Math.min(
+      graphCommitLimit + GRAPH_COMMIT_STEP,
+      GRAPH_COMMIT_MAX,
+    )
+    const showLoadMore =
+      commitRows >= graphCommitLimit &&
+      commitRows > 0 &&
+      graphCommitLimit < GRAPH_COMMIT_MAX
     return {
       ok: true,
       head,
       rows,
       worktree,
       repoPath: getCurrentRepo(),
+      graphCommitLimit,
+      graphNextLimit,
+      showLoadMore,
     }
   } catch (e) {
     const stderr =
@@ -143,7 +167,11 @@ app.get('/', async (c) => {
 
 app.get('/fragment/graph', async (c) => {
   c.header('Cache-Control', 'no-store')
-  const graph = await loadGraph()
+  const q = c.req.query('limit')
+  const parsed = q !== undefined ? Number.parseInt(q, 10) : NaN
+  const graph = await loadGraph(
+    Number.isFinite(parsed) ? parsed : undefined,
+  )
   return c.html(<GraphFragment {...graph} />, 200)
 })
 

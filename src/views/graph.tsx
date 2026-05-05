@@ -17,6 +17,11 @@ export type GraphFragmentProps =
       worktree: WorkTreeSummary
       /** Absolute repo root; tags #worktree so stale polls cannot overwrite after repo switch. */
       repoPath: string
+      /** Current `git log -n` window size (shown commits cap). */
+      graphCommitLimit: number
+      /** Next limit for “load more” (`min(limit + step, max)`). */
+      graphNextLimit: number
+      showLoadMore: boolean
       swapOob?: boolean
     }
   | { ok: false; stderr: string; swapOob?: boolean }
@@ -496,7 +501,12 @@ export function GraphFragment(props: GraphFragmentProps) {
   const laneHighlights = graphLaneHighlights(rows)
 
   return (
-    <div id="graph" class="graph-root" {...oob}>
+    <div
+      id="graph"
+      class="graph-root"
+      data-graph-limit={String(props.graphCommitLimit)}
+      {...oob}
+    >
       <div class={`graph-head${detached ? ' graph-head-detached' : ''}`}>
         <HeadLine head={head} />
         {head.kind === 'detached' && head.previousBranch ? (
@@ -534,6 +544,20 @@ export function GraphFragment(props: GraphFragmentProps) {
           detached={detached}
           laneHighlights={laneHighlights}
         />
+        {props.showLoadMore ? (
+          <div class="graph-load-more">
+            <button
+              type="button"
+              class="graph-load-more-btn"
+              title={`git log --graph -n ${props.graphNextLimit}`}
+              hx-get={`/fragment/graph?limit=${encodeURIComponent(String(props.graphNextLimit))}`}
+              hx-target="#graph"
+              hx-swap="outerHTML"
+            >
+              load more
+            </button>
+          </div>
+        ) : null}
       </div>
     </div>
   )

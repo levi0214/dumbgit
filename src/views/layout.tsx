@@ -255,6 +255,27 @@ body {
   display: flex;
   flex-direction: column;
 }
+.graph-load-more {
+  flex-shrink: 0;
+  padding: 6px 8px 8px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: center;
+}
+.graph-load-more-btn {
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  padding: 4px 14px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: #2d2d2d;
+  color: var(--muted);
+}
+.graph-load-more-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
 .log-lines {
   margin: 0;
   padding: 8px 0;
@@ -972,7 +993,11 @@ const SSE_SCRIPT = `
     if (typeof htmx === 'undefined') { setTimeout(start, 50); return; }
     var es = new EventSource('/events');
     es.addEventListener('changed', function () {
-      htmx.ajax('GET', '/fragment/graph', { target: '#graph', swap: 'outerHTML' });
+      var g = document.getElementById('graph');
+      var limRaw = g && g.dataset ? g.dataset.graphLimit : '';
+      var lim = parseInt(String(limRaw || '50'), 10);
+      if (!Number.isFinite(lim) || lim < 10) lim = 50;
+      htmx.ajax('GET', '/fragment/graph?limit=' + encodeURIComponent(String(lim)), { target: '#graph', swap: 'outerHTML' });
     });
   }
   start();
