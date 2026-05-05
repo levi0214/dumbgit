@@ -165,6 +165,53 @@ function AnsiSpans(props: { ansi: string }) {
   )
 }
 
+const LANE_PALETTE = [
+  '#569cd6', // blue
+  '#6a9955', // green
+  '#c586c0', // magenta
+  '#dcdcaa', // yellow
+  '#4ec9b0', // cyan
+  '#f48771', // orange
+  '#b0a6e0', // lavender
+]
+
+/**
+ * Color a single `git log --graph` lane char by its column.
+ * git draws lane chars at even columns (`|`, `*`) and slants at odd columns
+ * (`/`, `\`). Slants connect adjacent lanes; we color them with the OUTER
+ * lane (the one farther from main lane 0), which is what your eye traces
+ * when following a branch up or down.
+ */
+function laneOf(col: number): number {
+  return col % 2 === 0 ? col / 2 : (col + 1) / 2
+}
+
+function laneColor(col: number): string {
+  return LANE_PALETTE[laneOf(col) % LANE_PALETTE.length]
+}
+
+/** Render the `git --graph` prefix with per-column colored lanes. */
+function GraphLaneSpans(props: { ansi: string }) {
+  const text = stripAnsi(props.ansi)
+  const out: JSX.Element[] = []
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i]
+    if (ch === ' ') {
+      out.push(<span key={i}> </span>)
+      continue
+    }
+    const isNode = ch === '*'
+    const style: Record<string, string> = { color: laneColor(i) }
+    if (isNode) style['font-weight'] = '700'
+    out.push(
+      <span key={i} style={style}>
+        {ch}
+      </span>,
+    )
+  }
+  return <>{out}</>
+}
+
 function RefPills(props: { decorateRaw: string }) {
   const tokens = decorationRefs(props.decorateRaw)
   if (tokens.length === 0) return null
@@ -201,7 +248,7 @@ function GraphCommitLine(props: { row: GraphCommitRow }) {
   return (
     <div class={`log-row ${isHead ? 'log-row-head' : ''}`}>
       <span class="graph-prefix">
-        <AnsiSpans ansi={graphAnsi} />
+        <GraphLaneSpans ansi={graphAnsi} />
       </span>
       <button
         type="button"
@@ -232,7 +279,7 @@ function GraphOtherLine(props: { ansi: string }) {
   return (
     <div class="log-row log-row-other">
       <span class="graph-prefix-wide">
-        <AnsiSpans ansi={props.ansi} />
+        <GraphLaneSpans ansi={props.ansi} />
       </span>
     </div>
   )
