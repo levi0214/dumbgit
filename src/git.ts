@@ -82,7 +82,7 @@ export async function logGraphRows(limit = 50): Promise<GraphRow[]> {
     'log',
     '--graph',
     '--all',
-    '--pretty=format:\x1f%C(auto)%h\x1f%d\x1f%s\x1f%an\x1f%ai\x1f',
+    '--pretty=format:\x1f%C(auto)%h\x1f%d\x1f%s\x1f%an\x1f%aI\x1f',
     '--decorate=short',
     '--color=always',
     '-n',

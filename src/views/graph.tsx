@@ -240,11 +240,29 @@ function RefPills(props: { decorateRaw: string }) {
   )
 }
 
+/** Compact relative time like `3m`, `2h`, `yesterday`, `2w`, `4mo`, `1y`. */
+function relTime(iso: string): string {
+  const t = new Date(iso).getTime()
+  if (Number.isNaN(t)) return ''
+  const diff = Math.max(0, Date.now() - t)
+  const sec = Math.floor(diff / 1000)
+  if (sec < 60) return 'now'
+  const min = Math.floor(sec / 60)
+  if (min < 60) return `${min}m`
+  const hr = Math.floor(min / 60)
+  if (hr < 24) return `${hr}h`
+  const day = Math.floor(hr / 24)
+  if (day === 1) return 'yesterday'
+  if (day < 14) return `${day}d`
+  if (day < 60) return `${Math.floor(day / 7)}w`
+  if (day < 365) return `${Math.floor(day / 30)}mo`
+  return `${Math.floor(day / 365)}y`
+}
+
 function GraphCommitLine(props: { row: GraphCommitRow }) {
-  const { graphAnsi, hashAnsi, decorateRaw, subject, inHistory } = props.row
+  const { graphAnsi, hashAnsi, decorateRaw, subject, date, inHistory } = props.row
   const sha = stripAnsi(hashAnsi).trim()
   const isHead = stripAnsi(decorateRaw).includes('HEAD ->')
-  const checkoutUrl = `/api/checkout/commit?sha=${encodeURIComponent(sha)}`
   const diffUrl = `/api/diff/${encodeURIComponent(sha)}`
   const cls = [
     'log-row',
@@ -259,16 +277,9 @@ function GraphCommitLine(props: { row: GraphCommitRow }) {
       <span class="graph-prefix">
         <GraphLaneSpans ansi={graphAnsi} />
       </span>
-      <button
-        type="button"
-        class="sha-btn"
-        title="checkout this commit (detached HEAD)"
-        hx-post={checkoutUrl}
-        hx-target="#graph"
-        hx-swap="outerHTML"
-      >
-        <AnsiSpans ansi={hashAnsi} />
-      </button>
+      <span class="sha-text" title={`commit ${sha} — click to copy`}>
+        {sha}
+      </span>
       <button
         type="button"
         class="msg-btn"
@@ -280,6 +291,9 @@ function GraphCommitLine(props: { row: GraphCommitRow }) {
         {subject}
       </button>
       <RefPills decorateRaw={decorateRaw} />
+      <span class="row-time" title={date}>
+        {relTime(date)}
+      </span>
     </div>
   )
 }

@@ -55,6 +55,7 @@ export function DiffPanel(props: DiffPanelProps) {
     ) : (
       <pre class="diff-body">(no diff)</pre>
     )
+  const checkoutUrl = `/api/checkout/commit?sha=${encodeURIComponent(sha)}`
 
   return (
     <div id="diff" class="diff-panel">
@@ -62,6 +63,18 @@ export function DiffPanel(props: DiffPanelProps) {
         <div class="diff-subject">{details.subject}</div>
         <div class="diff-meta">
           {sha.slice(0, 7)} · {details.author} · {details.date}
+        </div>
+        <div class="diff-actions">
+          <button
+            type="button"
+            class="diff-checkout-btn"
+            title="git switch --detach to this commit (HEAD will detach)"
+            hx-post={checkoutUrl}
+            hx-target="#graph"
+            hx-swap="outerHTML"
+          >
+            ↗ checkout (detached)
+          </button>
         </div>
       </div>
       {details.files.length > 0 && (

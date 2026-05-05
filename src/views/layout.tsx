@@ -213,18 +213,24 @@ body {
 .ref-pill-branch {
   color: #9cdcfe;
 }
-.sha-btn {
+.sha-text {
   font: inherit;
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  padding: 0;
-  text-decoration: underline;
-  text-underline-offset: 2px;
+  font-size: 11px;
+  color: var(--muted);
+  opacity: 0.35;
+  cursor: copy;
+  user-select: all;
   flex-shrink: 0;
+  transition: opacity 0.12s, color 0.12s;
+  letter-spacing: 0.3px;
 }
-.sha-btn:hover {
-  filter: brightness(1.15);
+.log-row:hover .sha-text {
+  opacity: 1;
+  color: #dcdcaa;
+}
+.sha-copied {
+  color: var(--success) !important;
+  opacity: 1 !important;
 }
 .msg-btn {
   font: inherit;
@@ -240,6 +246,17 @@ body {
 }
 .msg-btn:hover {
   color: var(--accent);
+}
+.row-time {
+  flex-shrink: 0;
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 11px;
+  opacity: 0.5;
+  padding-left: 8px;
+}
+.log-row:hover .row-time {
+  opacity: 1;
 }
 .log-lines.empty {
   color: var(--muted);
@@ -285,14 +302,43 @@ body {
   padding: 8px 12px;
   border-bottom: 1px solid var(--border);
   background: #2d2d30;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-areas:
+    "subject actions"
+    "meta    actions";
+  align-items: center;
+  gap: 4px 12px;
 }
 .diff-subject {
+  grid-area: subject;
   color: var(--accent);
   word-break: break-word;
 }
 .diff-meta {
+  grid-area: meta;
   color: var(--muted);
   font-size: 11px;
+}
+.diff-actions {
+  grid-area: actions;
+  display: flex;
+  gap: 6px;
+}
+.diff-checkout-btn {
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: #2d2d2d;
+  color: var(--fg);
+  white-space: nowrap;
+}
+.diff-checkout-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
 }
 .diff-files {
   margin: 0;
@@ -367,6 +413,18 @@ document.addEventListener('keydown', function (e) {
     const d = document.getElementById('diff');
     if (d) d.outerHTML = EMPTY_DIFF;
   }
+});
+
+document.addEventListener('click', function (e) {
+  const t = e.target.closest('.sha-text');
+  if (!t) return;
+  const sha = t.textContent.trim();
+  if (!sha) return;
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(sha);
+  }
+  t.classList.add('sha-copied');
+  setTimeout(function () { t.classList.remove('sha-copied'); }, 800);
 });
 `
 
