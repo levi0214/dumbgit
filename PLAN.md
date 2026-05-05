@@ -57,8 +57,9 @@ dumbgit/
   src/
     index.tsx       # Hono app + route registrations + server start (Bun needs .tsx for JSX)
     git.ts          # thin wrappers around `git` CLI; returns typed data
+    watch.ts        # fs.watch on .git/refs and HEAD with debounce
     views/
-      layout.tsx    # full-page shell (head, htmx script, css)
+      layout.tsx    # full-page shell (head, htmx script, css, SSE bootstrap)
       graph.tsx    # branches + colored `git log --graph` block
       diff.tsx     # right-side diff panel for a selected commit
       status.tsx   # small status / error toast fragment
@@ -135,3 +136,27 @@ push from the toolbar, and a one-command launcher.
   resolves `tsconfig.json` relative to the cwd, not the source file, so
   `bun run /path/to/dumbgit/src/index.tsx` from another repo would otherwise
   fall back to React. The pragma makes JSX runtime selection cwd-independent.
+
+### Step 5 — Live updates ✅
+
+Replace the manual refresh button with event-driven updates so the graph
+reflects reality without polling.
+
+- `src/git.ts` adds `gitDir()` returning the absolute `.git` path
+- `src/watch.ts`: `watchGitRefs(gitDir, onChange)`, an `fs.watch` recursive
+  watcher with an 80ms debounce. On macOS this rides FSEvents — kernel-level,
+  ~0 idle CPU. Filter only fires on `HEAD`, `packed-refs`, and `refs/**`
+  (so noise from `objects/`, `logs/`, `index`, `COMMIT_EDITMSG` is ignored).
+- `index.tsx` keeps a `lastChangeTimestamp` updated by the watcher
+- `GET /events`: SSE stream from `hono/streaming`. Inside the handler we
+  poll `lastChangeTimestamp` every 100ms and emit a `changed` SSE event
+  when it advances. Costs roughly 0.5ms of CPU per minute per open tab; far
+  less than 2-second HTTP polling and noticeably more responsive.
+- Layout adds a small bootstrap script that opens an `EventSource` and on
+  `changed` calls `htmx.ajax('GET', '/fragment/graph', ...)` to swap `#graph`.
+  Browser EventSource auto-reconnects on transient disconnects, so server
+  restarts are self-healing.
+- Toolbar loses the refresh button and the `R` keybinding. `Esc` and `P` stay.
+- Bun 1.0 quirk: `streamSSE` calls `c.newResponse(stream)` without a status,
+  which hits the same status=0 error as `c.html(...)` did in step 1. Workaround
+  is one line: `c.status(200)` before returning the SSE response.

@@ -241,10 +241,7 @@ const KEY_SCRIPT =
 document.addEventListener('keydown', function (e) {
   if (e.target.closest('input, textarea')) return;
   const k = e.key;
-  if (k === 'r' || k === 'R') {
-    e.preventDefault();
-    document.getElementById('refresh-btn')?.click();
-  } else if (k === 'p' || k === 'P') {
+  if (k === 'p' || k === 'P') {
     e.preventDefault();
     document.getElementById('push-btn')?.click();
   } else if (k === 'Escape') {
@@ -252,6 +249,19 @@ document.addEventListener('keydown', function (e) {
     if (d) d.outerHTML = EMPTY_DIFF;
   }
 });
+`
+
+const SSE_SCRIPT = `
+(function () {
+  function start() {
+    if (typeof htmx === 'undefined') { setTimeout(start, 50); return; }
+    var es = new EventSource('/events');
+    es.addEventListener('changed', function () {
+      htmx.ajax('GET', '/fragment/graph', { target: '#graph', swap: 'outerHTML' });
+    });
+  }
+  start();
+})();
 `
 
 export function Layout(props: { children: JSX.Element }) {
@@ -270,6 +280,7 @@ export function Layout(props: { children: JSX.Element }) {
       <body>
         {props.children}
         <script>{raw(KEY_SCRIPT)}</script>
+        <script>{raw(SSE_SCRIPT)}</script>
       </body>
     </html>
   )
@@ -278,16 +289,6 @@ export function Layout(props: { children: JSX.Element }) {
 export function Toolbar() {
   return (
     <div class="toolbar">
-      <button
-        type="button"
-        id="refresh-btn"
-        title="Refresh (R)"
-        hx-get="/fragment/graph"
-        hx-target="#graph"
-        hx-swap="outerHTML"
-      >
-        ↻ refresh
-      </button>
       <button
         type="button"
         id="push-btn"

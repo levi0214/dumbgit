@@ -1,12 +1,14 @@
 /** @jsxImportSource hono/jsx */
 import { Fragment } from 'hono/jsx'
 import { Hono } from 'hono'
+import { streamSSE } from 'hono/streaming'
 import {
   GitError,
   checkoutBranch,
   checkoutCommit,
   commitDetails,
   ensureGitRepo,
+  gitDir,
   headInfo,
   listBranches,
   logGraph,
@@ -17,6 +19,7 @@ import type { GraphFragmentProps } from './views/graph'
 import { DiffPanel } from './views/diff'
 import { Layout, Toolbar } from './views/layout'
 import { StatusOob } from './views/status'
+import { watchGitRefs } from './watch'
 
 const PORT = 7777
 
@@ -45,6 +48,12 @@ try {
   console.error(`run dumbgit from inside a git working tree`)
   process.exit(1)
 }
+
+let lastChangeTimestamp = Date.now()
+const watchedDir = await gitDir()
+watchGitRefs(watchedDir, () => {
+  lastChangeTimestamp = Date.now()
+})
 
 const app = new Hono()
 
@@ -131,6 +140,22 @@ app.post('/api/push', async (c) => {
     return c.html(<StatusOob info={r.message} />, 200)
   }
   return c.html(<StatusOob error={r.stderr} />, 200)
+})
+
+app.get('/events', (c) => {
+  c.status(200)
+  return streamSSE(c, async (stream) => {
+    let lastSent = lastChangeTimestamp
+    await stream.writeSSE({ event: 'ready', data: String(lastSent) })
+
+    while (!stream.aborted && !stream.closed) {
+      if (lastChangeTimestamp > lastSent) {
+        lastSent = lastChangeTimestamp
+        await stream.writeSSE({ event: 'changed', data: String(lastSent) })
+      }
+      await stream.sleep(100)
+    }
+  })
 })
 
 console.log(`dumbgit on http://localhost:${PORT}  (ctrl-c to quit)`)

@@ -194,3 +194,9 @@ export async function ensureGitRepo(): Promise<void> {
     throw new GitError(stderr.trim() || 'not a git repository', code)
   }
 }
+
+/** Absolute path to the .git directory for the current cwd. */
+export async function gitDir(): Promise<string> {
+  const out = await gitOrThrow(['rev-parse', '--absolute-git-dir'])
+  return out.trim()
+}
