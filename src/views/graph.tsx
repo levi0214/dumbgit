@@ -331,6 +331,18 @@ export function GraphFragment(props: GraphFragmentProps) {
     <div id="graph" class="graph-root">
       <div class="graph-head">
         <HeadLine head={head} />
+        {head.kind === 'branch' ? (
+          <button
+            type="button"
+            id="push-btn"
+            class="head-push-btn"
+            title={`git push (P)`}
+            hx-post="/api/push"
+            hx-swap="none"
+          >
+            ↑ push
+          </button>
+        ) : null}
       </div>
       <WorkTreeFragment {...worktree} />
       <div class="graph-body">

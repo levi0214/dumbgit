@@ -25,21 +25,18 @@ body {
   margin: 0 auto;
   padding: 12px 16px 24px;
 }
-.toolbar {
-  margin-bottom: 12px;
-  display: flex;
-  gap: 8px;
-}
-.toolbar button {
+.head-push-btn {
+  margin-left: auto;
   font: inherit;
+  font-size: 11px;
   cursor: pointer;
-  padding: 4px 10px;
+  padding: 3px 10px;
   border: 1px solid var(--border);
   border-radius: 4px;
   background: #2d2d2d;
   color: var(--fg);
 }
-.toolbar button:hover {
+.head-push-btn:hover {
   border-color: var(--accent);
   color: var(--accent);
 }
@@ -642,18 +639,3 @@ export function Layout(props: { children: JSX.Element }) {
   )
 }
 
-export function Toolbar() {
-  return (
-    <div class="toolbar">
-      <button
-        type="button"
-        id="push-btn"
-        title="Push current branch to origin (P)"
-        hx-post="/api/push"
-        hx-swap="none"
-      >
-        ↑ push
-      </button>
-    </div>
-  )
-}

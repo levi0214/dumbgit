@@ -18,7 +18,7 @@ import {
 import { GraphFragment } from './views/graph'
 import type { GraphFragmentProps } from './views/graph'
 import { DiffPanel, DiffPatchBody } from './views/diff'
-import { Layout, Toolbar } from './views/layout'
+import { Layout } from './views/layout'
 import { StatusOob } from './views/status'
 import { watchGitRefs } from './watch'
 import { WorkTreeFragment } from './views/worktree'
@@ -83,7 +83,6 @@ app.get('/', async (c) => {
   return c.html(
     <Layout>
       <div class="page">
-        <Toolbar />
         <div id="status" class="status-slot"></div>
         <div class="main-grid">
           <GraphFragment {...graph} />
