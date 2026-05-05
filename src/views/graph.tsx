@@ -278,12 +278,12 @@ function HeadLine(props: { head: HeadInfo }) {
     props.head.kind === 'branch' ? props.head.name : '(detached)'
   return (
     <>
-      <span class="head-dot" aria-hidden="true">
+      <span class="head-dot" aria-hidden="true" title={`at ${short}`}>
         ●
       </span>
-      <span class="head-label">{label}</span>
-      <span class="head-sep"> · </span>
-      <code class="head-sha">{short}</code>
+      <span class="head-label" title={`at ${short}`}>
+        {label}
+      </span>
     </>
   )
 }

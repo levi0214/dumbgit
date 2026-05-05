@@ -88,14 +88,6 @@ body {
   font-weight: 700;
   color: #ffffff;
 }
-.head-sep {
-  color: var(--muted);
-}
-.head-sha {
-  color: var(--muted);
-  font-family: inherit;
-  font-size: 12px;
-}
 .branch-current-dot {
   color: #3ddc6c;
   font-size: 8px;
@@ -108,13 +100,10 @@ body {
   font-size: 11px;
   background: #252526;
 }
-.worktree-head {
-  padding: 4px 12px;
-  background: #2a2a2a;
-  color: var(--muted);
+.worktree-clean-panel {
+  padding: 6px 12px 8px;
 }
 .worktree-clean {
-  padding: 6px 12px 8px;
   color: var(--muted);
 }
 .worktree-body {
@@ -141,13 +130,12 @@ body {
   display: flex;
   gap: 6px;
 }
-.wt-mark {
-  flex-shrink: 0;
-  width: 2.2em;
-  color: var(--muted);
-}
 .wt-path {
   word-break: break-all;
+  color: var(--fg);
+}
+.wt-list li:hover .wt-path {
+  color: var(--accent);
 }
 .graph-body {
   flex: 1;
