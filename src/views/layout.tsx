@@ -4,8 +4,8 @@ import { raw } from 'hono/html'
 const CSS = `
 :root {
   --bg: #1e1e1e;
-  --fg: #d4d4d4;
-  --muted: #858585;
+  --fg: #e8e8e8;
+  --muted: #686868;
   --accent: #569cd6;
   --border: #333;
   --error: #f48771;
@@ -265,11 +265,12 @@ body {
 }
 .log-row {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: baseline;
-  gap: 4px 10px;
+  gap: 6px;
   padding: 3px 12px;
   border-left: 2px solid transparent;
+  overflow: hidden;
 }
 .log-row:hover {
   background: rgba(255, 255, 255, 0.04);
@@ -331,9 +332,13 @@ body {
 }
 .graph-pills {
   display: inline-flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  flex-shrink: 0;
   gap: 4px;
-  align-items: center;
+  align-items: baseline;
+}
+.graph-pills:empty {
+  display: none;
 }
 .ref-pill {
   font: inherit;
@@ -344,7 +349,8 @@ body {
   border: 1px solid var(--border);
   background: #333;
   color: var(--fg);
-  max-width: 100%;
+  flex-shrink: 0;
+  max-width: 28ch;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -357,26 +363,56 @@ body {
   border-color: var(--accent);
   background: rgba(86, 156, 214, 0.15);
 }
-.ref-pill-tag {
-  border-color: #c586c0;
-  color: #d6bce8;
-}
-.ref-pill-remote {
-  color: var(--muted);
-}
 .ref-pill-branch {
   color: #9cdcfe;
 }
-.msg-cell {
-  display: flex;
-  flex: 1;
-  min-width: 0;
-  align-items: baseline;
-  gap: 4px;
-  flex-wrap: wrap;
+/* Remote = outlined / ghost: deprioritized vs local. */
+.ref-pill-remote {
+  background: transparent;
+  border-color: rgba(133, 133, 133, 0.45);
+  color: var(--muted);
+  opacity: 0.85;
+}
+.ref-pill-remote:hover {
+  opacity: 1;
+  border-color: var(--accent);
+  color: var(--accent);
+}
+/* Tag = inline, no pill. Conceptually different from a movable branch. */
+.ref-tag {
+  all: unset;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  color: #c89bd9;
+  opacity: 0.78;
+  padding: 0 2px;
+  flex-shrink: 0;
+  max-width: 28ch;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.ref-tag:hover {
+  opacity: 1;
+  color: #d6bce8;
+}
+.ref-tag .tag-ico {
+  display: block;
+  opacity: 0.85;
+}
+.ref-tag-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .branch-prefix {
   flex-shrink: 0;
+  max-width: 28ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: 12px;
   color: #9cdcfe;
   background: rgba(156, 220, 254, 0.12);
@@ -392,36 +428,39 @@ body {
   color: #ffffff;
   background: rgba(86, 156, 214, 0.35);
 }
-.branch-sep {
-  display: none;
+/* Same grid cell: date by default, hash + copy on hover — no floating chip. */
+.row-end {
+  display: inline-grid;
+  flex-shrink: 0;
+  align-items: baseline;
+  justify-items: end;
+}
+.msg-age,
+.row-tail {
+  grid-area: 1 / 1;
 }
 .msg-age {
-  flex-shrink: 0;
   color: var(--muted);
   font-size: 11px;
-  opacity: 0.7;
 }
 .log-row:hover .msg-age {
-  opacity: 1;
+  visibility: hidden;
 }
 .row-tail {
-  flex-shrink: 0;
   display: inline-flex;
   align-items: center;
-  gap: 3px;
-  margin-left: auto;
-  opacity: 0;
+  gap: 4px;
+  visibility: hidden;
   pointer-events: none;
-  transition: opacity 0.12s ease-out;
 }
 .log-row:hover .row-tail {
-  opacity: 1;
+  visibility: visible;
   pointer-events: auto;
 }
 .hash-peek {
   font-family: inherit;
   font-size: 11px;
-  color: #c8c8c8;
+  color: var(--muted);
   user-select: all;
 }
 .copy-sha-btn {
@@ -453,9 +492,10 @@ body {
   cursor: pointer;
   padding: 0;
   text-align: left;
-  white-space: pre-wrap;
-  word-break: break-word;
-  flex: 0 1 auto;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1 1 0;
   min-width: 0;
 }
 .msg-btn:hover {

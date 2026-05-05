@@ -22,6 +22,9 @@ export type GraphFragmentProps =
 const COPY_ICO = raw(
   `<svg class="copy-ico" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`,
 )
+const TAG_ICO = raw(
+  `<svg class="tag-ico" xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>`,
+)
 /** Split `%d` / parentheses list on commas not inside nested parens. */
 function splitDec(inner: string): string[] {
   const parts: string[] = []
@@ -99,9 +102,51 @@ function refForCheckout(tokenPlain: string): string | null {
   return s
 }
 
+function isTagToken(plain: string): boolean {
+  return /^tag:/i.test(plain)
+}
+
+function tagName(plain: string): string {
+  return plain.replace(/^tag:\s*/i, '').trim()
+}
+
+function isOriginHeadToken(plain: string): boolean {
+  // matches "origin/HEAD" (decorate=short) or "origin/HEAD -> origin/main" (decorate=full)
+  return /^origin\/HEAD(\s*->.*)?$/i.test(plain)
+}
+
+/**
+ * Names of "local" branches present on this commit: any non-tag, non-remote
+ * (no slash) ref token, plus the prefix branch we render before the subject.
+ */
+function localNamesOnRow(
+  tokens: string[],
+  branchPrefix: string | null,
+): Set<string> {
+  const set = new Set<string>()
+  if (branchPrefix && !branchPrefix.includes('/')) set.add(branchPrefix)
+  for (const t of tokens) {
+    const p = stripAnsi(t).trim()
+    const hm = p.match(/^HEAD\s*->\s*(.+)$/i)
+    const name = hm ? hm[1].trim() : p
+    if (!name) continue
+    if (isTagToken(name)) continue
+    if (/^HEAD$/i.test(name)) continue
+    if (!name.includes('/')) set.add(name)
+  }
+  return set
+}
+
+/** `origin/<x>` is redundant if `<x>` is already shown as a local branch on the same row. */
+function isRemoteShadowingLocal(plain: string, locals: Set<string>): boolean {
+  const m = plain.match(/^origin\/(.+)$/i)
+  if (!m) return false
+  return locals.has(m[1])
+}
+
 function pillClass(tokenPlain: string): string {
   if (/HEAD\s*->/i.test(tokenPlain)) return 'ref-pill ref-pill-head'
-  if (/^tag:/i.test(tokenPlain)) return 'ref-pill ref-pill-tag'
+  if (isTagToken(tokenPlain)) return 'ref-tag'
   if (tokenPlain.includes('/')) return 'ref-pill ref-pill-remote'
   return 'ref-pill ref-pill-branch'
 }
@@ -131,7 +176,11 @@ function laneColor(col: number): string {
   return LANE_PALETTE[laneOf(col) % LANE_PALETTE.length]
 }
 
-/** Render the `git --graph` prefix with per-column colored lanes. */
+/**
+ * Render the `git --graph` prefix with per-column colored lanes.
+ * `*` (the commit node) stays full color and bold; connector glyphs
+ * (`|`, `/`, `\`, `_`) are dimmed so commit nodes pop out of the topology.
+ */
 function GraphLaneSpans(props: { ansi: string }) {
   const text = stripAnsi(props.ansi)
   const out: JSX.Element[] = []
@@ -145,7 +194,7 @@ function GraphLaneSpans(props: { ansi: string }) {
     const styleStr =
       ch === '*'
         ? `color:${color};font-weight:800`
-        : `color:${color};font-weight:700`
+        : `color:${color};font-weight:600;opacity:0.45`
     out.push(
       <span key={i} style={styleStr}>
         {ch}
@@ -155,20 +204,52 @@ function GraphLaneSpans(props: { ansi: string }) {
   return <>{out}</>
 }
 
+/** Order pills as: local branch > remote branch > tag. */
+function pillSortKey(plain: string): number {
+  if (/HEAD\s*->/i.test(plain)) return -1
+  if (/^HEAD$/i.test(plain)) return 4
+  if (isTagToken(plain)) return 2
+  if (plain.includes('/')) return 1
+  return 0
+}
+
 function RefPills(props: {
   decorateRaw: string
   branchPrefix: string | null
 }) {
   const tokens = decorationRefs(props.decorateRaw)
   if (tokens.length === 0) return null
+  const locals = localNamesOnRow(tokens, props.branchPrefix)
+  const sorted = [...tokens].sort(
+    (a, b) => pillSortKey(stripAnsi(a).trim()) - pillSortKey(stripAnsi(b).trim()),
+  )
   return (
     <span class="graph-pills">
-      {tokens.map((t, idx) => {
+      {sorted.map((t, idx) => {
         const plain = stripAnsi(t).trim()
         if (/^HEAD$/i.test(plain)) return null
+        if (isOriginHeadToken(plain)) return null
         if (refPillRedundantWithBranchPrefix(t, props.branchPrefix)) return null
+        if (isRemoteShadowingLocal(plain, locals)) return null
         const ref = refForCheckout(t)
         if (!ref) return null
+        if (isTagToken(plain)) {
+          const name = tagName(plain)
+          return (
+            <button
+              key={idx}
+              type="button"
+              class="ref-tag"
+              title={`tag ${name} — git switch ${name}`}
+              hx-post={`/api/checkout/branch?name=${encodeURIComponent(ref)}`}
+              hx-target="#graph"
+              hx-swap="outerHTML"
+            >
+              {TAG_ICO}
+              <span class="ref-tag-name">{name}</span>
+            </button>
+          )
+        }
         return (
           <button
             key={idx}
@@ -179,7 +260,7 @@ function RefPills(props: {
             hx-target="#graph"
             hx-swap="outerHTML"
           >
-            {t}
+            {plain}
           </button>
         )
       })}
@@ -241,48 +322,46 @@ function GraphCommitLine(props: {
           ●
         </span>
       ) : null}
-      <div class="msg-cell">
-        {branchPrefix ? (
-          <span
-            class="branch-prefix"
-            title={`branch: ${branchPrefix} — double-click to switch`}
-            hx-post={`/api/checkout/branch?name=${encodeURIComponent(branchPrefix)}`}
-            hx-target="#graph"
-            hx-swap="outerHTML"
-            hx-trigger="dblclick"
-          >
-            {branchPrefix}
-            <span class="branch-sep"> · </span>
-          </span>
-        ) : null}
-        <button
-          type="button"
-          class="msg-btn"
-          title="show changed files"
-          hx-get={diffUrl}
-          hx-target="#diff"
+      {branchPrefix ? (
+        <span
+          class="branch-prefix"
+          title={`branch: ${branchPrefix} — double-click to switch`}
+          hx-post={`/api/checkout/branch?name=${encodeURIComponent(branchPrefix)}`}
+          hx-target="#graph"
           hx-swap="outerHTML"
+          hx-trigger="dblclick"
         >
-          {subject}
-        </button>
+          {branchPrefix}
+        </span>
+      ) : null}
+      <RefPills decorateRaw={decorateRaw} branchPrefix={branchPrefix} />
+      <button
+        type="button"
+        class="msg-btn"
+        title={subject}
+        hx-get={diffUrl}
+        hx-target="#diff"
+        hx-swap="outerHTML"
+      >
+        {subject}
+      </button>
+      <span class="row-end">
         <span class="msg-age" title={date}>
-          {' · '}
           {relTimeAgo(date)}
         </span>
-      </div>
-      <RefPills decorateRaw={decorateRaw} branchPrefix={branchPrefix} />
-      <span class="row-tail">
-        <code class="hash-peek" title={shaFull}>
-          {shaShort}
-        </code>
-        <button
-          type="button"
-          class="copy-sha-btn"
-          data-sha={shaFull}
-          title="copy full hash"
-        >
-          {COPY_ICO}
-        </button>
+        <span class="row-tail">
+          <code class="hash-peek" title={shaFull}>
+            {shaShort}
+          </code>
+          <button
+            type="button"
+            class="copy-sha-btn"
+            data-sha={shaFull}
+            title="copy full hash"
+          >
+            {COPY_ICO}
+          </button>
+        </span>
       </span>
     </div>
   )
