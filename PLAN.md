@@ -59,8 +59,9 @@ dumbgit/
     git.ts          # thin wrappers around `git` CLI; returns typed data
     watch.ts        # fs.watch on .git/refs and HEAD with debounce
     views/
-      layout.tsx    # full-page shell (head, htmx script, css, SSE bootstrap)
-      graph.tsx    # branches + colored `git log --graph` block
+      layout.tsx    # full-page shell (htmx, css, SSE + worktree poll scripts)
+      graph.tsx    # branches + log graph + embedded #worktree
+      worktree.tsx # staged / unstaged / untracked file lists
       diff.tsx     # right-side diff panel for a selected commit
       status.tsx   # small status / error toast fragment
   README.md
@@ -152,10 +153,16 @@ reflects reality without polling.
   poll `lastChangeTimestamp` every 100ms and emit a `changed` SSE event
   when it advances. Costs roughly 0.5ms of CPU per minute per open tab; far
   less than 2-second HTTP polling and noticeably more responsive.
-- Layout adds a small bootstrap script that opens an `EventSource` and on
-  `changed` calls `htmx.ajax('GET', '/fragment/graph', ...)` to swap `#graph`.
+- Layout adds bootstrap scripts: `EventSource('/events')` on `changed` calls
+  `htmx.ajax('GET', '/fragment/graph', ...)` to swap `#graph`.
   Browser EventSource auto-reconnects on transient disconnects, so server
   restarts are self-healing.
+- **Working tree file list** (staged / unstaged / untracked): `git.ts`
+  adds `workTreeSummary()`; `views/worktree.tsx` renders `#worktree` under
+  the HEAD banner. Plain file paths only — no hunks (use your editor for that).
+  Working-copy edits do not touch `refs/**`, so they do not wake the FSEvents
+  watcher; `WT_POLL_SCRIPT` refetches `/fragment/worktree` every 3s while the
+  tab is visible only.
 - Toolbar loses the refresh button and the `R` keybinding. `Esc` and `P` stay.
 - Bun 1.0 quirk: `streamSSE` calls `c.newResponse(stream)` without a status,
   which hits the same status=0 error as `c.html(...)` did in step 1. Workaround

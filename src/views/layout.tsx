@@ -72,11 +72,57 @@ body {
   background: #2d2d30;
   color: var(--accent);
 }
+.worktree-panel {
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+  background: #252526;
+}
+.worktree-head {
+  padding: 4px 12px;
+  background: #2a2a2a;
+  color: var(--muted);
+}
+.worktree-clean {
+  padding: 6px 12px 8px;
+  color: var(--muted);
+}
+.worktree-body {
+  padding: 0 12px 8px;
+  max-height: 26vh;
+  overflow-y: auto;
+}
+.wt-section {
+  margin-top: 6px;
+}
+.wt-section-title {
+  color: var(--accent);
+  margin-bottom: 2px;
+}
+.wt-count {
+  color: var(--muted);
+}
+.wt-list {
+  margin: 0;
+  padding: 0 0 0 6px;
+  list-style: none;
+}
+.wt-list li {
+  display: flex;
+  gap: 6px;
+}
+.wt-mark {
+  flex-shrink: 0;
+  width: 2.2em;
+  color: var(--muted);
+}
+.wt-path {
+  word-break: break-all;
+}
 .graph-body {
   display: grid;
   grid-template-columns: 220px 1fr;
   min-height: 200px;
-  max-height: calc(100vh - 140px);
+  max-height: calc(100vh - 260px);
 }
 .branch-list {
   margin: 0;
@@ -175,7 +221,7 @@ body {
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  max-height: calc(100vh - 140px);
+  max-height: calc(100vh - 260px);
 }
 .diff-empty {
   padding: 16px;
@@ -264,6 +310,17 @@ const SSE_SCRIPT = `
 })();
 `
 
+const WT_POLL_SCRIPT = `
+setInterval(function () {
+  if (document.visibilityState !== 'visible') return;
+  if (typeof htmx === 'undefined') return;
+  var w = document.getElementById('worktree');
+  if (w) {
+    htmx.ajax('GET', '/fragment/worktree', { target: '#worktree', swap: 'outerHTML' });
+  }
+}, 3000);
+`
+
 export function Layout(props: { children: JSX.Element }) {
   return (
     <html lang="en">
@@ -281,6 +338,7 @@ export function Layout(props: { children: JSX.Element }) {
         {props.children}
         <script>{raw(KEY_SCRIPT)}</script>
         <script>{raw(SSE_SCRIPT)}</script>
+        <script>{raw(WT_POLL_SCRIPT)}</script>
       </body>
     </html>
   )

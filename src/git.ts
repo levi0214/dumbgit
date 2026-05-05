@@ -200,3 +200,45 @@ export async function gitDir(): Promise<string> {
   const out = await gitOrThrow(['rev-parse', '--absolute-git-dir'])
   return out.trim()
 }
+
+export type WorkTreeEntry = { mark: string; path: string }
+
+export type WorkTreeSummary = {
+  staged: WorkTreeEntry[]
+  unstaged: WorkTreeEntry[]
+  untracked: WorkTreeEntry[]
+}
+
+function parseNameStatus(stdout: string): WorkTreeEntry[] {
+  const entries: WorkTreeEntry[] = []
+  for (const line of stdout.split('\n')) {
+    if (!line.trim()) continue
+    const tabs = line.split('\t')
+    const mark = tabs[0] ?? ''
+    if (tabs.length === 2) {
+      entries.push({ mark, path: tabs[1] })
+    } else if (tabs.length >= 3) {
+      entries.push({ mark, path: `${tabs[1]} → ${tabs[2]}` })
+    }
+  }
+  return entries
+}
+
+/** Files changed in the working tree (not yet reflected in `git log`). */
+export async function workTreeSummary(): Promise<WorkTreeSummary> {
+  const stagedR = await spawnGit(['diff', '--cached', '--name-status'])
+  const unstagedR = await spawnGit(['diff', '--name-status'])
+  const staged = stagedR.code === 0 ? parseNameStatus(stagedR.stdout) : []
+  const unstaged = unstagedR.code === 0 ? parseNameStatus(unstagedR.stdout) : []
+
+  const ut = await spawnGit(['ls-files', '--others', '--exclude-standard'])
+  const untracked =
+    ut.code === 0
+      ? ut.stdout
+          .split('\n')
+          .filter(Boolean)
+          .map((path) => ({ mark: '??', path }))
+      : []
+
+  return { staged, unstaged, untracked }
+}

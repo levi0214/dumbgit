@@ -13,6 +13,7 @@ import {
   listBranches,
   logGraph,
   push,
+  workTreeSummary,
 } from './git'
 import { GraphFragment } from './views/graph'
 import type { GraphFragmentProps } from './views/graph'
@@ -20,6 +21,7 @@ import { DiffPanel } from './views/diff'
 import { Layout, Toolbar } from './views/layout'
 import { StatusOob } from './views/status'
 import { watchGitRefs } from './watch'
+import { WorkTreeFragment } from './views/worktree'
 
 const PORT = 7777
 
@@ -28,7 +30,8 @@ async function loadGraph(): Promise<GraphFragmentProps> {
     const head = await headInfo()
     const branches = await listBranches()
     const log = await logGraph(50)
-    return { ok: true, head, branches, log }
+    const worktree = await workTreeSummary()
+    return { ok: true, head, branches, log, worktree }
   } catch (e) {
     const stderr =
       e instanceof GitError
@@ -77,6 +80,11 @@ app.get('/', async (c) => {
 app.get('/fragment/graph', async (c) => {
   const graph = await loadGraph()
   return c.html(<GraphFragment {...graph} />, 200)
+})
+
+app.get('/fragment/worktree', async (c) => {
+  const wt = await workTreeSummary()
+  return c.html(<WorkTreeFragment {...wt} />, 200)
 })
 
 app.post('/api/checkout/branch', async (c) => {

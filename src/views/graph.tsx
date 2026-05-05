@@ -1,8 +1,9 @@
 /** @jsxImportSource hono/jsx */
-import type { Branch, HeadInfo } from '../git'
+import type { Branch, HeadInfo, WorkTreeSummary } from '../git'
+import { WorkTreeFragment } from './worktree'
 
 export type GraphFragmentProps =
-  | { ok: true; head: HeadInfo; branches: Branch[]; log: string }
+  | { ok: true; head: HeadInfo; branches: Branch[]; log: string; worktree: WorkTreeSummary }
   | { ok: false; stderr: string }
 
 function headLine(head: HeadInfo): string {
@@ -86,11 +87,12 @@ export function GraphFragment(props: GraphFragmentProps) {
     )
   }
 
-  const { head, branches, log } = props
+  const { head, branches, log, worktree } = props
 
   return (
     <div id="graph" class="graph-root">
       <div class="graph-head">{headLine(head)}</div>
+      <WorkTreeFragment {...worktree} />
       <div class="graph-body">
         <aside>
           <ul class="branch-list">
