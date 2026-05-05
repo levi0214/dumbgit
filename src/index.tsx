@@ -26,7 +26,6 @@ import { GraphFragment } from './views/graph'
 import type { GraphFragmentProps } from './views/graph'
 import { DiffPanel, DiffPatchBody } from './views/diff'
 import { Layout } from './views/layout'
-import { RepoBar } from './views/repo'
 import { StatusOob } from './views/status'
 import { watchGitRefs } from './watch'
 import { WorkTreeFragment } from './views/worktree'
@@ -86,6 +85,8 @@ async function loadGraph(limit?: number): Promise<GraphFragmentProps> {
       rows,
       worktree,
       repoPath: getCurrentRepo(),
+      repoPickerRoot: getCurrentRepo(),
+      repoPickerRecents: loadRecents(),
       graphCommitLimit,
       graphNextLimit,
       showLoadMore,
@@ -97,7 +98,12 @@ async function loadGraph(limit?: number): Promise<GraphFragmentProps> {
         : e instanceof Error
           ? e.message
           : String(e)
-    return { ok: false, stderr }
+    return {
+      ok: false,
+      stderr,
+      repoPickerRoot: getCurrentRepo(),
+      repoPickerRecents: loadRecents(),
+    }
   }
 }
 
@@ -153,7 +159,6 @@ app.get('/', async (c) => {
   return c.html(
     <Layout>
       <div class="page">
-        <RepoBar root={getCurrentRepo()} recents={loadRecents()} />
         <div id="status" class="status-slot"></div>
         <div class="main-grid">
           <GraphFragment {...graph} />
@@ -207,7 +212,6 @@ app.post('/api/repo', async (c) => {
 
   return c.html(
     <Fragment>
-      <RepoBar root={candidate} recents={loadRecents()} oob />
       <GraphFragment {...graph} swapOob />
       <DiffPanel state="empty" swapOob />
       <StatusOob />

@@ -27,7 +27,8 @@ body {
   padding: 12px 16px 24px;
 }
 .repo-bar {
-  margin-bottom: 10px;
+  flex-shrink: 0;
+  margin: 0;
 }
 .repo-bar-details {
   position: relative;
@@ -36,14 +37,14 @@ body {
 .repo-bar-summary {
   list-style: none;
   cursor: pointer;
-  padding: 8px 14px;
-  border: 1px solid var(--border);
+  padding: 6px 10px;
+  border: 1px solid transparent;
   border-radius: 4px;
-  background: #2d2d2d;
-  color: var(--accent);
-  font-size: 12px;
-  font-weight: 600;
-  min-height: 40px;
+  background: transparent;
+  color: var(--fg);
+  font-size: 13px;
+  font-weight: 700;
+  min-height: 32px;
   display: inline-flex;
   align-items: center;
   box-sizing: border-box;
@@ -51,8 +52,25 @@ body {
 .repo-bar-summary::-webkit-details-marker {
   display: none;
 }
+.repo-bar-summary::after {
+  content: ' ▾';
+  font-size: 9px;
+  color: var(--muted);
+  font-weight: 400;
+  margin-left: 5px;
+}
+.repo-bar-summary:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.12);
+  color: var(--accent);
+}
 .repo-bar-details[open] .repo-bar-summary {
-  border-color: var(--accent);
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(86, 156, 214, 0.45);
+  color: var(--accent);
+}
+.repo-bar-details[open] .repo-bar-summary::after {
+  color: var(--accent);
 }
 .repo-popover {
   position: absolute;
@@ -152,10 +170,10 @@ body {
   box-sizing: border-box;
 }
 .head-push-btn {
-  margin-left: auto;
+  margin-left: 0;
 }
 .head-back-btn {
-  margin-left: auto;
+  margin-left: 0;
   border-color: rgba(224, 162, 58, 0.6);
   color: #ffd58a;
 }
@@ -192,6 +210,10 @@ body {
 }
 .graph-root.graph-error {
   padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
 }
 .graph-root.graph-error .msg {
   margin: 0;
@@ -204,8 +226,28 @@ body {
   background: #2d2d30;
   color: var(--accent);
   display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+}
+.graph-head .repo-bar {
+  padding-right: 12px;
+  margin-right: 2px;
+  border-right: 1px solid rgba(255, 255, 255, 0.12);
+}
+.graph-head-line {
+  flex: 1;
+  min-width: 0;
+  display: flex;
   align-items: baseline;
   gap: 6px;
+}
+.graph-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  margin-left: auto;
 }
 .graph-head-detached {
   background: rgba(224, 162, 58, 0.14);

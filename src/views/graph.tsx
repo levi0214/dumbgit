@@ -7,6 +7,7 @@ import {
   type HeadInfo,
   type WorkTreeSummary,
 } from '../git'
+import { RepoBar } from './repo'
 import { WorkTreeFragment } from './worktree'
 
 export type GraphFragmentProps =
@@ -17,6 +18,8 @@ export type GraphFragmentProps =
       worktree: WorkTreeSummary
       /** Absolute repo root; tags #worktree so stale polls cannot overwrite after repo switch. */
       repoPath: string
+      repoPickerRoot: string
+      repoPickerRecents: string[]
       /** Current `git log -n` window size (shown commits cap). */
       graphCommitLimit: number
       /** Next limit for “load more” (`min(limit + step, max)`). */
@@ -24,7 +27,13 @@ export type GraphFragmentProps =
       showLoadMore: boolean
       swapOob?: boolean
     }
-  | { ok: false; stderr: string; swapOob?: boolean }
+  | {
+      ok: false
+      stderr: string
+      repoPickerRoot: string
+      repoPickerRecents: string[]
+      swapOob?: boolean
+    }
 
 const COPY_ICO = raw(
   `<svg class="copy-ico" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`,
@@ -491,6 +500,7 @@ export function GraphFragment(props: GraphFragmentProps) {
   if (!props.ok) {
     return (
       <div id="graph" class="graph-root graph-error" {...oob}>
+        <RepoBar root={props.repoPickerRoot} recents={props.repoPickerRecents} />
         <p class="msg">{props.stderr}</p>
       </div>
     )
@@ -508,34 +518,39 @@ export function GraphFragment(props: GraphFragmentProps) {
       {...oob}
     >
       <div class={`graph-head${detached ? ' graph-head-detached' : ''}`}>
-        <HeadLine head={head} />
-        {head.kind === 'detached' && head.previousBranch ? (
+        <RepoBar root={props.repoPickerRoot} recents={props.repoPickerRecents} />
+        <div class="graph-head-line">
+          <HeadLine head={head} />
+        </div>
+        <div class="graph-head-actions">
+          {head.kind === 'detached' && head.previousBranch ? (
+            <button
+              type="button"
+              class="head-back-btn"
+              title={`git switch ${head.previousBranch}`}
+              hx-post={`/api/checkout/branch?name=${encodeURIComponent(head.previousBranch)}`}
+              hx-target="#graph"
+              hx-swap="outerHTML"
+            >
+              ← back to {head.previousBranch}
+            </button>
+          ) : null}
           <button
             type="button"
-            class="head-back-btn"
-            title={`git switch ${head.previousBranch}`}
-            hx-post={`/api/checkout/branch?name=${encodeURIComponent(head.previousBranch)}`}
-            hx-target="#graph"
-            hx-swap="outerHTML"
+            id="push-btn"
+            class="head-push-btn"
+            title={
+              head.kind === 'branch'
+                ? 'git push'
+                : 'detached HEAD has no upstream — switch to a branch first'
+            }
+            disabled={head.kind !== 'branch'}
+            hx-post="/api/push"
+            hx-swap="none"
           >
-            ← back to {head.previousBranch}
+            ↑ push
           </button>
-        ) : null}
-        <button
-          type="button"
-          id="push-btn"
-          class="head-push-btn"
-          title={
-            head.kind === 'branch'
-              ? 'git push'
-              : 'detached HEAD has no upstream — switch to a branch first'
-          }
-          disabled={head.kind !== 'branch'}
-          hx-post="/api/push"
-          hx-swap="none"
-        >
-          ↑ push
-        </button>
+        </div>
       </div>
       <WorkTreeFragment {...worktree} repoPath={props.repoPath} />
       <div class="graph-body">
