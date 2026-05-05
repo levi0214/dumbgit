@@ -164,6 +164,7 @@ function GraphCommitLine(props: { row: GraphCommitRow }) {
   const diffUrl = `/api/commit/${encodeURIComponent(shaFull)}`
   const cls = [
     'log-row',
+    'log-row-commit',
     isHead ? 'log-row-head' : '',
     inHistory ? '' : 'log-row-dim',
   ]
@@ -171,7 +172,7 @@ function GraphCommitLine(props: { row: GraphCommitRow }) {
     .join(' ')
 
   return (
-    <div class={cls}>
+    <div class={cls} data-sha={shaFull}>
       <span class="graph-prefix">
         <GraphLaneSpans ansi={graphAnsi} />
       </span>

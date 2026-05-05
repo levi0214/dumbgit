@@ -1,5 +1,5 @@
 /** @jsxImportSource hono/jsx */
-import type { CommitSummary } from '../git'
+import type { CommitFile, CommitSummary } from '../git'
 
 export type DiffPanelProps =
   | { state: 'empty' }
@@ -14,7 +14,28 @@ function diffLineClass(line: string): string {
   return 'diff-ctx'
 }
 
-/** Lazy-loaded unified diff (htmx swaps into `#diff-patch-slot`). */
+function FileNums(props: { file: CommitFile }) {
+  const { file: f } = props
+  if (f.binary) {
+    return <span class="file-num file-num-binary">binary</span>
+  }
+  if (
+    f.added === undefined ||
+    f.deleted === undefined ||
+    !Number.isFinite(f.added) ||
+    !Number.isFinite(f.deleted)
+  ) {
+    return null
+  }
+  return (
+    <span class="file-num">
+      <span class="file-num-add">+{f.added}</span>
+      <span class="file-num-del"> −{f.deleted}</span>
+    </span>
+  )
+}
+
+/** Unified diff appended under the file list (lazy-loaded). */
 export function DiffPatchBody(props: { text: string }) {
   const lines = props.text.split('\n')
   return (
@@ -55,6 +76,7 @@ export function DiffPanel(props: DiffPanelProps) {
 
   return (
     <div id="diff" class="diff-panel diff-summary">
+      <input type="hidden" id="viewing-sha" value={sha} autocomplete="off" />
       <div class="diff-head">
         <div class="diff-subject">{summary.subject}</div>
         <div class="diff-meta">
@@ -73,36 +95,40 @@ export function DiffPanel(props: DiffPanelProps) {
           </button>
         </div>
       </div>
-      <div class="diff-files-head">
-        changed files{' '}
-        <span class="diff-files-count">({summary.files.length})</span>
+
+      <div
+        id="diff-files-trigger"
+        class="diff-files-block"
+        tabindex={0}
+        role="button"
+        title="Load unified diff below"
+        hx-get={patchUrl}
+        hx-target="#diff-patch-slot"
+        hx-swap="innerHTML"
+      >
+        <div class="diff-files-head">
+          changed files{' '}
+          <span class="diff-files-count">({summary.files.length})</span>
+          <span class="diff-files-hint"> — click to show patch</span>
+        </div>
+        {summary.files.length > 0 ? (
+          <ul class="diff-files">
+            {summary.files.map((f) => (
+              <li>
+                <span class={`file-status file-${f.status[0] ?? '_'}`}>
+                  {f.status}
+                </span>
+                <span class="file-path">{f.path}</span>
+                <FileNums file={f} />
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <div class="diff-files-empty">(no file changes)</div>
+        )}
       </div>
-      {summary.files.length > 0 ? (
-        <ul class="diff-files">
-          {summary.files.map((f) => (
-            <li>
-              <span class={`file-status file-${f.status[0] ?? '_'}`}>
-                {f.status}
-              </span>
-              <span class="file-path">{f.path}</span>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <div class="diff-files-empty">(no file changes)</div>
-      )}
-      <div id="diff-patch-slot" class="diff-patch-slot">
-        <button
-          type="button"
-          class="diff-show-patch-btn"
-          title="Load full unified diff from git"
-          hx-get={patchUrl}
-          hx-target="#diff-patch-slot"
-          hx-swap="innerHTML"
-        >
-          ▾ unified diff…
-        </button>
-      </div>
+
+      <div id="diff-patch-slot" class="diff-patch-slot"></div>
     </div>
   )
 }

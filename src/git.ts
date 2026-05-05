@@ -187,7 +187,15 @@ export async function checkoutCommit(
   }
 }
 
-export type CommitFile = { status: string; path: string }
+export type CommitFile = {
+  status: string
+  path: string
+  /** Line counts from `git show --numstat`. */
+  added?: number
+  deleted?: number
+  /** `-\\t-\\t` lines from numstat */
+  binary?: boolean
+}
 
 export type CommitSummary = {
   subject: string
@@ -198,6 +206,46 @@ export type CommitSummary = {
 
 export type CommitDetails = CommitSummary & {
   diff: string
+}
+
+function parseNumstat(
+  stdout: string,
+): Map<string, { added?: number; deleted?: number; binary: boolean }> {
+  const m = new Map<string, { added?: number; deleted?: number; binary: boolean }>()
+  for (const line of stdout.split('\n')) {
+    if (!line.trim()) continue
+    const tabs = line.split('\t')
+    if (tabs.length < 3) continue
+    const path = tabs.slice(2).join('\t')
+    const a = tabs[0] ?? ''
+    const b = tabs[1] ?? ''
+    const binary = a === '-' && b === '-'
+    const ai = binary ? NaN : Number.parseInt(a, 10)
+    const bi = binary ? NaN : Number.parseInt(b, 10)
+    m.set(path, {
+      binary,
+      added: Number.isFinite(ai) ? ai : undefined,
+      deleted: Number.isFinite(bi) ? bi : undefined,
+    })
+  }
+  return m
+}
+
+function mergeNumstat(files: CommitFile[], stats: Map<string, { added?: number; deleted?: number; binary: boolean }>): CommitFile[] {
+  return files.map((f) => {
+    let st = stats.get(f.path)
+    if (!st && f.path.includes(' → ')) {
+      const parts = f.path.split(' → ').map((s) => s.trim())
+      st = stats.get(parts[parts.length - 1]!) ?? stats.get(parts[0]!)
+    }
+    if (!st) return f
+    return {
+      ...f,
+      added: st.added,
+      deleted: st.deleted,
+      binary: st.binary,
+    }
+  })
 }
 
 function parseShowNameStatus(stdout: string): CommitFile[] {
@@ -236,13 +284,19 @@ export async function commitSummary(
     }
   }
 
+  const numstat = await spawnGit(['show', '--numstat', '--format=', sha])
+  let files = parseShowNameStatus(fileShow.stdout)
+  if (numstat.code === 0) {
+    files = mergeNumstat(files, parseNumstat(numstat.stdout))
+  }
+
   return {
     ok: true,
     value: {
       subject,
       author,
       date,
-      files: parseShowNameStatus(fileShow.stdout),
+      files,
     },
   }
 }

@@ -151,6 +151,10 @@ body {
   border-left-color: var(--accent);
   background: rgba(86, 156, 214, 0.09);
 }
+.log-row-commit.log-row-viewing {
+  box-shadow: inset 3px 0 0 0 var(--accent);
+  background: rgba(86, 156, 214, 0.07);
+}
 .log-row-dim {
   opacity: 0.38;
 }
@@ -372,12 +376,37 @@ body {
   border-color: var(--accent);
   color: var(--accent);
 }
+.diff-files-block {
+  border-bottom: 1px solid var(--border);
+  outline: none;
+}
+.diff-files-block:not(.diff-files-loaded) {
+  cursor: pointer;
+}
+.diff-files-block:not(.diff-files-loaded):hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+.diff-files-block:not(.diff-files-loaded):focus-visible {
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+.diff-files-loaded {
+  cursor: default;
+}
+.diff-files-loaded .diff-files-hint {
+  display: none;
+}
 .diff-files-head {
   padding: 6px 12px 2px;
   font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--muted);
+}
+.diff-files-hint {
+  font-weight: normal;
+  text-transform: none;
+  letter-spacing: normal;
+  opacity: 0.75;
 }
 .diff-files-count {
   font-weight: normal;
@@ -387,32 +416,18 @@ body {
   padding: 8px 12px 12px;
   color: var(--muted);
   font-size: 12px;
-  border-bottom: 1px solid var(--border);
 }
 .diff-patch-slot {
   flex: 1;
   min-height: 0;
-  padding: 10px 12px 12px;
+  padding: 0;
   display: flex;
   flex-direction: column;
-  border-top: 1px solid var(--border);
   background: #1f1f1f;
 }
-.diff-show-patch-btn {
-  align-self: flex-start;
-  font: inherit;
-  font-size: 11px;
-  cursor: pointer;
-  padding: 4px 12px;
-  border: 1px dashed var(--border);
-  border-radius: 4px;
-  background: transparent;
-  color: var(--muted);
-}
-.diff-show-patch-btn:hover {
-  border-color: var(--accent);
-  border-style: solid;
-  color: var(--accent);
+.diff-patch-slot:not(:empty) {
+  padding: 10px 12px 12px;
+  border-top: 1px solid var(--border);
 }
 .diff-patch-pre {
   margin: 0 !important;
@@ -428,20 +443,17 @@ body {
 .diff-patch-empty {
   color: var(--muted) !important;
 }
-.diff-summary .diff-files {
-  border-bottom: 1px solid var(--border);
-}
 .diff-files {
   margin: 0;
   padding: 8px 12px;
   list-style: none;
-  border-bottom: 1px solid var(--border);
   max-height: 30vh;
   overflow-y: auto;
 }
 .diff-files li {
   display: flex;
   gap: 8px;
+  align-items: baseline;
 }
 .file-status {
   display: inline-block;
@@ -453,7 +465,17 @@ body {
 .file-D { color: var(--error); }
 .file-M { color: #dcdcaa; }
 .file-R { color: var(--accent); }
-.file-path { word-break: break-all; }
+.file-path { word-break: break-all; flex: 1; min-width: 0; }
+.file-num {
+  flex-shrink: 0;
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.file-num-add { color: #89d185; }
+.file-num-del { color: #f48771; }
+.file-num-binary { color: var(--muted); font-style: italic; }
 .diff-body {
   margin: 0;
   padding: 10px 12px;
@@ -494,6 +516,31 @@ const EMPTY_DIFF_HTML =
 const KEY_SCRIPT =
   `const EMPTY_DIFF = ${JSON.stringify(EMPTY_DIFF_HTML)};` +
   `
+function syncViewingHighlight() {
+  var inp = document.getElementById('viewing-sha');
+  var sha = inp && inp.value ? String(inp.value).trim().toLowerCase() : '';
+  document.querySelectorAll('.log-row-commit').forEach(function (row) {
+    var ds = row.getAttribute('data-sha');
+    var match = !!(sha && ds && ds.toLowerCase() === sha);
+    row.classList.toggle('log-row-viewing', match);
+  });
+}
+
+document.addEventListener('DOMContentLoaded', syncViewingHighlight);
+
+document.body.addEventListener('htmx:afterSwap', function (e) {
+  var t = e.detail && e.detail.target;
+  if (!t || !t.id) return;
+  if (t.id === 'diff' || t.id === 'graph') syncViewingHighlight();
+  if (t.id === 'diff-patch-slot') {
+    var blk = document.getElementById('diff-files-trigger');
+    if (blk && !t.querySelector('.diff-patch-error')) {
+      blk.removeAttribute('hx-get');
+      blk.classList.add('diff-files-loaded');
+    }
+  }
+});
+
 document.addEventListener('keydown', function (e) {
   if (e.target.closest('input, textarea')) return;
   const k = e.key;
@@ -503,6 +550,7 @@ document.addEventListener('keydown', function (e) {
   } else if (k === 'Escape') {
     const d = document.getElementById('diff');
     if (d) d.outerHTML = EMPTY_DIFF;
+    syncViewingHighlight();
   }
 });
 
