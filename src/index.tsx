@@ -6,7 +6,8 @@ import {
   GitError,
   checkoutBranch,
   checkoutCommit,
-  commitDetails,
+  commitPatch,
+  commitSummary,
   ensureGitRepo,
   gitDir,
   headInfo,
@@ -16,7 +17,7 @@ import {
 } from './git'
 import { GraphFragment } from './views/graph'
 import type { GraphFragmentProps } from './views/graph'
-import { DiffPanel } from './views/diff'
+import { DiffPanel, DiffPatchBody } from './views/diff'
 import { Layout, Toolbar } from './views/layout'
 import { StatusOob } from './views/status'
 import { watchGitRefs } from './watch'
@@ -150,13 +151,28 @@ app.post('/api/checkout/commit', async (c) => {
   )
 })
 
-app.get('/api/diff/:sha', async (c) => {
+app.get('/api/commit/:sha', async (c) => {
   const sha = c.req.param('sha')
-  const r = await commitDetails(sha)
+  const r = await commitSummary(sha)
   if (!r.ok) {
     return c.html(<DiffPanel state="error" sha={sha} stderr={r.stderr} />, 200)
   }
-  return c.html(<DiffPanel state="loaded" sha={sha} details={r.value} />, 200)
+  return c.html(<DiffPanel state="summary" sha={sha} summary={r.value} />, 200)
+})
+
+app.get('/api/diff/:sha/patch', async (c) => {
+  const sha = c.req.param('sha')
+  const r = await commitPatch(sha)
+  if (!r.ok) {
+    return c.html(<pre class="diff-body diff-patch-error">{r.stderr}</pre>, 200)
+  }
+  if (!r.patch.trim()) {
+    return c.html(
+      <pre class="diff-body diff-patch-empty">(empty patch)</pre>,
+      200,
+    )
+  }
+  return c.html(<DiffPatchBody text={r.patch} />, 200)
 })
 
 app.post('/api/push', async (c) => {

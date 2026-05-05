@@ -372,6 +372,65 @@ body {
   border-color: var(--accent);
   color: var(--accent);
 }
+.diff-files-head {
+  padding: 6px 12px 2px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+.diff-files-count {
+  font-weight: normal;
+  opacity: 0.85;
+}
+.diff-files-empty {
+  padding: 8px 12px 12px;
+  color: var(--muted);
+  font-size: 12px;
+  border-bottom: 1px solid var(--border);
+}
+.diff-patch-slot {
+  flex: 1;
+  min-height: 0;
+  padding: 10px 12px 12px;
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--border);
+  background: #1f1f1f;
+}
+.diff-show-patch-btn {
+  align-self: flex-start;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  padding: 4px 12px;
+  border: 1px dashed var(--border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted);
+}
+.diff-show-patch-btn:hover {
+  border-color: var(--accent);
+  border-style: solid;
+  color: var(--accent);
+}
+.diff-patch-pre {
+  margin: 0 !important;
+  padding: 10px 0 0 !important;
+  flex: 1;
+  min-height: 0;
+  overflow: auto !important;
+}
+.diff-patch-error {
+  color: var(--error) !important;
+  white-space: pre-wrap !important;
+}
+.diff-patch-empty {
+  color: var(--muted) !important;
+}
+.diff-summary .diff-files {
+  border-bottom: 1px solid var(--border);
+}
 .diff-files {
   margin: 0;
   padding: 8px 12px;
@@ -430,7 +489,7 @@ body {
 `
 
 const EMPTY_DIFF_HTML =
-  '<div id="diff" class="diff-panel diff-empty">(select a commit message to see its diff)</div>'
+  '<div id="diff" class="diff-panel diff-empty">(click a commit message to see changed files)</div>'
 
 const KEY_SCRIPT =
   `const EMPTY_DIFF = ${JSON.stringify(EMPTY_DIFF_HTML)};` +

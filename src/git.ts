@@ -188,18 +188,35 @@ export async function checkoutCommit(
 }
 
 export type CommitFile = { status: string; path: string }
-export type CommitDetails = {
+
+export type CommitSummary = {
   subject: string
   author: string
   date: string
   files: CommitFile[]
+}
+
+export type CommitDetails = CommitSummary & {
   diff: string
 }
 
-export async function commitDetails(
+function parseShowNameStatus(stdout: string): CommitFile[] {
+  const files: CommitFile[] = []
+  for (const line of stdout.split('\n')) {
+    if (!line.trim()) continue
+    const tabs = line.split('\t')
+    const status = tabs[0] ?? ''
+    const path = tabs.slice(1).join(' → ')
+    if (path) files.push({ status, path })
+  }
+  return files
+}
+
+/** Subject, author, ISO date, changed files — no patch body (cheap). */
+export async function commitSummary(
   sha: string,
-): Promise<{ ok: true; value: CommitDetails } | { ok: false; stderr: string }> {
-  const meta = await spawnGit(['log', '-1', '--format=%s%n%an%n%ai', sha])
+): Promise<{ ok: true; value: CommitSummary } | { ok: false; stderr: string }> {
+  const meta = await spawnGit(['log', '-1', '--format=%s%n%an%n%aI', sha])
   if (meta.code !== 0) {
     return { ok: false, stderr: meta.stderr.trim() || `git log failed (${meta.code})` }
   }
@@ -218,15 +235,22 @@ export async function commitDetails(
       stderr: fileShow.stderr.trim() || `git show --name-status failed (${fileShow.code})`,
     }
   }
-  const files: CommitFile[] = []
-  for (const line of fileShow.stdout.split('\n')) {
-    if (!line.trim()) continue
-    const tabs = line.split('\t')
-    const status = tabs[0] ?? ''
-    const path = tabs.slice(1).join(' → ')
-    if (path) files.push({ status, path })
-  }
 
+  return {
+    ok: true,
+    value: {
+      subject,
+      author,
+      date,
+      files: parseShowNameStatus(fileShow.stdout),
+    },
+  }
+}
+
+/** Unified diff text only. */
+export async function commitPatch(
+  sha: string,
+): Promise<{ ok: true; patch: string } | { ok: false; stderr: string }> {
   const patch = await spawnGit(['show', '--format=', '--no-color', sha])
   if (patch.code !== 0) {
     return {
@@ -234,11 +258,17 @@ export async function commitDetails(
       stderr: patch.stderr.trim() || `git show failed (${patch.code})`,
     }
   }
+  return { ok: true, patch: patch.stdout.trimEnd() }
+}
 
-  return {
-    ok: true,
-    value: { subject, author, date, files, diff: patch.stdout.trimEnd() },
-  }
+export async function commitDetails(
+  sha: string,
+): Promise<{ ok: true; value: CommitDetails } | { ok: false; stderr: string }> {
+  const s = await commitSummary(sha)
+  if (!s.ok) return s
+  const p = await commitPatch(sha)
+  if (!p.ok) return p
+  return { ok: true, value: { ...s.value, diff: p.patch } }
 }
 
 export async function push(): Promise<

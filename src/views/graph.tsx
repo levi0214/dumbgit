@@ -161,7 +161,7 @@ function GraphCommitLine(props: { row: GraphCommitRow }) {
   const { graphAnsi, shaFull, shaShort, decorateRaw, subject, date, inHistory } =
     props.row
   const isHead = stripAnsi(decorateRaw).includes('HEAD ->')
-  const diffUrl = `/api/diff/${encodeURIComponent(shaFull)}`
+  const diffUrl = `/api/commit/${encodeURIComponent(shaFull)}`
   const cls = [
     'log-row',
     isHead ? 'log-row-head' : '',
@@ -179,7 +179,7 @@ function GraphCommitLine(props: { row: GraphCommitRow }) {
         <button
           type="button"
           class="msg-btn"
-          title="show diff"
+          title="show changed files"
           hx-get={diffUrl}
           hx-target="#diff"
           hx-swap="outerHTML"

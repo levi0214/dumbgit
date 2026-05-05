@@ -43,8 +43,9 @@ and exits with code 1.
 
 - HEAD line, colored `git log --graph` (ANSI lanes from Git), last 50 commits
 - Ref pills on each commit (`HEAD ->`, branches, remotes, tags) → `git switch <ref>`
-- Click a commit message → diff panel on the right
-- Hover a row → tail shows `· <short hash>` + copy icon (copies full hash); detached checkout only from the diff panel button
+- Click a commit message → changed-files panel (`git show --name-status` only)
+- In that panel, **▾ unified diff…** loads the full patch on demand (`git show`)
+- Hover a graph row → `· <short hash>` + copy icon (copies full hash); detach checkout lives in the commit panel header
 - `↑ push` button → `git push` (status shown inline; no graph re-render)
 - Working tree panel: staged / unstaged / untracked file paths only
   (no hunks; open the file in your editor if you want the diff)
