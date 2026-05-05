@@ -7,6 +7,7 @@ const CSS = `
   --fg: #e8e8e8;
   --muted: #686868;
   --accent: #569cd6;
+  --graph-rail-muted: #484848;
   --border: #333;
   --error: #f48771;
   --success: #6a9955;
@@ -261,6 +262,7 @@ body {
   flex: 1;
   font-family: inherit;
   font-size: 12px;
+  line-height: 1.32;
   color: var(--fg);
 }
 .log-row {
@@ -312,6 +314,44 @@ body {
 .log-row-dim:hover {
   opacity: 0.85;
 }
+/* Reachability-off commits: branch/tag chrome stays monochrome until hovered. */
+.log-row-commit.log-row-dim .branch-prefix {
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.04);
+}
+.log-row-commit.log-row-dim .branch-prefix:hover {
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--muted);
+}
+.log-row-commit.log-row-dim .ref-pill-branch,
+.log-row-commit.log-row-dim .ref-pill-head {
+  color: var(--muted);
+  border-color: var(--border);
+  background: transparent;
+}
+.log-row-commit.log-row-dim .ref-pill-remote {
+  color: var(--muted);
+  border-color: var(--border);
+  opacity: 0.92;
+}
+.log-row-commit.log-row-dim .ref-tag {
+  color: var(--muted);
+  opacity: 0.85;
+}
+.log-row-commit.log-row-dim .ref-tag .tag-ico {
+  opacity: 0.45;
+}
+.log-row-commit.log-row-dim .ref-pill:hover {
+  border-color: rgba(255, 255, 255, 0.14);
+  color: var(--fg);
+}
+.log-row-commit.log-row-dim .ref-tag:hover {
+  color: var(--fg);
+  opacity: 1;
+}
+.log-row-commit.log-row-dim .ref-tag:hover .tag-ico {
+  opacity: 0.65;
+}
 .log-row-other {
   padding-top: 1px;
   padding-bottom: 1px;
@@ -321,19 +361,20 @@ body {
   white-space: pre;
   font-family: inherit;
   font-size: 14px;
-  letter-spacing: 0.5px;
+  letter-spacing: normal;
 }
 .graph-prefix .graph-node,
 .graph-prefix-wide .graph-node {
   font-weight: 600;
-  font-size: 0.82em;
+  font-size: 0.92em;
+  vertical-align: -0.05em;
   opacity: 0.92;
 }
 .graph-prefix-wide {
   white-space: pre;
   font-family: inherit;
   font-size: 14px;
-  letter-spacing: 0.5px;
+  letter-spacing: normal;
   overflow-x: auto;
 }
 .graph-pills {

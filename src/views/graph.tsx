@@ -151,38 +151,80 @@ function pillClass(tokenPlain: string): string {
   return 'ref-pill ref-pill-branch'
 }
 
-const LANE_PALETTE = [
-  '#3aafff', // vivid blue
-  '#3ddc6c', // vivid green
-  '#ff5cd5', // hot pink
-  '#ffd633', // vivid yellow
-  '#28e6c8', // vivid cyan
-  '#ff7a3d', // vivid orange
-  '#9d7aff', // vivid purple
-]
-
 /**
- * Color a single `git log --graph` lane char by its column.
+ * Map a UTF-16 column in the stripped graph prefix to a logical lane index.
  * git draws lane chars at even columns (`|`, `*`) and slants at odd columns
- * (`/`, `\`). Slants connect adjacent lanes; we color them with the OUTER
- * lane (the one farther from main lane 0), which is what your eye traces
- * when following a branch up or down.
+ * (`/`, `\`). Slants connect adjacent lanes; we use the OUTER lane for odd
+ * columns (same rule git tracing uses).
  */
 function laneOf(col: number): number {
   return col % 2 === 0 ? col / 2 : (col + 1) / 2
 }
 
-function laneColor(col: number): string {
-  return LANE_PALETTE[laneOf(col) % LANE_PALETTE.length]
+function graphCommitIsHead(decorateRaw: string): boolean {
+  const decoPlain = stripAnsi(decorateRaw)
+  return (
+    decoPlain.includes('HEAD ->') ||
+    /(^|[(,\s])HEAD([),\s]|$)/.test(decoPlain)
+  )
+}
+
+function starLane(graphAnsi: string): number | null {
+  const text = stripAnsi(graphAnsi)
+  const idx = text.indexOf('*')
+  if (idx === -1) return null
+  return laneOf(idx)
 }
 
 /**
- * Render the `git --graph` prefix with per-column colored lanes.
- * Git uses `*` for the commit node; we swap it for a round bullet so the
- * graph reads quieter than a bold asterisk. Connector glyphs stay dimmed.
+ * Which logical lane(s) draw the “HEAD ancestry” spine on this row.
+ * Bright commits (`inHistory`) tint their `*` column; connector rows between
+ * them tint the union of the nearest reachable commits above and below so the
+ * colored thread follows the whole ancestry, not a single fixed column.
  */
-function GraphLaneSpans(props: { ansi: string }) {
+function highlightLanesForRow(rows: GraphRow[], i: number): Set<number> | null {
+  const r = rows[i]
+  if (r.kind === 'commit') {
+    if (!r.row.inHistory) return null
+    const L = starLane(r.row.graphAnsi)
+    return L === null ? null : new Set([L])
+  }
+  if (!r.betweenInHistory) return null
+  const lanes = new Set<number>()
+  for (let j = i - 1; j >= 0; j--) {
+    const x = rows[j]
+    if (x.kind === 'commit' && x.row.inHistory) {
+      const L = starLane(x.row.graphAnsi)
+      if (L !== null) lanes.add(L)
+      break
+    }
+  }
+  for (let j = i + 1; j < rows.length; j++) {
+    const x = rows[j]
+    if (x.kind === 'commit' && x.row.inHistory) {
+      const L = starLane(x.row.graphAnsi)
+      if (L !== null) lanes.add(L)
+      break
+    }
+  }
+  return lanes.size === 0 ? null : lanes
+}
+
+function graphLaneHighlights(rows: GraphRow[]): Array<Set<number> | null> {
+  return rows.map((_, i) => highlightLanesForRow(rows, i))
+}
+
+/**
+ * Render the `git --graph` prefix. Git uses `*` for the commit node; we swap
+ * it for `•`. Lanes on the HEAD-reachable spine use `--accent`; others use
+ * `--graph-rail-muted`.
+ */
+function GraphLaneSpans(props: {
+  ansi: string
+  highlightLanes: Set<number> | null
+}) {
   const text = stripAnsi(props.ansi)
+  const lanes = props.highlightLanes
   const out: JSX.Element[] = []
   for (let i = 0; i < text.length; i++) {
     const ch = text[i]
@@ -190,8 +232,9 @@ function GraphLaneSpans(props: { ansi: string }) {
       out.push(<span key={i}> </span>)
       continue
     }
-    const color = laneColor(i)
+    const onSpine = lanes !== null && lanes.has(laneOf(i))
     if (ch === '*') {
+      const color = onSpine ? 'var(--accent)' : 'var(--graph-rail-muted)'
       out.push(
         <span key={i} class="graph-node" style={`color:${color}`}>
           {'\u2022'}
@@ -199,7 +242,9 @@ function GraphLaneSpans(props: { ansi: string }) {
       )
       continue
     }
-    const styleStr = `color:${color};font-weight:600;opacity:0.45`
+    const styleStr = onSpine
+      ? 'color:var(--accent);font-weight:600;opacity:0.52'
+      : 'color:var(--graph-rail-muted);font-weight:600;opacity:0.62'
     out.push(
       <span key={i} style={styleStr}>
         {ch}
@@ -295,12 +340,11 @@ function relTimeAgo(iso: string): string {
 function GraphCommitLine(props: {
   row: GraphCommitRow
   detached: boolean
+  highlightLanes: Set<number> | null
 }) {
   const { graphAnsi, shaFull, shaShort, decorateRaw, subject, date, inHistory } =
     props.row
-  const decoPlain = stripAnsi(decorateRaw)
-  const isHead =
-    decoPlain.includes('HEAD ->') || /(^|[(,\s])HEAD([),\s]|$)/.test(decoPlain)
+  const isHead = graphCommitIsHead(decorateRaw)
   const branchPrefix = branchPrefixFromDecorations(decorateRaw)
   const diffUrl = `/api/commit/${encodeURIComponent(shaFull)}`
   const cls = [
@@ -316,7 +360,7 @@ function GraphCommitLine(props: {
   return (
     <div class={cls} data-sha={shaFull}>
       <span class="graph-prefix">
-        <GraphLaneSpans ansi={graphAnsi} />
+        <GraphLaneSpans ansi={graphAnsi} highlightLanes={props.highlightLanes} />
       </span>
       {isHead ? (
         <span
@@ -372,12 +416,16 @@ function GraphCommitLine(props: {
   )
 }
 
-function GraphOtherLine(props: { ansi: string; betweenInHistory: boolean }) {
+function GraphOtherLine(props: {
+  ansi: string
+  betweenInHistory: boolean
+  highlightLanes: Set<number> | null
+}) {
   const cls = `log-row log-row-other ${props.betweenInHistory ? '' : 'log-row-dim'}`
   return (
     <div class={cls.trim()}>
       <span class="graph-prefix-wide">
-        <GraphLaneSpans ansi={props.ansi} />
+        <GraphLaneSpans ansi={props.ansi} highlightLanes={props.highlightLanes} />
       </span>
     </div>
   )
@@ -399,7 +447,11 @@ function HeadLine(props: { head: HeadInfo }) {
   )
 }
 
-function LogLines(props: { rows: GraphRow[]; detached: boolean }) {
+function LogLines(props: {
+  rows: GraphRow[]
+  detached: boolean
+  laneHighlights: Array<Set<number> | null>
+}) {
   if (props.rows.length === 0) {
     return <div class="log-lines empty">(no commits yet)</div>
   }
@@ -408,12 +460,18 @@ function LogLines(props: { rows: GraphRow[]; detached: boolean }) {
     <div class="log-lines">
       {props.rows.map((r, i) =>
         r.kind === 'commit' ? (
-          <GraphCommitLine key={i} row={r.row} detached={props.detached} />
+          <GraphCommitLine
+            key={i}
+            row={r.row}
+            detached={props.detached}
+            highlightLanes={props.laneHighlights[i] ?? null}
+          />
         ) : (
           <GraphOtherLine
             key={i}
             ansi={r.ansi}
             betweenInHistory={r.betweenInHistory}
+            highlightLanes={props.laneHighlights[i] ?? null}
           />
         ),
       )}
@@ -433,6 +491,7 @@ export function GraphFragment(props: GraphFragmentProps) {
 
   const { head, rows, worktree } = props
   const detached = head.kind === 'detached'
+  const laneHighlights = graphLaneHighlights(rows)
 
   return (
     <div id="graph" class="graph-root" {...oob}>
@@ -468,7 +527,11 @@ export function GraphFragment(props: GraphFragmentProps) {
       </div>
       <WorkTreeFragment {...worktree} />
       <div class="graph-body">
-        <LogLines rows={rows} detached={detached} />
+        <LogLines
+          rows={rows}
+          detached={detached}
+          laneHighlights={laneHighlights}
+        />
       </div>
     </div>
   )
