@@ -252,7 +252,12 @@ app.get('/api/diff/:sha/patch', async (c) => {
 
 app.post('/api/branch/create', async (c) => {
   const sha = c.req.query('sha') ?? ''
-  const name = (c.req.header('HX-Prompt') ?? '').trim()
+  const body = await c.req.parseBody()
+  let name = typeof body.name === 'string' ? body.name.trim() : ''
+  if (!name) {
+    name =
+      (c.req.header('HX-Prompt') ?? c.req.header('hx-prompt') ?? '').trim()
+  }
   if (!sha || !name) {
     const next = await loadGraph()
     return c.html(

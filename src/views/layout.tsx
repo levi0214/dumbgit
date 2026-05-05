@@ -616,6 +616,28 @@ body {
   gap: 6px;
   flex-wrap: wrap;
   justify-content: flex-end;
+  align-items: center;
+}
+.diff-branch-form {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+}
+.diff-branch-input {
+  font: inherit;
+  font-size: 11px;
+  min-width: 11em;
+  max-width: min(22em, 40vw);
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: #1e1e1e;
+  color: var(--fg);
+}
+.diff-branch-input:focus {
+  outline: none;
+  border-color: var(--accent);
 }
 .diff-checkout-btn,
 .diff-branch-btn {
