@@ -209,16 +209,16 @@ export async function checkoutCommit(
   }
 }
 
-/** Create a new branch at `sha` and switch to it (`git switch -c name sha`). */
+/** Create a new branch at `sha` without switching (`git branch name sha`). */
 export async function createBranchAt(
   sha: string,
   name: string,
 ): Promise<{ ok: true } | { ok: false; stderr: string }> {
-  const { code, stderr } = await spawnGit(['switch', '-c', name, sha])
+  const { code, stderr } = await spawnGit(['branch', name, sha])
   if (code === 0) return { ok: true }
   return {
     ok: false,
-    stderr: stderr.trim() || `git switch -c failed (${code})`,
+    stderr: stderr.trim() || `git branch failed (${code})`,
   }
 }
 

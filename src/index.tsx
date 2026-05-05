@@ -273,10 +273,7 @@ app.post('/api/branch/create', async (c) => {
   return c.html(
     <Fragment>
       <GraphFragment {...next} />
-      <StatusOob
-        error={r.ok ? undefined : r.stderr}
-        info={r.ok ? `created and switched to ${name}` : undefined}
-      />
+      <StatusOob error={r.ok ? undefined : r.stderr} />
     </Fragment>,
     200,
   )

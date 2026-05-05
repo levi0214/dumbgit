@@ -102,7 +102,7 @@ export function DiffPanel(props: DiffPanelProps) {
                   autocomplete="off"
                   spellcheck={false}
                   aria-label="New branch name"
-                  title={`git switch -c … ${sha.slice(0, 7)}`}
+                  title={`git branch … ${sha.slice(0, 7)}`}
                   required
                 />
                 <div class="diff-branch-panel-actions">
