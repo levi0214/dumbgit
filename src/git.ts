@@ -13,13 +13,24 @@ export type HeadInfo =
   | { kind: 'branch'; name: string; sha: string }
   | { kind: 'detached'; sha: string; previousBranch?: string }
 
+/** Working tree all git commands run in (switch via repo picker). */
+let repoRoot = process.cwd()
+
+export function setCurrentRepo(dir: string): void {
+  repoRoot = dir
+}
+
+export function getCurrentRepo(): string {
+  return repoRoot
+}
+
 async function spawnGit(
   args: string[],
 ): Promise<{ code: number; stdout: string; stderr: string }> {
   const proc = Bun.spawn(['git', ...args], {
     stdout: 'pipe',
     stderr: 'pipe',
-    cwd: process.cwd(),
+    cwd: repoRoot,
   })
   const stdout = await new Response(proc.stdout).text()
   const stderr = await new Response(proc.stderr).text()

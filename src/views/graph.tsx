@@ -10,8 +10,14 @@ import {
 import { WorkTreeFragment } from './worktree'
 
 export type GraphFragmentProps =
-  | { ok: true; head: HeadInfo; rows: GraphRow[]; worktree: WorkTreeSummary }
-  | { ok: false; stderr: string }
+  | {
+      ok: true
+      head: HeadInfo
+      rows: GraphRow[]
+      worktree: WorkTreeSummary
+      swapOob?: boolean
+    }
+  | { ok: false; stderr: string; swapOob?: boolean }
 
 const COPY_ICO = raw(
   `<svg class="copy-ico" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`,
@@ -332,9 +338,10 @@ function LogLines(props: { rows: GraphRow[]; detached: boolean }) {
 }
 
 export function GraphFragment(props: GraphFragmentProps) {
+  const oob = props.swapOob ? ({ 'hx-swap-oob': 'true' } as const) : {}
   if (!props.ok) {
     return (
-      <div id="graph" class="graph-root graph-error">
+      <div id="graph" class="graph-root graph-error" {...oob}>
         <p class="msg">{props.stderr}</p>
       </div>
     )
@@ -344,7 +351,7 @@ export function GraphFragment(props: GraphFragmentProps) {
   const detached = head.kind === 'detached'
 
   return (
-    <div id="graph" class="graph-root">
+    <div id="graph" class="graph-root" {...oob}>
       <div class={`graph-head${detached ? ' graph-head-detached' : ''}`}>
         <HeadLine head={head} />
         {head.kind === 'detached' && head.previousBranch ? (

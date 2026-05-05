@@ -25,6 +25,102 @@ body {
   margin: 0 auto;
   padding: 12px 16px 24px;
 }
+.repo-bar {
+  margin-bottom: 10px;
+}
+.repo-bar-details {
+  position: relative;
+  display: inline-block;
+}
+.repo-bar-summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: #2d2d2d;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 600;
+}
+.repo-bar-summary::-webkit-details-marker {
+  display: none;
+}
+.repo-bar-details[open] .repo-bar-summary {
+  border-color: var(--accent);
+}
+.repo-popover {
+  position: absolute;
+  left: 0;
+  top: calc(100% + 4px);
+  z-index: 20;
+  min-width: 320px;
+  max-width: min(90vw, 520px);
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #252526;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+.repo-popover-path {
+  font-size: 11px;
+  color: var(--muted);
+  word-break: break-all;
+  margin-bottom: 8px;
+}
+.repo-recents-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+.repo-recents-list {
+  margin: 0 0 10px;
+  padding: 0;
+  list-style: none;
+}
+.repo-recent-btn {
+  all: unset;
+  cursor: pointer;
+  display: block;
+  padding: 3px 0;
+  font-size: 12px;
+  color: var(--accent);
+}
+.repo-recent-btn:hover {
+  text-decoration: underline;
+}
+.repo-open-form {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.repo-open-input {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  font-size: 12px;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: #1e1e1e;
+  color: var(--fg);
+}
+.repo-open-submit {
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: #2d2d2d;
+  color: var(--fg);
+}
+.repo-open-submit:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
 .head-push-btn,
 .head-back-btn {
   font: inherit;
@@ -612,6 +708,15 @@ document.body.addEventListener('htmx:afterSwap', function (e) {
       blk.classList.add('diff-files-loaded');
     }
   }
+});
+
+document.body.addEventListener('htmx:afterRequest', function (e) {
+  if (!e.detail.successful) return;
+  var xhr = e.detail.xhr;
+  var url = (xhr && xhr.responseURL) || '';
+  if (url.indexOf('/api/repo') === -1) return;
+  var det = document.querySelector('details.repo-bar-details');
+  if (det) det.removeAttribute('open');
 });
 
 document.addEventListener('keydown', function (e) {

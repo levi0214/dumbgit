@@ -2,6 +2,8 @@
 import { Fragment } from 'hono/jsx'
 import { Hono } from 'hono'
 import { streamSSE } from 'hono/streaming'
+import os from 'node:os'
+import path from 'node:path'
 import {
   GitError,
   checkoutBranch,
@@ -10,21 +12,55 @@ import {
   commitSummary,
   createBranchAt,
   ensureGitRepo,
+  getCurrentRepo,
   gitDir,
   headInfo,
   logGraphRows,
   push,
+  setCurrentRepo,
   workTreeSummary,
 } from './git'
+import { bumpRecent, loadRecents } from './recents'
 import { GraphFragment } from './views/graph'
 import type { GraphFragmentProps } from './views/graph'
 import { DiffPanel, DiffPatchBody } from './views/diff'
 import { Layout } from './views/layout'
+import { RepoBar } from './views/repo'
 import { StatusOob } from './views/status'
 import { watchGitRefs } from './watch'
 import { WorkTreeFragment } from './views/worktree'
 
 const PORT = 7777
+
+function expandUser(p: string): string {
+  if (p.startsWith('~/')) return path.join(os.homedir(), p.slice(2))
+  if (p === '~') return os.homedir()
+  return p
+}
+
+/** First non-flag argv after script (skip `--open`, etc.). */
+function initialRepoFromArgv(): string {
+  const skip = new Set(['--open'])
+  const pos: string[] = []
+  for (let i = 2; i < process.argv.length; i++) {
+    const a = process.argv[i]!
+    if (a.startsWith('-')) continue
+    if (skip.has(a)) continue
+    pos.push(a)
+  }
+  const raw = pos[0]
+  if (!raw) return process.cwd()
+  return path.resolve(expandUser(raw))
+}
+
+async function isGitRepo(dir: string): Promise<boolean> {
+  const proc = Bun.spawn(['git', 'rev-parse', '--git-dir'], {
+    cwd: dir,
+    stdout: 'pipe',
+    stderr: 'pipe',
+  })
+  return (await proc.exited) === 0
+}
 
 async function loadGraph(): Promise<GraphFragmentProps> {
   try {
@@ -51,14 +87,20 @@ async function loadGraph(): Promise<GraphFragmentProps> {
  */
 type DumbgitState = {
   lastChange: number
-  watchAttached: boolean
+  closeWatch?: () => void
   server?: ReturnType<typeof Bun.serve>
+  repoInitialized?: boolean
 }
 const G = globalThis as { __dumbgit?: DumbgitState }
 if (!G.__dumbgit) {
-  G.__dumbgit = { lastChange: Date.now(), watchAttached: false }
+  G.__dumbgit = { lastChange: Date.now() }
 }
 const state = G.__dumbgit
+
+if (!state.repoInitialized) {
+  setCurrentRepo(initialRepoFromArgv())
+  state.repoInitialized = true
+}
 
 try {
   await ensureGitRepo()
@@ -69,13 +111,16 @@ try {
   process.exit(1)
 }
 
-if (!state.watchAttached) {
-  state.watchAttached = true
+async function attachWatcher() {
+  state.closeWatch?.()
+  state.closeWatch = undefined
   const watchedDir = await gitDir()
-  watchGitRefs(watchedDir, () => {
+  state.closeWatch = watchGitRefs(watchedDir, () => {
     state.lastChange = Date.now()
   })
 }
+
+await attachWatcher()
 
 const app = new Hono()
 
@@ -84,6 +129,7 @@ app.get('/', async (c) => {
   return c.html(
     <Layout>
       <div class="page">
+        <RepoBar root={getCurrentRepo()} recents={loadRecents()} />
         <div id="status" class="status-slot"></div>
         <div class="main-grid">
           <GraphFragment {...graph} />
@@ -103,6 +149,42 @@ app.get('/fragment/graph', async (c) => {
 app.get('/fragment/worktree', async (c) => {
   const wt = await workTreeSummary()
   return c.html(<WorkTreeFragment {...wt} />, 200)
+})
+
+app.post('/api/repo', async (c) => {
+  let raw = c.req.query('path')?.trim() ?? ''
+  if (!raw) {
+    const body = await c.req.parseBody()
+    const p = body.path
+    raw = typeof p === 'string' ? p.trim() : ''
+  }
+  if (!raw) {
+    return c.html(<StatusOob error="path required" />, 200)
+  }
+  const candidate = path.resolve(expandUser(raw))
+  const ok = await isGitRepo(candidate)
+  if (!ok) {
+    return c.html(
+      <StatusOob error={`not a git repo: ${candidate}`} />,
+      200,
+    )
+  }
+
+  setCurrentRepo(candidate)
+  await attachWatcher()
+  bumpRecent(candidate)
+  const graph = await loadGraph()
+  const root = getCurrentRepo()
+
+  return c.html(
+    <Fragment>
+      <RepoBar root={root} recents={loadRecents()} oob />
+      <GraphFragment {...graph} swapOob />
+      <DiffPanel state="empty" swapOob />
+      <StatusOob info={`opened ${path.basename(root)}`} />
+    </Fragment>,
+    200,
+  )
 })
 
 app.post('/api/checkout/branch', async (c) => {

@@ -2,7 +2,7 @@
 import type { CommitFile, CommitSummary } from '../git'
 
 export type DiffPanelProps =
-  | { state: 'empty' }
+  | { state: 'empty'; swapOob?: boolean }
   | { state: 'summary'; sha: string; summary: CommitSummary }
   | { state: 'error'; sha: string; stderr: string }
 
@@ -52,8 +52,9 @@ export function DiffPatchBody(props: { text: string }) {
 
 export function DiffPanel(props: DiffPanelProps) {
   if (props.state === 'empty') {
+    const oob = props.swapOob ? ({ 'hx-swap-oob': 'true' } as const) : {}
     return (
-      <div id="diff" class="diff-panel diff-empty">
+      <div id="diff" class="diff-panel diff-empty" {...oob}>
         (click a commit message to see changed files)
       </div>
     )
