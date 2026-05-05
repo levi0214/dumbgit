@@ -237,7 +237,14 @@ function GraphCommitLine(props: {
       ) : null}
       <div class="msg-cell">
         {branchPrefix ? (
-          <span class="branch-prefix" title={`branch: ${branchPrefix}`}>
+          <span
+            class="branch-prefix"
+            title={`branch: ${branchPrefix} — double-click to switch`}
+            hx-post={`/api/checkout/branch?name=${encodeURIComponent(branchPrefix)}`}
+            hx-target="#graph"
+            hx-swap="outerHTML"
+            hx-trigger="dblclick"
+          >
             {branchPrefix}
             <span class="branch-sep"> · </span>
           </span>

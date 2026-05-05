@@ -287,6 +287,11 @@ body {
   background: rgba(156, 220, 254, 0.12);
   border-radius: 3px;
   padding: 0 5px;
+  cursor: pointer;
+  user-select: none;
+}
+.branch-prefix:hover {
+  background: rgba(156, 220, 254, 0.22);
 }
 .log-row-head .branch-prefix {
   color: #ffffff;
