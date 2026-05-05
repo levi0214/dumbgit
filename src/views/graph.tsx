@@ -46,6 +46,41 @@ function decorationRefs(decorateRaw: string): string[] {
   return splitDec(inner)
 }
 
+/** Local-ish branch label to show before the subject (avoids duplicating HEAD / same-name pills). */
+function branchPrefixFromDecorations(decorateRaw: string): string | null {
+  const tokens = decorationRefs(decorateRaw)
+  for (const t of tokens) {
+    const plain = stripAnsi(t).trim()
+    const hm = plain.match(/^HEAD\s*->\s*(.+)$/i)
+    if (hm) {
+      const name = hm[1]?.trim()
+      if (name) return name
+    }
+  }
+  for (const t of tokens) {
+    const plain = stripAnsi(t).trim()
+    if (/^tag:/i.test(plain)) continue
+    if (!plain.includes('/') && plain) return plain
+  }
+  for (const t of tokens) {
+    const plain = stripAnsi(t).trim()
+    if (/^tag:/i.test(plain)) continue
+    if (plain.includes('/') && plain) return plain
+  }
+  return null
+}
+
+function refPillRedundantWithBranchPrefix(
+  tokenPlain: string,
+  branchPrefix: string | null,
+): boolean {
+  if (!branchPrefix) return false
+  const p = stripAnsi(tokenPlain).trim()
+  const hm = p.match(/^HEAD\s*->\s*(.+)$/i)
+  if (hm && hm[1]?.trim() === branchPrefix) return true
+  return p === branchPrefix
+}
+
 /** Argument for `git switch <ref>` (branch, remote ref, tag name, …). */
 function refForCheckout(tokenPlain: string): string | null {
   const s = tokenPlain.trim()
@@ -112,12 +147,16 @@ function GraphLaneSpans(props: { ansi: string }) {
   return <>{out}</>
 }
 
-function RefPills(props: { decorateRaw: string }) {
+function RefPills(props: {
+  decorateRaw: string
+  branchPrefix: string | null
+}) {
   const tokens = decorationRefs(props.decorateRaw)
   if (tokens.length === 0) return null
   return (
     <span class="graph-pills">
       {tokens.map((t, idx) => {
+        if (refPillRedundantWithBranchPrefix(t, props.branchPrefix)) return null
         const ref = refForCheckout(t)
         if (!ref) return null
         return (
@@ -138,29 +177,30 @@ function RefPills(props: { decorateRaw: string }) {
   )
 }
 
-/** Compact relative time like `3m`, `2h`, `yesterday`, `2w`, `4mo`, `1y`. */
-function relTime(iso: string): string {
+/** Relative time with trailing “ago” where English allows it. */
+function relTimeAgo(iso: string): string {
   const t = new Date(iso).getTime()
   if (Number.isNaN(t)) return ''
   const diff = Math.max(0, Date.now() - t)
   const sec = Math.floor(diff / 1000)
-  if (sec < 60) return 'now'
+  if (sec < 60) return 'just now'
   const min = Math.floor(sec / 60)
-  if (min < 60) return `${min}m`
+  if (min < 60) return `${min}m ago`
   const hr = Math.floor(min / 60)
-  if (hr < 24) return `${hr}h`
+  if (hr < 24) return `${hr}h ago`
   const day = Math.floor(hr / 24)
   if (day === 1) return 'yesterday'
-  if (day < 14) return `${day}d`
-  if (day < 60) return `${Math.floor(day / 7)}w`
-  if (day < 365) return `${Math.floor(day / 30)}mo`
-  return `${Math.floor(day / 365)}y`
+  if (day < 14) return `${day}d ago`
+  if (day < 60) return `${Math.floor(day / 7)}w ago`
+  if (day < 365) return `${Math.floor(day / 30)}mo ago`
+  return `${Math.floor(day / 365)}y ago`
 }
 
 function GraphCommitLine(props: { row: GraphCommitRow }) {
   const { graphAnsi, shaFull, shaShort, decorateRaw, subject, date, inHistory } =
     props.row
   const isHead = stripAnsi(decorateRaw).includes('HEAD ->')
+  const branchPrefix = branchPrefixFromDecorations(decorateRaw)
   const diffUrl = `/api/commit/${encodeURIComponent(shaFull)}`
   const cls = [
     'log-row',
@@ -177,6 +217,12 @@ function GraphCommitLine(props: { row: GraphCommitRow }) {
         <GraphLaneSpans ansi={graphAnsi} />
       </span>
       <div class="msg-cell">
+        {branchPrefix ? (
+          <span class="branch-prefix" title={`branch: ${branchPrefix}`}>
+            {branchPrefix}
+            <span class="branch-sep"> · </span>
+          </span>
+        ) : null}
         <button
           type="button"
           class="msg-btn"
@@ -187,24 +233,24 @@ function GraphCommitLine(props: { row: GraphCommitRow }) {
         >
           {subject}
         </button>
-        <span class="msg-tail">
-          <span class="msg-tail-sep"> · </span>
-          <code class="hash-peek" title={shaFull}>
-            {shaShort}
-          </code>
-          <button
-            type="button"
-            class="copy-sha-btn"
-            data-sha={shaFull}
-            title="copy full hash"
-          >
-            {COPY_ICO}
-          </button>
+        <span class="msg-age" title={date}>
+          {' · '}
+          {relTimeAgo(date)}
         </span>
       </div>
-      <RefPills decorateRaw={decorateRaw} />
-      <span class="row-time" title={date}>
-        {relTime(date)}
+      <RefPills decorateRaw={decorateRaw} branchPrefix={branchPrefix} />
+      <span class="row-tail">
+        <code class="hash-peek" title={shaFull}>
+          {shaShort}
+        </code>
+        <button
+          type="button"
+          class="copy-sha-btn"
+          data-sha={shaFull}
+          title="copy full hash"
+        >
+          {COPY_ICO}
+        </button>
       </span>
     </div>
   )
