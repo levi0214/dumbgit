@@ -1,4 +1,5 @@
 /** @jsxImportSource hono/jsx */
+import { raw } from 'hono/html'
 import {
   stripAnsi,
   type GraphCommitRow,
@@ -12,37 +13,9 @@ export type GraphFragmentProps =
   | { ok: true; head: HeadInfo; rows: GraphRow[]; worktree: WorkTreeSummary }
   | { ok: false; stderr: string }
 
-const FG: Record<number, string> = {
-  30: '#808080',
-  31: '#f48771',
-  32: '#6a9955',
-  33: '#dcdcaa',
-  34: '#569cd6',
-  35: '#c586c0',
-  36: '#4ec9b0',
-  37: '#d4d4d4',
-  90: '#808080',
-  91: '#f48771',
-  92: '#89d185',
-  93: '#e5e510',
-  94: '#6796e6',
-  95: '#d670d6',
-  96: '#4ec9b0',
-  97: '#ffffff',
-}
-
-function cssToObj(s: string): Record<string, string> | undefined {
-  const o: Record<string, string> = {}
-  for (const chunk of s.split(';')) {
-    const idx = chunk.indexOf(':')
-    if (idx === -1) continue
-    const k = chunk.slice(0, idx).trim()
-    const v = chunk.slice(idx + 1).trim()
-    if (k) o[k] = v
-  }
-  return Object.keys(o).length ? o : undefined
-}
-
+const COPY_ICO = raw(
+  `<svg class="copy-ico" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`,
+)
 /** Split `%d` / parentheses list on commas not inside nested parens. */
 function splitDec(inner: string): string[] {
   const parts: string[] = []
@@ -88,81 +61,6 @@ function pillClass(tokenPlain: string): string {
   if (/^tag:/i.test(tokenPlain)) return 'ref-pill ref-pill-tag'
   if (tokenPlain.includes('/')) return 'ref-pill ref-pill-remote'
   return 'ref-pill ref-pill-branch'
-}
-
-function parseAnsi(s: string): { style?: Record<string, string>; text: string }[] {
-  const out: { style?: Record<string, string>; text: string }[] = []
-  let i = 0
-  let bold = false
-  let fg: number | undefined
-
-  const styleObj = (): Record<string, string> | undefined => {
-    const parts: string[] = []
-    if (bold) parts.push('font-weight:700')
-    if (fg !== undefined && FG[fg]) parts.push(`color:${FG[fg]}`)
-    const css = parts.join(';')
-    return cssToObj(css)
-  }
-
-  let buf = ''
-  let curStyle = styleObj()
-
-  const flush = () => {
-    if (!buf) return
-    out.push({ style: curStyle, text: buf })
-    buf = ''
-  }
-
-  while (i < s.length) {
-    if (s[i] === '\x1b' && s[i + 1] === '[') {
-      const end = s.indexOf('m', i)
-      if (end === -1) {
-        buf += s.slice(i)
-        break
-      }
-      const seq = s.slice(i + 2, end)
-      i = end + 1
-      flush()
-      const codes =
-        seq === ''
-          ? [0]
-          : seq
-              .split(';')
-              .map((x) => parseInt(x, 10))
-              .filter((c) => !Number.isNaN(c))
-      for (const c of codes) {
-        if (c === 0) {
-          bold = false
-          fg = undefined
-        } else if (c === 1) bold = true
-        else if (c === 22) bold = false
-        else if ((c >= 30 && c <= 37) || (c >= 90 && c <= 97)) fg = c
-        else if (c === 39) fg = undefined
-      }
-      curStyle = styleObj()
-      continue
-    }
-    buf += s[i]
-    i++
-  }
-  flush()
-  return out
-}
-
-function AnsiSpans(props: { ansi: string }) {
-  return (
-    <>
-      {parseAnsi(props.ansi).map((p, idx) =>
-        p.style ? (
-          <span key={idx} style={p.style}>
-            {p.text}
-          </span>
-        ) : (
-          <span key={idx}>{p.text}</span>
-        ),
-      )}
-    </>
-  )
 }
 
 const LANE_PALETTE = [
@@ -260,10 +158,10 @@ function relTime(iso: string): string {
 }
 
 function GraphCommitLine(props: { row: GraphCommitRow }) {
-  const { graphAnsi, hashAnsi, decorateRaw, subject, date, inHistory } = props.row
-  const sha = stripAnsi(hashAnsi).trim()
+  const { graphAnsi, shaFull, shaShort, decorateRaw, subject, date, inHistory } =
+    props.row
   const isHead = stripAnsi(decorateRaw).includes('HEAD ->')
-  const diffUrl = `/api/diff/${encodeURIComponent(sha)}`
+  const diffUrl = `/api/diff/${encodeURIComponent(shaFull)}`
   const cls = [
     'log-row',
     isHead ? 'log-row-head' : '',
@@ -277,19 +175,32 @@ function GraphCommitLine(props: { row: GraphCommitRow }) {
       <span class="graph-prefix">
         <GraphLaneSpans ansi={graphAnsi} />
       </span>
-      <span class="sha-text" title={`commit ${sha} — click to copy`}>
-        {sha}
-      </span>
-      <button
-        type="button"
-        class="msg-btn"
-        title="show diff"
-        hx-get={diffUrl}
-        hx-target="#diff"
-        hx-swap="outerHTML"
-      >
-        {subject}
-      </button>
+      <div class="msg-cell">
+        <button
+          type="button"
+          class="msg-btn"
+          title="show diff"
+          hx-get={diffUrl}
+          hx-target="#diff"
+          hx-swap="outerHTML"
+        >
+          {subject}
+        </button>
+        <span class="msg-tail">
+          <span class="msg-tail-sep"> · </span>
+          <code class="hash-peek" title={shaFull}>
+            {shaShort}
+          </code>
+          <button
+            type="button"
+            class="copy-sha-btn"
+            data-sha={shaFull}
+            title="copy full hash"
+          >
+            {COPY_ICO}
+          </button>
+        </span>
+      </div>
       <RefPills decorateRaw={decorateRaw} />
       <span class="row-time" title={date}>
         {relTime(date)}

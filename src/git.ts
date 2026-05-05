@@ -51,7 +51,10 @@ export function stripAnsi(s: string): string {
 
 export type GraphCommitRow = {
   graphAnsi: string
-  hashAnsi: string
+  /** Full 40-char hex, for copy / URLs. */
+  shaFull: string
+  /** Abbreviated hash from git `%h` (matches log elsewhere). */
+  shaShort: string
   decorateRaw: string
   subject: string
   author: string
@@ -76,13 +79,13 @@ async function reachableShortShas(): Promise<Set<string>> {
   return set
 }
 
-/** Graph lines from `git log --graph`, ANSI-colored lanes preserved in `graphAnsi` / `hashAnsi`. */
+/** Graph lines from `git log --graph`. Lane colors come from `graphAnsi`; hashes are plain fields. */
 export async function logGraphRows(limit = 50): Promise<GraphRow[]> {
   const { code, stdout, stderr } = await spawnGit([
     'log',
     '--graph',
     '--all',
-    '--pretty=format:\x1f%C(auto)%h\x1f%d\x1f%s\x1f%an\x1f%aI\x1f',
+    '--pretty=format:\x1f%H\x1f%h\x1f%d\x1f%s\x1f%an\x1f%aI\x1f',
     '--decorate=short',
     '--color=always',
     '-n',
@@ -110,25 +113,29 @@ export async function logGraphRows(limit = 50): Promise<GraphRow[]> {
   for (const line of text.split('\n')) {
     if (!line.trim()) continue
     const parts = line.split('\x1f')
-    if (parts.length >= 6) {
+    if (parts.length >= 7) {
       const graphAnsi = parts[0] ?? ''
-      const hashAnsi = parts[1] ?? ''
-      const decorateRaw = parts[2] ?? ''
-      const subject = parts[3] ?? ''
-      const author = parts[4] ?? ''
-      const date = parts[5] ?? ''
-      const hashPlain = stripAnsi(hashAnsi).trim()
-      if (/^[a-f0-9]{7,40}$/i.test(hashPlain)) {
+      const shaFull = (parts[1] ?? '').trim()
+      const shaShort = (parts[2] ?? '').trim()
+      const decorateRaw = parts[3] ?? ''
+      const subject = parts[4] ?? ''
+      const author = parts[5] ?? ''
+      const date = parts[6] ?? ''
+      if (
+        /^[a-f0-9]{7,40}$/i.test(shaFull) &&
+        /^[a-f0-9]{7,40}$/i.test(shaShort)
+      ) {
         tmp.push({
           kind: 'commit',
           row: {
             graphAnsi,
-            hashAnsi,
+            shaFull,
+            shaShort,
             decorateRaw,
             subject,
             author,
             date,
-            inHistory: reachable.size === 0 ? true : reachable.has(hashPlain),
+            inHistory: reachable.size === 0 ? true : reachable.has(shaShort),
           },
         })
         continue

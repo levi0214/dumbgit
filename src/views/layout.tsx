@@ -213,24 +213,56 @@ body {
 .ref-pill-branch {
   color: #9cdcfe;
 }
-.sha-text {
-  font: inherit;
-  font-size: 11px;
-  color: var(--muted);
-  opacity: 0.35;
-  cursor: copy;
-  user-select: all;
+.msg-cell {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  align-items: baseline;
+  gap: 6px;
+}
+.msg-tail {
   flex-shrink: 0;
-  transition: opacity 0.12s, color 0.12s;
-  letter-spacing: 0.3px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease-out;
 }
-.log-row:hover .sha-text {
+.log-row:hover .msg-tail {
   opacity: 1;
-  color: #dcdcaa;
+  pointer-events: auto;
 }
-.sha-copied {
+.msg-tail-sep {
+  color: var(--muted);
+  font-size: 11px;
+}
+.hash-peek {
+  font-family: inherit;
+  font-size: 11px;
+  color: #c8c8c8;
+  user-select: all;
+}
+.copy-sha-btn {
+  all: unset;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  border-radius: 3px;
+  color: var(--muted);
+  vertical-align: middle;
+}
+.copy-sha-btn:hover {
+  color: var(--accent);
+  background: rgba(255, 255, 255, 0.06);
+}
+.copy-ico {
+  display: block;
+}
+.copy-sha-flash {
   color: var(--success) !important;
-  opacity: 1 !important;
 }
 .msg-btn {
   font: inherit;
@@ -242,7 +274,7 @@ body {
   text-align: left;
   white-space: pre-wrap;
   flex: 1;
-  min-width: 8em;
+  min-width: 0;
 }
 .msg-btn:hover {
   color: var(--accent);
@@ -416,15 +448,15 @@ document.addEventListener('keydown', function (e) {
 });
 
 document.addEventListener('click', function (e) {
-  const t = e.target.closest('.sha-text');
-  if (!t) return;
-  const sha = t.textContent.trim();
-  if (!sha) return;
-  if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(sha);
-  }
-  t.classList.add('sha-copied');
-  setTimeout(function () { t.classList.remove('sha-copied'); }, 800);
+  const btn = e.target.closest('.copy-sha-btn');
+  if (!btn) return;
+  e.preventDefault();
+  e.stopPropagation();
+  var sha = btn.getAttribute('data-sha');
+  if (!sha || !navigator.clipboard || !navigator.clipboard.writeText) return;
+  navigator.clipboard.writeText(sha);
+  btn.classList.add('copy-sha-flash');
+  setTimeout(function () { btn.classList.remove('copy-sha-flash'); }, 700);
 });
 `
 
