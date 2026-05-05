@@ -219,11 +219,6 @@ function GraphCommitLine(props: { row: GraphCommitRow }) {
       <div class="msg-cell">
         {branchPrefix ? (
           <span class="branch-prefix" title={`branch: ${branchPrefix}`}>
-            {isHead ? (
-              <span class="branch-current-dot" aria-hidden="true">
-                ●
-              </span>
-            ) : null}
             {branchPrefix}
             <span class="branch-sep"> · </span>
           </span>
@@ -274,14 +269,14 @@ function GraphOtherLine(props: { ansi: string; betweenInHistory: boolean }) {
 
 function HeadLine(props: { head: HeadInfo }) {
   const short = props.head.sha.slice(0, 7)
-  const label =
-    props.head.kind === 'branch' ? props.head.name : '(detached)'
+  const onBranch = props.head.kind === 'branch'
+  const prefix = onBranch ? 'On branch:' : 'Detached at:'
+  const label = onBranch ? props.head.name : short
+  const tip = onBranch ? `at ${short}` : `detached at ${short}`
   return (
     <>
-      <span class="head-dot" aria-hidden="true" title={`at ${short}`}>
-        ●
-      </span>
-      <span class="head-label" title={`at ${short}`}>
+      <span class="head-prep">{prefix}</span>
+      <span class="head-label" title={tip}>
         {label}
       </span>
     </>
