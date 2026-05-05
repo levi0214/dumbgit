@@ -331,18 +331,21 @@ export function GraphFragment(props: GraphFragmentProps) {
     <div id="graph" class="graph-root">
       <div class="graph-head">
         <HeadLine head={head} />
-        {head.kind === 'branch' ? (
-          <button
-            type="button"
-            id="push-btn"
-            class="head-push-btn"
-            title={`git push (P)`}
-            hx-post="/api/push"
-            hx-swap="none"
-          >
-            ↑ push
-          </button>
-        ) : null}
+        <button
+          type="button"
+          id="push-btn"
+          class="head-push-btn"
+          title={
+            head.kind === 'branch'
+              ? 'git push'
+              : 'detached HEAD has no upstream — switch to a branch first'
+          }
+          disabled={head.kind !== 'branch'}
+          hx-post="/api/push"
+          hx-swap="none"
+        >
+          ↑ push
+        </button>
       </div>
       <WorkTreeFragment {...worktree} />
       <div class="graph-body">

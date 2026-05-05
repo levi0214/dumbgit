@@ -36,9 +36,13 @@ body {
   background: #2d2d2d;
   color: var(--fg);
 }
-.head-push-btn:hover {
+.head-push-btn:hover:not(:disabled) {
   border-color: var(--accent);
   color: var(--accent);
+}
+.head-push-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 .main-grid {
   display: grid;
@@ -568,11 +572,7 @@ document.body.addEventListener('htmx:afterSwap', function (e) {
 
 document.addEventListener('keydown', function (e) {
   if (e.target.closest('input, textarea')) return;
-  const k = e.key;
-  if (k === 'p' || k === 'P') {
-    e.preventDefault();
-    document.getElementById('push-btn')?.click();
-  } else if (k === 'Escape') {
+  if (e.key === 'Escape') {
     const d = document.getElementById('diff');
     if (d) d.outerHTML = EMPTY_DIFF;
     syncViewingHighlight();
