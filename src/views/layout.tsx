@@ -36,13 +36,17 @@ body {
 .repo-bar-summary {
   list-style: none;
   cursor: pointer;
-  padding: 4px 10px;
+  padding: 8px 14px;
   border: 1px solid var(--border);
   border-radius: 4px;
   background: #2d2d2d;
   color: var(--accent);
   font-size: 12px;
   font-weight: 600;
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  box-sizing: border-box;
 }
 .repo-bar-summary::-webkit-details-marker {
   display: none;
@@ -85,9 +89,11 @@ body {
   all: unset;
   cursor: pointer;
   display: block;
-  padding: 3px 0;
+  padding: 6px 4px;
+  min-height: 32px;
   font-size: 12px;
   color: var(--accent);
+  box-sizing: border-box;
 }
 .repo-recent-btn:hover {
   text-decoration: underline;
@@ -102,21 +108,28 @@ body {
   min-width: 0;
   font: inherit;
   font-size: 12px;
-  padding: 4px 8px;
+  padding: 8px 10px;
+  min-height: 36px;
   border: 1px solid var(--border);
   border-radius: 4px;
   background: #1e1e1e;
   color: var(--fg);
+  box-sizing: border-box;
 }
 .repo-open-submit {
   font: inherit;
   font-size: 11px;
   cursor: pointer;
-  padding: 4px 10px;
+  padding: 8px 14px;
+  min-height: 36px;
   border: 1px solid var(--border);
   border-radius: 4px;
   background: #2d2d2d;
   color: var(--fg);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
 }
 .repo-open-submit:hover {
   border-color: var(--accent);
@@ -127,11 +140,16 @@ body {
   font: inherit;
   font-size: 11px;
   cursor: pointer;
-  padding: 3px 10px;
+  padding: 8px 14px;
   border: 1px solid var(--border);
   border-radius: 4px;
   background: #2d2d2d;
   color: var(--fg);
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
 }
 .head-push-btn {
   margin-left: auto;
@@ -257,23 +275,24 @@ body {
 }
 .graph-load-more {
   flex-shrink: 0;
-  padding: 6px 8px 8px;
+  width: 100%;
+  margin: 0;
+  padding: 7px 12px;
+  border: none;
   border-top: 1px solid var(--border);
-  display: flex;
-  justify-content: center;
-}
-.graph-load-more-btn {
+  border-radius: 0;
   font: inherit;
   font-size: 11px;
+  line-height: 1.35;
   cursor: pointer;
-  padding: 4px 14px;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  background: #2d2d2d;
+  background: transparent;
   color: var(--muted);
+  display: block;
+  text-align: center;
+  box-sizing: border-box;
 }
-.graph-load-more-btn:hover {
-  border-color: var(--accent);
+.graph-load-more:hover {
+  background: rgba(255, 255, 255, 0.045);
   color: var(--accent);
 }
 .log-lines {
@@ -650,17 +669,21 @@ body {
   display: none;
 }
 .diff-branch-summary {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   font: inherit;
   font-size: 11px;
   cursor: pointer;
-  padding: 4px 10px;
+  padding: 8px 14px;
+  min-height: 36px;
   border: 1px solid var(--border);
   border-radius: 4px;
   background: #2d2d2d;
   color: var(--fg);
   white-space: nowrap;
   user-select: none;
+  box-sizing: border-box;
 }
 .diff-branch-summary:hover {
   border-color: var(--accent);
@@ -715,12 +738,17 @@ body {
   font: inherit;
   font-size: 11px;
   cursor: pointer;
-  padding: 4px 10px;
+  padding: 8px 14px;
+  min-height: 36px;
   border: 1px solid var(--border);
   border-radius: 4px;
   background: #2d2d2d;
   color: var(--fg);
   white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
 }
 .diff-checkout-btn:hover,
 .diff-branch-btn:hover {

@@ -545,18 +545,16 @@ export function GraphFragment(props: GraphFragmentProps) {
           laneHighlights={laneHighlights}
         />
         {props.showLoadMore ? (
-          <div class="graph-load-more">
-            <button
-              type="button"
-              class="graph-load-more-btn"
-              title={`git log --graph -n ${props.graphNextLimit}`}
-              hx-get={`/fragment/graph?limit=${encodeURIComponent(String(props.graphNextLimit))}`}
-              hx-target="#graph"
-              hx-swap="outerHTML"
-            >
-              load more
-            </button>
-          </div>
+          <button
+            type="button"
+            class="graph-load-more"
+            title={`git log --graph -n ${props.graphNextLimit}`}
+            hx-get={`/fragment/graph?limit=${encodeURIComponent(String(props.graphNextLimit))}`}
+            hx-target="#graph"
+            hx-swap="outerHTML"
+          >
+            load more
+          </button>
         ) : null}
       </div>
     </div>
