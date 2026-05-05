@@ -41,6 +41,23 @@ async function loadGraph(): Promise<GraphFragmentProps> {
   }
 }
 
+/**
+ * `bun --hot` re-evaluates this module on every save. We pin one-shot state
+ * (the fs.watch handle, the change timestamp, the Bun.serve handle) onto
+ * globalThis so reloads update fetch handlers without rebinding the port
+ * and without leaking watchers.
+ */
+type DumbgitState = {
+  lastChange: number
+  watchAttached: boolean
+  server?: ReturnType<typeof Bun.serve>
+}
+const G = globalThis as { __dumbgit?: DumbgitState }
+if (!G.__dumbgit) {
+  G.__dumbgit = { lastChange: Date.now(), watchAttached: false }
+}
+const state = G.__dumbgit
+
 try {
   await ensureGitRepo()
 } catch (e) {
@@ -50,11 +67,13 @@ try {
   process.exit(1)
 }
 
-let lastChangeTimestamp = Date.now()
-const watchedDir = await gitDir()
-watchGitRefs(watchedDir, () => {
-  lastChangeTimestamp = Date.now()
-})
+if (!state.watchAttached) {
+  state.watchAttached = true
+  const watchedDir = await gitDir()
+  watchGitRefs(watchedDir, () => {
+    state.lastChange = Date.now()
+  })
+}
 
 const app = new Hono()
 
@@ -151,12 +170,12 @@ app.post('/api/push', async (c) => {
 app.get('/events', (c) => {
   c.status(200)
   return streamSSE(c, async (stream) => {
-    let lastSent = lastChangeTimestamp
+    let lastSent = state.lastChange
     await stream.writeSSE({ event: 'ready', data: String(lastSent) })
 
     while (!stream.aborted && !stream.closed) {
-      if (lastChangeTimestamp > lastSent) {
-        lastSent = lastChangeTimestamp
+      if (state.lastChange > lastSent) {
+        lastSent = state.lastChange
         await stream.writeSSE({ event: 'changed', data: String(lastSent) })
       }
       await stream.sleep(100)
@@ -164,14 +183,14 @@ app.get('/events', (c) => {
   })
 })
 
-console.log(`dumbgit on http://localhost:${PORT}  (ctrl-c to quit)`)
-Bun.serve({
-  port: PORT,
-  fetch: app.fetch,
-})
-
-if (process.argv.includes('--open')) {
-  setTimeout(() => {
-    Bun.spawn(['open', `http://localhost:${PORT}`])
-  }, 200)
+if (state.server) {
+  state.server.reload({ fetch: app.fetch })
+} else {
+  state.server = Bun.serve({ port: PORT, fetch: app.fetch })
+  console.log(`dumbgit on http://localhost:${PORT}  (ctrl-c to quit)`)
+  if (process.argv.includes('--open')) {
+    setTimeout(() => {
+      Bun.spawn(['open', `http://localhost:${PORT}`])
+    }, 200)
+  }
 }

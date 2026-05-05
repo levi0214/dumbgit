@@ -24,8 +24,9 @@ bun run --cwd /Users/zhangluyao/dev/2025/dumbgit dumbgit
 ```
 
 That starts the server on <http://localhost:7777> and opens the browser.
-`Ctrl-C` to stop. Use `dev` instead of `dumbgit` for the same thing
-without auto-opening the browser.
+`Ctrl-C` to stop. Use `dev` (`bun --watch src/index.tsx` under the
+hood) when iterating on dumbgit itself — it restarts the server on
+every save, then reload the browser tab to see your change.
 
 If you're going to use it, put a shell alias somewhere:
 
