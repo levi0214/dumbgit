@@ -11,7 +11,7 @@ export class GitError extends Error {
 
 export type HeadInfo =
   | { kind: 'branch'; name: string; sha: string }
-  | { kind: 'detached'; sha: string }
+  | { kind: 'detached'; sha: string; previousBranch?: string }
 
 async function spawnGit(
   args: string[],
@@ -41,7 +41,11 @@ export async function headInfo(): Promise<HeadInfo> {
   if (sym.code === 0) {
     return { kind: 'branch', name: sym.stdout.trim(), sha }
   }
-  return { kind: 'detached', sha }
+  const prev = await spawnGit(['rev-parse', '--abbrev-ref', '@{-1}'])
+  const prevName = prev.code === 0 ? prev.stdout.trim() : ''
+  const previousBranch =
+    prevName && prevName !== 'HEAD' && !prevName.includes('@') ? prevName : undefined
+  return { kind: 'detached', sha, previousBranch }
 }
 
 /** Strip SGR sequences so we can regex-match hashes and decorations. */

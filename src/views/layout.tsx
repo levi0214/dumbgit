@@ -25,8 +25,8 @@ body {
   margin: 0 auto;
   padding: 12px 16px 24px;
 }
-.head-push-btn {
-  margin-left: auto;
+.head-push-btn,
+.head-back-btn {
   font: inherit;
   font-size: 11px;
   cursor: pointer;
@@ -36,9 +36,25 @@ body {
   background: #2d2d2d;
   color: var(--fg);
 }
+.head-push-btn {
+  margin-left: auto;
+}
+.head-back-btn {
+  margin-left: auto;
+  border-color: rgba(224, 162, 58, 0.6);
+  color: #ffd58a;
+}
+.head-back-btn + .head-push-btn {
+  margin-left: 0;
+}
 .head-push-btn:hover:not(:disabled) {
   border-color: var(--accent);
   color: var(--accent);
+}
+.head-back-btn:hover {
+  background: rgba(224, 162, 58, 0.18);
+  border-color: #e0a23a;
+  color: #ffd58a;
 }
 .head-push-btn:disabled {
   opacity: 0.4;
@@ -78,6 +94,16 @@ body {
   display: flex;
   align-items: baseline;
   gap: 6px;
+}
+.graph-head-detached {
+  background: rgba(224, 162, 58, 0.14);
+  border-bottom-color: rgba(224, 162, 58, 0.45);
+}
+.graph-head-detached .head-prep {
+  color: #e0a23a;
+}
+.graph-head-detached .head-label {
+  color: #ffd58a;
 }
 .head-prep {
   color: var(--muted);
@@ -167,6 +193,18 @@ body {
   line-height: 1;
   align-self: center;
   text-shadow: 0 0 6px rgba(61, 220, 108, 0.7);
+}
+.log-row-detached {
+  border-left-color: #e0a23a !important;
+  background: rgba(224, 162, 58, 0.09) !important;
+}
+.log-row-detached .row-current-dot {
+  color: #e0a23a;
+  text-shadow: 0 0 6px rgba(224, 162, 58, 0.7);
+}
+.log-row-detached .branch-prefix {
+  background: rgba(224, 162, 58, 0.25) !important;
+  color: #ffd58a !important;
 }
 .log-row-commit.log-row-viewing {
   box-shadow: inset 3px 0 0 0 var(--accent);

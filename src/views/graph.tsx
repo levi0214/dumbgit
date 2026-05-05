@@ -200,7 +200,10 @@ function relTimeAgo(iso: string): string {
   return `${Math.floor(day / 365)}y ago`
 }
 
-function GraphCommitLine(props: { row: GraphCommitRow }) {
+function GraphCommitLine(props: {
+  row: GraphCommitRow
+  detached: boolean
+}) {
   const { graphAnsi, shaFull, shaShort, decorateRaw, subject, date, inHistory } =
     props.row
   const decoPlain = stripAnsi(decorateRaw)
@@ -212,6 +215,7 @@ function GraphCommitLine(props: { row: GraphCommitRow }) {
     'log-row',
     'log-row-commit',
     isHead ? 'log-row-head' : '',
+    isHead && props.detached ? 'log-row-detached' : '',
     inHistory ? '' : 'log-row-dim',
   ]
     .filter(Boolean)
@@ -223,7 +227,11 @@ function GraphCommitLine(props: { row: GraphCommitRow }) {
         <GraphLaneSpans ansi={graphAnsi} />
       </span>
       {isHead ? (
-        <span class="row-current-dot" aria-hidden="true" title="current">
+        <span
+          class="row-current-dot"
+          aria-hidden="true"
+          title={props.detached ? 'viewing past commit' : 'current'}
+        >
           ●
         </span>
       ) : null}
@@ -294,7 +302,7 @@ function HeadLine(props: { head: HeadInfo }) {
   )
 }
 
-function LogLines(props: { rows: GraphRow[] }) {
+function LogLines(props: { rows: GraphRow[]; detached: boolean }) {
   if (props.rows.length === 0) {
     return <div class="log-lines empty">(no commits yet)</div>
   }
@@ -303,7 +311,7 @@ function LogLines(props: { rows: GraphRow[] }) {
     <div class="log-lines">
       {props.rows.map((r, i) =>
         r.kind === 'commit' ? (
-          <GraphCommitLine key={i} row={r.row} />
+          <GraphCommitLine key={i} row={r.row} detached={props.detached} />
         ) : (
           <GraphOtherLine
             key={i}
@@ -326,11 +334,24 @@ export function GraphFragment(props: GraphFragmentProps) {
   }
 
   const { head, rows, worktree } = props
+  const detached = head.kind === 'detached'
 
   return (
     <div id="graph" class="graph-root">
-      <div class="graph-head">
+      <div class={`graph-head${detached ? ' graph-head-detached' : ''}`}>
         <HeadLine head={head} />
+        {head.kind === 'detached' && head.previousBranch ? (
+          <button
+            type="button"
+            class="head-back-btn"
+            title={`git switch ${head.previousBranch}`}
+            hx-post={`/api/checkout/branch?name=${encodeURIComponent(head.previousBranch)}`}
+            hx-target="#graph"
+            hx-swap="outerHTML"
+          >
+            ← back to {head.previousBranch}
+          </button>
+        ) : null}
         <button
           type="button"
           id="push-btn"
@@ -349,7 +370,7 @@ export function GraphFragment(props: GraphFragmentProps) {
       </div>
       <WorkTreeFragment {...worktree} />
       <div class="graph-body">
-        <LogLines rows={rows} />
+        <LogLines rows={rows} detached={detached} />
       </div>
     </div>
   )
