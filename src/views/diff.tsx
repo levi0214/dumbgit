@@ -72,6 +72,7 @@ export function DiffPanel(props: DiffPanelProps) {
 
   const { sha, summary } = props
   const checkoutUrl = `/api/checkout/commit?sha=${encodeURIComponent(sha)}`
+  const branchUrl = `/api/branch/create?sha=${encodeURIComponent(sha)}`
   const patchUrl = `/api/diff/${encodeURIComponent(sha)}/patch`
 
   return (
@@ -83,6 +84,17 @@ export function DiffPanel(props: DiffPanelProps) {
           {sha.slice(0, 7)} · {summary.author} · {summary.date}
         </div>
         <div class="diff-actions">
+          <button
+            type="button"
+            class="diff-branch-btn"
+            title={`git switch -c <name> ${sha.slice(0, 7)}`}
+            hx-post={branchUrl}
+            hx-prompt="New branch name?"
+            hx-target="#graph"
+            hx-swap="outerHTML"
+          >
+            + branch from here…
+          </button>
           <button
             type="button"
             class="diff-checkout-btn"

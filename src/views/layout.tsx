@@ -433,7 +433,8 @@ body {
   display: flex;
   gap: 6px;
 }
-.diff-checkout-btn {
+.diff-checkout-btn,
+.diff-branch-btn {
   font: inherit;
   font-size: 11px;
   cursor: pointer;
@@ -444,7 +445,8 @@ body {
   color: var(--fg);
   white-space: nowrap;
 }
-.diff-checkout-btn:hover {
+.diff-checkout-btn:hover,
+.diff-branch-btn:hover {
   border-color: var(--accent);
   color: var(--accent);
 }

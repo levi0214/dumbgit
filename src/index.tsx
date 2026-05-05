@@ -8,6 +8,7 @@ import {
   checkoutCommit,
   commitPatch,
   commitSummary,
+  createBranchAt,
   ensureGitRepo,
   gitDir,
   headInfo,
@@ -172,6 +173,33 @@ app.get('/api/diff/:sha/patch', async (c) => {
     )
   }
   return c.html(<DiffPatchBody text={r.patch} />, 200)
+})
+
+app.post('/api/branch/create', async (c) => {
+  const sha = c.req.query('sha') ?? ''
+  const name = (c.req.header('HX-Prompt') ?? '').trim()
+  if (!sha || !name) {
+    const next = await loadGraph()
+    return c.html(
+      <Fragment>
+        <GraphFragment {...next} />
+        <StatusOob error={!sha ? 'missing commit sha' : 'branch name required'} />
+      </Fragment>,
+      200,
+    )
+  }
+  const r = await createBranchAt(sha, name)
+  const next = await loadGraph()
+  return c.html(
+    <Fragment>
+      <GraphFragment {...next} />
+      <StatusOob
+        error={r.ok ? undefined : r.stderr}
+        info={r.ok ? `created and switched to ${name}` : undefined}
+      />
+    </Fragment>,
+    200,
+  )
 })
 
 app.post('/api/push', async (c) => {
