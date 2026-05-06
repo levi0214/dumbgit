@@ -35,17 +35,56 @@ function FileNums(props: { file: CommitFile }) {
   )
 }
 
-/** Unified diff appended under the file list (lazy-loaded). */
-export function DiffPatchBody(props: { text: string }) {
-  const lines = props.text.split('\n')
+/** Per-file boilerplate (`diff --git`, blob hashes, `---`/`+++`, no-newline marker) — useless when caller already shows the file path. */
+function isCompactNoiseLine(line: string): boolean {
+  return (
+    line.startsWith('diff --git ') ||
+    line.startsWith('index ') ||
+    line.startsWith('--- ') ||
+    line.startsWith('+++ ') ||
+    line.startsWith('\\ No newline')
+  )
+}
+
+/** Capture the section blurb after `@@ -X,Y +A,B @@ ` (function name / header) — the only useful bit of a hunk header. */
+const HUNK_RE = /^@@\s+-\d+(?:,\d+)?\s+\+\d+(?:,\d+)?\s+@@\s*(.*)$/
+function compactHunkContext(line: string): string {
+  const m = HUNK_RE.exec(line)
+  return m && m[1] ? m[1].trim() : ''
+}
+
+/** Unified diff body. `compact` strips the per-file framing lines and replaces hunk headers (`@@ … @@ ctx`) with just `ctx` (or omits them). */
+export function DiffPatchBody(props: { text: string; compact?: boolean }) {
+  let lines = props.text.split('\n')
+  if (props.compact) {
+    lines = lines.filter((l) => !isCompactNoiseLine(l))
+    while (lines.length > 0 && lines[0]!.trim() === '') lines.shift()
+    while (lines.length > 0 && lines[lines.length - 1]!.trim() === '') lines.pop()
+  }
+  let hunksSeen = 0
   return (
     <pre class="diff-body diff-patch-pre">
-      {lines.map((line, i) => (
-        <span key={i} class={diffLineClass(line)}>
-          {line}
-          {'\n'}
-        </span>
-      ))}
+      {lines.map((line, i) => {
+        if (props.compact && line.startsWith('@@')) {
+          const ctx = compactHunkContext(line)
+          const isFirst = hunksSeen === 0
+          hunksSeen++
+          if (isFirst && !ctx) return null
+          const cls = `diff-hunk diff-hunk-compact${isFirst ? ' diff-hunk-first' : ''}`
+          return (
+            <span key={i} class={cls}>
+              {ctx}
+              {'\n'}
+            </span>
+          )
+        }
+        return (
+          <span key={i} class={diffLineClass(line)}>
+            {line}
+            {'\n'}
+          </span>
+        )
+      })}
     </pre>
   )
 }
@@ -62,10 +101,9 @@ export type WorkTreeDiffPanelProps =
 export function WorkTreeDiffPanel(props: WorkTreeDiffPanelProps) {
   if (!props.ok) {
     return (
-      <div id="diff" class="diff-panel diff-error">
+      <div id="diff" class="diff-panel diff-error diff-worktree-file">
         <div class="diff-head">
-          <div class="diff-subject">working tree</div>
-          <div class="diff-meta">could not load diff</div>
+          <div class="diff-subject">could not load diff</div>
         </div>
         <pre class="diff-body">{props.stderr}</pre>
       </div>
@@ -84,14 +122,14 @@ export function WorkTreeDiffPanel(props: WorkTreeDiffPanelProps) {
   return (
     <div id="diff" class="diff-panel diff-summary diff-worktree-file">
       <div class="diff-head">
-        <div class="diff-subject">working tree · file</div>
-        <div class="diff-meta">
-          {kindLabel} · {props.displayPath}
+        <div class="diff-subject" title={props.displayPath}>
+          <span class={`wt-kind wt-kind-${props.kind}`}>{kindLabel}</span>
+          <span class="diff-subject-path">{props.displayPath}</span>
         </div>
       </div>
       <div id="diff-patch-slot" class="diff-patch-slot diff-patch-slot-inline">
         {patch ? (
-          <DiffPatchBody text={props.patch} />
+          <DiffPatchBody text={props.patch} compact />
         ) : (
           <pre class="diff-body diff-patch-empty">(no diff)</pre>
         )}

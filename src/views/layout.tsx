@@ -738,6 +738,54 @@ body {
   justify-content: flex-end;
   align-items: flex-start;
 }
+.diff-worktree-file .diff-head {
+  padding: 7px 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.diff-worktree-file .diff-subject {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+  color: var(--fg);
+  font-weight: 600;
+}
+.diff-subject-path {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.wt-kind {
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: 3px;
+  border: 1px solid currentColor;
+  line-height: 1.4;
+}
+.wt-kind-staged { color: var(--success); }
+.wt-kind-unstaged { color: #dcdcaa; }
+.wt-kind-untracked { color: var(--accent); }
+.diff-hunk-compact {
+  color: var(--muted);
+  font-weight: 400;
+  font-style: italic;
+  margin-top: 12px;
+  padding-top: 8px;
+  border-top: 1px dashed rgba(255, 255, 255, 0.1);
+}
+.diff-hunk-compact.diff-hunk-first {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+}
 .diff-branch-details {
   position: relative;
   display: inline-block;
