@@ -1,7 +1,7 @@
 # dumbgit
 
 A tiny self-use Git GUI for Mac. One Bun process, server-rendered HTML,
-htmx for swaps. No build step, no packaging, no installer.
+htmx for swaps. No build step, no app bundle.
 
 Pick any repo from the bar at the top (recent paths + open-by-path), or
 launch as `dumbgit /path/to/repo`; omit the path to use the cwd.
@@ -12,31 +12,28 @@ For the "why" and the deliberate non-features, see [`PLAN.md`](./PLAN.md).
 
 ```bash
 bun install
+bun link
 ```
 
-Requires Bun ≥ 1.0 and `git` on `PATH`. Built and used on macOS.
+Requires Bun ≥ 1.0, `git` on `PATH`, and Bun's global bin directory on
+`PATH`. Built and used on macOS.
 
 ## Run
 
 ```bash
-bun run --cwd /Users/zhangluyao/dev/2025/dumbgit dumbgit              # cwd repo
-bun run --cwd /Users/zhangluyao/dev/2025/dumbgit dumbgit /path/to/x   # explicit repo
+dumbgit              # current repo
+dumbgit /path/to/x   # explicit repo
+dumbgit --stop       # stop the background server
 ```
 
-You can also `cd /path/to/some/repo` then run without an argument — same effect.
+`dumbgit` resolves the repo root, starts the local server in the background
+if needed, switches an already-running server to that repo, then opens
+<http://127.0.0.1:7777>. You usually don't need to stop it; use
+`dumbgit --stop` when you want the port free or want a clean restart.
 
-That starts the server on <http://localhost:7777> and opens the browser.
-`Ctrl-C` to stop. Use `dev` (`bun --watch src/index.tsx` under the
-hood) when iterating on dumbgit itself — it restarts the server on
-every save, then reload the browser tab to see your change.
-
-If you're going to use it, put a shell alias somewhere:
-
-```bash
-alias dumbgit='bun run --cwd /Users/zhangluyao/dev/2025/dumbgit dumbgit'
-```
-
-Then it's just `cd repo && dumbgit`.
+Use `bun run dev` when iterating on dumbgit itself. It runs the server in
+the foreground with `bun --watch src/index.tsx`; reload the browser tab to
+see your change.
 
 If the cwd isn't a Git working tree, dumbgit prints a single `git` error
 and exits with code 1.
@@ -72,6 +69,7 @@ need two side-by-side, start a second instance on another port.
 ## Layout
 
 ```
+bin/dumbgit     global launcher
 src/
   index.tsx       Hono routes + server start
   git.ts          all git CLI calls live here

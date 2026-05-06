@@ -2,6 +2,9 @@
   "name": "dumbgit",
   "module": "src/index.tsx",
   "type": "module",
+  "bin": {
+    "dumbgit": "./bin/dumbgit"
+  },
   "scripts": {
     "dev": "bun --watch src/index.tsx",
     "dumbgit": "bun run src/index.tsx --open"

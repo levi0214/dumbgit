@@ -156,6 +156,8 @@ await attachWatcher()
 
 const app = new Hono()
 
+app.get('/healthz', (c) => c.text('ok\n'))
+
 app.get('/', async (c) => {
   const graph = await loadGraph()
   return c.html(
@@ -427,11 +429,15 @@ app.get('/events', (c) => {
 if (state.server) {
   state.server.reload({ fetch: app.fetch })
 } else {
-  state.server = Bun.serve({ port: PORT, fetch: app.fetch })
-  console.log(`dumbgit on http://localhost:${PORT}  (ctrl-c to quit)`)
+  state.server = Bun.serve({
+    hostname: '127.0.0.1',
+    port: PORT,
+    fetch: app.fetch,
+  })
+  console.log(`dumbgit on http://127.0.0.1:${PORT}  (ctrl-c to quit)`)
   if (process.argv.includes('--open')) {
     setTimeout(() => {
-      Bun.spawn(['open', `http://localhost:${PORT}`])
+      Bun.spawn(['open', `http://127.0.0.1:${PORT}`])
     }, 200)
   }
 }
