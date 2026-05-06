@@ -487,23 +487,21 @@ body {
   border-color: var(--border);
   opacity: 0.92;
 }
-.log-row-commit.log-row-dim .ref-tag {
-  color: var(--muted);
-  opacity: 0.85;
+.log-row-commit.log-row-dim .ref-tags-marker {
+  opacity: 0.42;
 }
-.log-row-commit.log-row-dim .ref-tag .tag-ico {
-  opacity: 0.45;
+.log-row-commit.log-row-dim .ref-tags-marker .tag-ico {
+  opacity: 0.55;
 }
 .log-row-commit.log-row-dim .ref-pill:hover {
   border-color: rgba(255, 255, 255, 0.14);
   color: var(--fg);
 }
-.log-row-commit.log-row-dim .ref-tag:hover {
-  color: var(--fg);
-  opacity: 1;
+.log-row-commit.log-row-dim .ref-tags-marker:hover {
+  opacity: 0.75;
 }
-.log-row-commit.log-row-dim .ref-tag:hover .tag-ico {
-  opacity: 0.65;
+.log-row-commit.log-row-dim .ref-tags-marker:hover .tag-ico {
+  opacity: 0.85;
 }
 .log-row-other {
   padding-top: 1px;
@@ -576,32 +574,31 @@ body {
   border-color: var(--accent);
   color: var(--accent);
 }
-/* Tag = inline, no pill. Conceptually different from a movable branch. */
-.ref-tag {
-  all: unset;
-  cursor: pointer;
+/* Tags = one muted icon (+ count if multiple); full names live in title. */
+.ref-tags-marker {
   display: inline-flex;
-  align-items: center;
+  align-items: baseline;
   gap: 3px;
-  font-size: 11px;
-  color: #c89bd9;
-  opacity: 0.78;
-  padding: 0 2px;
   flex-shrink: 0;
-  white-space: nowrap;
+  color: var(--muted);
+  opacity: 0.55;
+  vertical-align: baseline;
+  cursor: default;
 }
-.ref-tag:hover {
-  opacity: 1;
-  color: #d6bce8;
+.ref-tags-marker:hover {
+  opacity: 0.88;
 }
-.ref-tag .tag-ico {
+.ref-tags-marker .tag-ico {
   display: block;
-  opacity: 0.85;
+  opacity: 0.8;
 }
-.ref-tag-name {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.ref-tags-marker:hover .tag-ico {
+  opacity: 1;
+}
+.ref-tags-count {
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
 }
 .branch-prefix {
   flex-shrink: 0;
@@ -640,7 +637,6 @@ body {
   background: rgba(86, 156, 214, 0.22);
 }
 .ref-pill:hover .inline-action-btn,
-.ref-tag:hover .inline-action-btn,
 .branch-prefix:hover .inline-action-btn,
 .head-label:hover .inline-action-btn {
   display: inline-flex;

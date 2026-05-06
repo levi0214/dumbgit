@@ -162,9 +162,24 @@ function isRemoteShadowingLocal(plain: string, locals: Set<string>): boolean {
 
 function pillClass(tokenPlain: string): string {
   if (/HEAD\s*->/i.test(tokenPlain)) return 'ref-pill ref-pill-head'
-  if (isTagToken(tokenPlain)) return 'ref-tag'
   if (tokenPlain.includes('/')) return 'ref-pill ref-pill-remote'
   return 'ref-pill ref-pill-branch'
+}
+
+/** One icon (+ optional count) for all tags on this commit; names live in `title`. */
+function collectTagNames(tokens: string[]): string[] {
+  const out: string[] = []
+  const seen = new Set<string>()
+  for (const t of tokens) {
+    const plain = stripAnsi(t).trim()
+    if (!isTagToken(plain)) continue
+    const n = tagName(plain)
+    if (n && !seen.has(n)) {
+      seen.add(n)
+      out.push(n)
+    }
+  }
+  return out
 }
 
 /**
@@ -285,11 +300,10 @@ function GraphLaneSpans(props: {
   return <>{out}</>
 }
 
-/** Order pills as: local branch > remote branch > tag. */
+/** Order pills as: HEAD ref first, local branch before remote-tracking. */
 function pillSortKey(plain: string): number {
   if (/HEAD\s*->/i.test(plain)) return -1
   if (/^HEAD$/i.test(plain)) return 4
-  if (isTagToken(plain)) return 2
   if (plain.includes('/')) return 1
   return 0
 }
@@ -302,7 +316,9 @@ function RefPills(props: {
   const tokens = decorationRefs(props.decorateRaw)
   if (tokens.length === 0) return null
   const locals = localNamesOnRow(tokens, props.branchPrefix)
-  const sorted = [...tokens].sort(
+  const tagNames = collectTagNames(tokens)
+  const nonTag = tokens.filter((t) => !isTagToken(stripAnsi(t).trim()))
+  const sorted = [...nonTag].sort(
     (a, b) => pillSortKey(stripAnsi(a).trim()) - pillSortKey(stripAnsi(b).trim()),
   )
   return (
@@ -315,33 +331,10 @@ function RefPills(props: {
         if (isRemoteShadowingLocal(plain, locals)) return null
         const ref = refForCheckout(t)
         if (!ref) return null
-        if (isTagToken(plain)) {
-          const name = tagName(plain)
-          return (
-            <span
-              key={idx}
-              class="ref-tag"
-              title={`tag ${name}`}
-            >
-              {TAG_ICO}
-              <span class="ref-tag-name">{name}</span>
-              <button
-                type="button"
-                class="inline-action-btn ref-action-btn"
-                title={`git switch ${ref}`}
-                hx-post={`/api/checkout/branch?name=${encodeURIComponent(ref)}`}
-                hx-target="#graph"
-                hx-swap="outerHTML"
-              >
-                switch
-              </button>
-            </span>
-          )
-        }
         return (
           <span
             key={idx}
-            class={pillClass(t)}
+            class={pillClass(plain)}
             title={plain}
           >
             {plain}
@@ -371,6 +364,17 @@ function RefPills(props: {
           </span>
         )
       })}
+      {tagNames.length > 0 ? (
+        <span
+          class="ref-tags-marker"
+          title={`tags: ${tagNames.join(', ')}`}
+        >
+          {TAG_ICO}
+          {tagNames.length > 1 ? (
+            <span class="ref-tags-count">{tagNames.length}</span>
+          ) : null}
+        </span>
+      ) : null}
     </span>
   )
 }
