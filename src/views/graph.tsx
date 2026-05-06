@@ -491,6 +491,7 @@ function GraphCommitLine(props: {
             type="button"
             class="row-action-btn"
             title="git switch --detach to this commit"
+            data-confirm-label="confirm checkout"
             hx-post={`/api/checkout/commit?sha=${encodeURIComponent(shaFull)}`}
             hx-target="#graph"
             hx-swap="outerHTML"
