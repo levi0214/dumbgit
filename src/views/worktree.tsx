@@ -20,6 +20,33 @@ function markLabel(mark: string): string {
   return MARK_LABELS[head] ?? mark
 }
 
+function WorkTreeNums(props: {
+  entry: WorkTreeEntry
+  kind: 'staged' | 'unstaged' | 'untracked'
+}) {
+  const { entry: e } = props
+  if (props.kind === 'untracked') {
+    return <span class="file-num file-num-new">new</span>
+  }
+  if (e.binary) {
+    return <span class="file-num file-num-binary">binary</span>
+  }
+  if (
+    e.added === undefined ||
+    e.deleted === undefined ||
+    !Number.isFinite(e.added) ||
+    !Number.isFinite(e.deleted)
+  ) {
+    return null
+  }
+  return (
+    <span class="file-num">
+      <span class="file-num-add">+{e.added}</span>
+      <span class="file-num-del"> −{e.deleted}</span>
+    </span>
+  )
+}
+
 export function WorkTreeFragment(
   props: WorkTreeSummary & { repoPath: string },
 ) {
@@ -97,8 +124,12 @@ function Section(props: {
                 hx-get={diffUrl}
                 hx-target="#diff"
                 hx-swap="outerHTML"
+                data-kind={kind}
+                data-path={e.path}
               >
+                <span class={`wt-mark file-${e.mark[0] ?? '_'}`}>{e.mark}</span>
                 <span class="wt-path">{e.path}</span>
+                <WorkTreeNums entry={e} kind={kind} />
               </button>
             </li>
           )

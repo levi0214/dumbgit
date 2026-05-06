@@ -332,20 +332,42 @@ body {
   font: inherit;
   border: none;
   background: transparent;
-  padding: 0;
-  margin: 0;
+  padding: 2px 6px;
+  margin: 0 -6px;
   cursor: pointer;
   text-align: left;
   flex: 1;
   min-width: 0;
   color: inherit;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  border-left: 2px solid transparent;
+  border-radius: 3px;
+}
+.wt-mark {
+  display: inline-block;
+  width: 1.5em;
+  flex-shrink: 0;
+  color: var(--muted);
 }
 .wt-file-btn .wt-path {
   word-break: break-all;
   color: var(--fg);
+  flex: 1;
+  min-width: 0;
 }
 .wt-file-btn:hover .wt-path {
   color: var(--accent);
+}
+.wt-file-btn.wt-file-selected {
+  background: rgba(86, 156, 214, 0.18);
+  border-left-color: var(--accent);
+  box-shadow: inset 0 0 0 1px rgba(86, 156, 214, 0.28);
+}
+.wt-file-btn.wt-file-selected .wt-path {
+  color: var(--accent);
+  font-weight: 700;
 }
 .graph-body {
   flex: 1;
@@ -996,6 +1018,7 @@ body {
 }
 .file-num-add { color: #89d185; }
 .file-num-del { color: #f48771; }
+.file-num-new { color: var(--accent); }
 .file-num-binary { color: var(--muted); font-style: italic; }
 .diff-body {
   margin: 0;
@@ -1047,7 +1070,36 @@ function syncViewingHighlight() {
   });
 }
 
-document.addEventListener('DOMContentLoaded', syncViewingHighlight);
+function clearSelectedFiles() {
+  document.querySelectorAll('.diff-file-selected, .wt-file-selected').forEach(function (b) {
+    b.classList.remove('diff-file-selected');
+    b.classList.remove('wt-file-selected');
+    b.removeAttribute('aria-current');
+  });
+}
+
+function syncWorktreeFileSelection() {
+  var diff = document.getElementById('diff');
+  var kind = diff && diff.dataset ? diff.dataset.worktreeKind : '';
+  var path = diff && diff.dataset ? diff.dataset.worktreePath : '';
+  document.querySelectorAll('.wt-file-selected').forEach(function (b) {
+    b.classList.remove('wt-file-selected');
+    b.removeAttribute('aria-current');
+  });
+  if (!kind || !path) return;
+  document.querySelectorAll('.wt-file-btn').forEach(function (btn) {
+    var ds = btn.dataset || {};
+    var match = ds.kind === kind && ds.path === path;
+    btn.classList.toggle('wt-file-selected', match);
+    if (match) btn.setAttribute('aria-current', 'true');
+    else btn.removeAttribute('aria-current');
+  });
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+  syncViewingHighlight();
+  syncWorktreeFileSelection();
+});
 
 document.body.addEventListener('htmx:beforeSwap', function (e) {
   var t = e.detail.target;
@@ -1076,15 +1128,21 @@ document.body.addEventListener('htmx:beforeSwap', function (e) {
 document.body.addEventListener('htmx:afterSwap', function (e) {
   var t = e.detail && e.detail.target;
   if (!t || !t.id) return;
-  if (t.id === 'diff' || t.id === 'graph') syncViewingHighlight();
+  if (t.id === 'diff' || t.id === 'graph') {
+    syncViewingHighlight();
+    syncWorktreeFileSelection();
+  }
+  if (t.id === 'worktree') syncWorktreeFileSelection();
   if (t.id === 'diff-patch-slot') {
     var trig = e.detail && e.detail.elt;
     var fileBtn = trig && trig.closest && trig.closest('.diff-file-btn');
     if (fileBtn && !t.querySelector('.diff-patch-error')) {
       document.querySelectorAll('.diff-file-selected').forEach(function (b) {
         b.classList.remove('diff-file-selected');
+        b.removeAttribute('aria-current');
       });
       fileBtn.classList.add('diff-file-selected');
+      fileBtn.setAttribute('aria-current', 'true');
     }
     var blk = document.getElementById('diff-files-trigger');
     if (blk && blk.hasAttribute('hx-get') && !t.querySelector('.diff-patch-error')) {
@@ -1095,13 +1153,10 @@ document.body.addEventListener('htmx:afterSwap', function (e) {
 });
 
 document.addEventListener('click', function (e) {
-  var fileBtn = e.target && e.target.closest && e.target.closest('.diff-file-btn');
+  var fileBtn = e.target && e.target.closest && e.target.closest('.diff-file-btn, .wt-file-btn');
   if (!fileBtn) return;
-  document.querySelectorAll('.diff-file-selected').forEach(function (b) {
-    b.classList.remove('diff-file-selected');
-    b.removeAttribute('aria-current');
-  });
-  fileBtn.classList.add('diff-file-selected');
+  clearSelectedFiles();
+  fileBtn.classList.add(fileBtn.matches('.wt-file-btn') ? 'wt-file-selected' : 'diff-file-selected');
   fileBtn.setAttribute('aria-current', 'true');
 });
 

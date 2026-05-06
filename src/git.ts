@@ -245,10 +245,10 @@ export type CommitDetails = CommitSummary & {
   diff: string
 }
 
-function parseNumstat(
-  stdout: string,
-): Map<string, { added?: number; deleted?: number; binary: boolean }> {
-  const m = new Map<string, { added?: number; deleted?: number; binary: boolean }>()
+type Numstat = { added?: number; deleted?: number; binary: boolean }
+
+function parseNumstat(stdout: string): Map<string, Numstat> {
+  const m = new Map<string, Numstat>()
   for (const line of stdout.split('\n')) {
     if (!line.trim()) continue
     const tabs = line.split('\t')
@@ -268,7 +268,14 @@ function parseNumstat(
   return m
 }
 
-function mergeNumstat(files: CommitFile[], stats: Map<string, { added?: number; deleted?: number; binary: boolean }>): CommitFile[] {
+function mergeNumstat<
+  T extends {
+    path: string
+    added?: number
+    deleted?: number
+    binary?: boolean
+  },
+>(files: T[], stats: Map<string, Numstat>): T[] {
   return files.map((f) => {
     let st = stats.get(f.path)
     if (!st && f.path.includes(' → ')) {
@@ -418,7 +425,13 @@ export async function gitDir(): Promise<string> {
   return out.trim()
 }
 
-export type WorkTreeEntry = { mark: string; path: string }
+export type WorkTreeEntry = {
+  mark: string
+  path: string
+  added?: number
+  deleted?: number
+  binary?: boolean
+}
 
 export type WorkTreeSummary = {
   staged: WorkTreeEntry[]
@@ -443,10 +456,20 @@ function parseNameStatus(stdout: string): WorkTreeEntry[] {
 
 /** Files changed in the working tree (not yet reflected in `git log`). */
 export async function workTreeSummary(): Promise<WorkTreeSummary> {
-  const stagedR = await spawnGit(['diff', '--cached', '--name-status'])
-  const unstagedR = await spawnGit(['diff', '--name-status'])
-  const staged = stagedR.code === 0 ? parseNameStatus(stagedR.stdout) : []
-  const unstaged = unstagedR.code === 0 ? parseNameStatus(unstagedR.stdout) : []
+  const [stagedR, unstagedR, stagedNumsR, unstagedNumsR] = await Promise.all([
+    spawnGit(['diff', '--cached', '--name-status']),
+    spawnGit(['diff', '--name-status']),
+    spawnGit(['diff', '--cached', '--numstat']),
+    spawnGit(['diff', '--numstat']),
+  ])
+  let staged = stagedR.code === 0 ? parseNameStatus(stagedR.stdout) : []
+  let unstaged = unstagedR.code === 0 ? parseNameStatus(unstagedR.stdout) : []
+  if (stagedNumsR.code === 0) {
+    staged = mergeNumstat(staged, parseNumstat(stagedNumsR.stdout))
+  }
+  if (unstagedNumsR.code === 0) {
+    unstaged = mergeNumstat(unstaged, parseNumstat(unstagedNumsR.stdout))
+  }
 
   const ut = await spawnGit(['ls-files', '--others', '--exclude-standard'])
   const untracked =

@@ -120,7 +120,12 @@ export function WorkTreeDiffPanel(props: WorkTreeDiffPanelProps) {
   const patch = props.patch.trim()
 
   return (
-    <div id="diff" class="diff-panel diff-summary diff-worktree-file">
+    <div
+      id="diff"
+      class="diff-panel diff-summary diff-worktree-file"
+      data-worktree-kind={props.kind}
+      data-worktree-path={props.displayPath}
+    >
       <div class="diff-head">
         <div class="diff-subject" title={props.displayPath}>
           <span class={`wt-kind wt-kind-${props.kind}`}>{kindLabel}</span>
