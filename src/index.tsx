@@ -236,7 +236,7 @@ app.post('/api/worktree/action', async (c) => {
     <Fragment>
       <GraphFragment {...next} swapOob />
       <DiffPanel state="empty" swapOob />
-      <StatusOob info={r.message} />
+      <StatusOob />
     </Fragment>,
     200,
   )

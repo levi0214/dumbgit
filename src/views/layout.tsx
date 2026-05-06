@@ -792,15 +792,15 @@ body {
   font: inherit;
   font-size: 11px;
   cursor: pointer;
-  padding: 4px 8px;
+  padding: 5px 10px;
   border: 1px solid var(--border);
   border-radius: 4px;
-  background: rgba(255, 255, 255, 0.03);
-  color: var(--muted);
+  background: #2d2d2d;
+  color: var(--fg);
   white-space: nowrap;
 }
 .worktree-action-btn:hover {
-  background: rgba(255, 255, 255, 0.07);
+  background: rgba(86, 156, 214, 0.12);
   border-color: var(--accent);
   color: var(--accent);
 }
