@@ -649,6 +649,11 @@ body {
   color: #ffffff;
   background: rgba(86, 156, 214, 0.34);
 }
+.confirm-armed {
+  color: #ffd58a !important;
+  border-color: rgba(224, 162, 58, 0.6) !important;
+  background: rgba(224, 162, 58, 0.18) !important;
+}
 .branch-prefix:hover {
   background: rgba(156, 220, 254, 0.22);
 }
@@ -1056,10 +1061,48 @@ function syncWorktreeFileSelection() {
   });
 }
 
+function clearConfirmButton(btn) {
+  var old = btn.getAttribute('data-confirm-original');
+  if (old !== null) btn.textContent = old;
+  btn.classList.remove('confirm-armed');
+  btn.removeAttribute('data-confirm-armed');
+  btn.removeAttribute('data-confirm-original');
+  var timer = btn.getAttribute('data-confirm-timer');
+  if (timer) clearTimeout(Number(timer));
+  btn.removeAttribute('data-confirm-timer');
+}
+
+function clearOtherConfirmButtons(btn) {
+  document.querySelectorAll('[data-confirm-armed="true"]').forEach(function (other) {
+    if (other !== btn) clearConfirmButton(other);
+  });
+}
+
 document.addEventListener('DOMContentLoaded', function () {
   syncViewingHighlight();
   syncWorktreeFileSelection();
 });
+
+document.addEventListener('click', function (e) {
+  var btn = e.target && e.target.closest && e.target.closest('[data-confirm-label]');
+  if (!btn) {
+    clearOtherConfirmButtons(null);
+    return;
+  }
+  clearOtherConfirmButtons(btn);
+  if (btn.getAttribute('data-confirm-armed') === 'true') {
+    clearConfirmButton(btn);
+    return;
+  }
+  e.preventDefault();
+  e.stopImmediatePropagation();
+  btn.setAttribute('data-confirm-armed', 'true');
+  btn.setAttribute('data-confirm-original', btn.textContent || '');
+  btn.textContent = '✓ ' + (btn.getAttribute('data-confirm-label') || 'confirm');
+  btn.classList.add('confirm-armed');
+  var timer = setTimeout(function () { clearConfirmButton(btn); }, 3000);
+  btn.setAttribute('data-confirm-timer', String(timer));
+}, true);
 
 document.body.addEventListener('htmx:beforeSwap', function (e) {
   var t = e.detail.target;

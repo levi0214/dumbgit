@@ -350,6 +350,7 @@ function RefPills(props: {
                 type="button"
                 class="inline-action-btn ref-action-btn"
                 title="git push"
+                data-confirm-label="confirm push"
                 hx-post="/api/push"
                 hx-swap="none"
               >
@@ -435,6 +436,7 @@ function GraphCommitLine(props: {
               type="button"
               class="inline-action-btn branch-prefix-action"
               title="git push"
+              data-confirm-label="confirm push"
               hx-post="/api/push"
               hx-swap="none"
             >
@@ -546,6 +548,7 @@ function HeadLine(props: { head: HeadInfo }) {
             type="button"
             class="inline-action-btn head-branch-action"
             title="git push"
+            data-confirm-label="confirm push"
             hx-post="/api/push"
             hx-swap="none"
           >

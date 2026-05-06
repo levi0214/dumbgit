@@ -112,10 +112,12 @@ export function WorkTreeDiffPanel(props: WorkTreeDiffPanelProps) {
 
   const actionLabel = props.kind === 'staged' ? 'unstage' : 'discard'
   const actionUrl = `/api/worktree/action?kind=${props.kind}&path=${encodeURIComponent(props.displayPath)}`
-  const confirmText =
+  const actionTitle =
     props.kind === 'staged'
       ? `Unstage ${props.displayPath}?`
       : `Discard changes to ${props.displayPath}? This cannot be undone.`
+  const confirmAttrs =
+    props.kind === 'staged' ? {} : { 'data-confirm-label': 'confirm discard' }
 
   const patch = props.patch.trim()
 
@@ -134,10 +136,10 @@ export function WorkTreeDiffPanel(props: WorkTreeDiffPanelProps) {
           <button
             type="button"
             class="worktree-action-btn"
-            title={confirmText}
+            title={actionTitle}
+            {...confirmAttrs}
             hx-post={actionUrl}
             hx-swap="none"
-            hx-confirm={confirmText}
           >
             ↶ {actionLabel}
           </button>
