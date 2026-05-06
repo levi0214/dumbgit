@@ -91,30 +91,55 @@ body {
   word-break: break-all;
   margin-bottom: 8px;
 }
+.repo-recents {
+  margin: 0 -12px 10px;
+}
 .repo-recents-label {
   font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--muted);
   margin-bottom: 4px;
+  padding: 0 12px;
 }
 .repo-recents-list {
-  margin: 0 0 10px;
+  margin: 0;
   padding: 0;
   list-style: none;
 }
+.repo-recents-list li {
+  margin: 0;
+}
+.repo-recents-list li + li {
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
 .repo-recent-btn {
   all: unset;
+  appearance: none;
   cursor: pointer;
-  display: block;
-  padding: 6px 4px;
-  min-height: 32px;
-  font-size: 12px;
-  color: var(--accent);
   box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 10px 16px;
+  min-height: 40px;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.35;
+  color: var(--accent);
+  text-align: left;
 }
 .repo-recent-btn:hover {
-  text-decoration: underline;
+  background: rgba(255, 255, 255, 0.09);
+  color: #7ebef0;
+}
+.repo-recent-btn:active {
+  background: rgba(255, 255, 255, 0.13);
+}
+.repo-recent-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+  background: rgba(255, 255, 255, 0.07);
 }
 .repo-open-form {
   display: flex;
@@ -1022,6 +1047,13 @@ document.body.addEventListener('click', function (e) {
   var fo = det.querySelector('form.diff-branch-form');
   if (fo) fo.reset();
 });
+
+document.addEventListener('click', function (e) {
+  var rd = document.querySelector('details.repo-bar-details');
+  if (!rd || !rd.open) return;
+  if (rd.contains(e.target)) return;
+  rd.removeAttribute('open');
+}, true);
 
 document.addEventListener('keydown', function (e) {
   if (e.key !== 'Escape') return;
