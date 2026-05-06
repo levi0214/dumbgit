@@ -721,7 +721,10 @@ body {
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  max-height: calc(100vh - 260px);
+  height: calc(100vh - 40px);
+  min-height: 320px;
+  position: sticky;
+  top: 12px;
 }
 .diff-empty {
   padding: 16px;
