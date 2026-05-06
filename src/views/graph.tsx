@@ -166,7 +166,7 @@ function pillClass(tokenPlain: string): string {
   return 'ref-pill ref-pill-branch'
 }
 
-/** One icon (+ optional count) for all tags on this commit; names live in `title`. */
+/** Distinct tag names on this commit. */
 function collectTagNames(tokens: string[]): string[] {
   const out: string[] = []
   const seen = new Set<string>()
@@ -316,7 +316,6 @@ function RefPills(props: {
   const tokens = decorationRefs(props.decorateRaw)
   if (tokens.length === 0) return null
   const locals = localNamesOnRow(tokens, props.branchPrefix)
-  const tagNames = collectTagNames(tokens)
   const nonTag = tokens.filter((t) => !isTagToken(stripAnsi(t).trim()))
   const sorted = [...nonTag].sort(
     (a, b) => pillSortKey(stripAnsi(a).trim()) - pillSortKey(stripAnsi(b).trim()),
@@ -364,17 +363,6 @@ function RefPills(props: {
           </span>
         )
       })}
-      {tagNames.length > 0 ? (
-        <span
-          class="ref-tags-marker"
-          title={`tags: ${tagNames.join(', ')}`}
-        >
-          {TAG_ICO}
-          {tagNames.length > 1 ? (
-            <span class="ref-tags-count">{tagNames.length}</span>
-          ) : null}
-        </span>
-      ) : null}
     </span>
   )
 }
@@ -408,6 +396,7 @@ function GraphCommitLine(props: {
     props.row
   const isHead = graphCommitIsHead(decorateRaw)
   const branchPrefix = branchPrefixFromDecorations(decorateRaw)
+  const tagNames = collectTagNames(decorationRefs(decorateRaw))
   const diffUrl = `/api/commit/${encodeURIComponent(shaFull)}`
   const cls = [
     'log-row',
@@ -474,6 +463,14 @@ function GraphCommitLine(props: {
         hx-swap="outerHTML"
       >
         {subject}
+        {tagNames.length > 0 ? (
+          <span
+            class="row-tags-marker"
+            title={`tags: ${tagNames.join(', ')}`}
+          >
+            {TAG_ICO}
+          </span>
+        ) : null}
       </button>
       <span class="row-end">
         <span class="msg-age" title={date}>

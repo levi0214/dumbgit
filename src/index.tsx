@@ -324,7 +324,7 @@ app.post('/api/checkout/commit', async (c) => {
 
 app.get('/api/commit/:sha', async (c) => {
   const sha = c.req.param('sha')
-  const r = await commitSummary(sha)
+  const r = await commitSummary(sha, { includeTags: true })
   if (!r.ok) {
     return c.html(<DiffPanel state="error" sha={sha} stderr={r.stderr} />, 200)
   }

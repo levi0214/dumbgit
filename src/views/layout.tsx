@@ -467,7 +467,7 @@ body {
 .log-row-dim:hover {
   opacity: 0.85;
 }
-/* Reachability-off commits: branch/tag chrome stays monochrome until hovered. */
+/* Reachability-off commits: branch chrome stays monochrome until hovered. */
 .log-row-commit.log-row-dim .branch-prefix {
   color: var(--muted);
   background: rgba(255, 255, 255, 0.04);
@@ -487,21 +487,9 @@ body {
   border-color: var(--border);
   opacity: 0.92;
 }
-.log-row-commit.log-row-dim .ref-tags-marker {
-  opacity: 0.42;
-}
-.log-row-commit.log-row-dim .ref-tags-marker .tag-ico {
-  opacity: 0.55;
-}
 .log-row-commit.log-row-dim .ref-pill:hover {
   border-color: rgba(255, 255, 255, 0.14);
   color: var(--fg);
-}
-.log-row-commit.log-row-dim .ref-tags-marker:hover {
-  opacity: 0.75;
-}
-.log-row-commit.log-row-dim .ref-tags-marker:hover .tag-ico {
-  opacity: 0.85;
 }
 .log-row-other {
   padding-top: 1px;
@@ -574,32 +562,6 @@ body {
   border-color: var(--accent);
   color: var(--accent);
 }
-/* Tags = one muted icon (+ count if multiple); full names live in title. */
-.ref-tags-marker {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 3px;
-  flex-shrink: 0;
-  color: var(--muted);
-  opacity: 0.55;
-  vertical-align: baseline;
-  cursor: default;
-}
-.ref-tags-marker:hover {
-  opacity: 0.88;
-}
-.ref-tags-marker .tag-ico {
-  display: block;
-  opacity: 0.8;
-}
-.ref-tags-marker:hover .tag-ico {
-  opacity: 1;
-}
-.ref-tags-count {
-  font-size: 10px;
-  font-weight: 700;
-  line-height: 1;
-}
 .branch-prefix {
   flex-shrink: 0;
   overflow: visible;
@@ -671,6 +633,16 @@ body {
 .msg-age {
   color: var(--muted);
   font-size: 11px;
+}
+.row-tags-marker {
+  display: inline-flex;
+  margin-left: 6px;
+  color: #c89bd9;
+  opacity: 0.95;
+  vertical-align: -0.08em;
+}
+.row-tags-marker .tag-ico {
+  display: block;
 }
 .log-row:hover .msg-age {
   visibility: hidden;
@@ -790,6 +762,33 @@ body {
   margin-top: 4px;
   color: var(--muted);
   font-size: 11px;
+}
+.diff-tags {
+  margin-top: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.diff-tag {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
+  max-width: min(100%, 18rem);
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 11px;
+  color: #d6bce8;
+  background: rgba(200, 155, 217, 0.12);
+}
+.diff-tag .tag-ico {
+  display: block;
+  flex-shrink: 0;
+}
+.diff-tag-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .diff-worktree-file .diff-head {
   padding: 7px 12px;

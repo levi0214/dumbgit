@@ -245,6 +245,7 @@ export type CommitSummary = {
   subject: string
   author: string
   date: string
+  tags: string[]
   files: CommitFile[]
 }
 
@@ -310,6 +311,7 @@ function parseShowNameStatus(stdout: string): CommitFile[] {
 /** Subject, author, ISO date, changed files — no patch body (cheap). */
 export async function commitSummary(
   sha: string,
+  opts: { includeTags?: boolean } = {},
 ): Promise<{ ok: true; value: CommitSummary } | { ok: false; stderr: string }> {
   const meta = await spawnGit(['log', '-1', '--format=%s%n%an%n%aI', sha])
   if (meta.code !== 0) {
@@ -336,6 +338,16 @@ export async function commitSummary(
   if (numstat.code === 0) {
     files = mergeNumstat(files, parseNumstat(numstat.stdout))
   }
+  let tags: string[] = []
+  if (opts.includeTags) {
+    const tagList = await spawnGit(['tag', '--points-at', sha])
+    if (tagList.code === 0) {
+      tags = tagList.stdout
+        .split('\n')
+        .map((s) => s.trim())
+        .filter(Boolean)
+    }
+  }
 
   return {
     ok: true,
@@ -343,6 +355,7 @@ export async function commitSummary(
       subject,
       author,
       date,
+      tags,
       files,
     },
   }
