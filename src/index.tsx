@@ -24,7 +24,11 @@ import {
   workTreeSummary,
 } from './git'
 import { bumpRecent, loadRecents } from './recents'
-import { GraphFragment } from './views/graph'
+import {
+  GraphFragment,
+  GraphTailFragment,
+  graphLaneHighlights,
+} from './views/graph'
 import type { GraphFragmentProps } from './views/graph'
 import { DiffPanel, DiffPatchBody, WorkTreeDiffPanel } from './views/diff'
 import { Layout } from './views/layout'
@@ -182,6 +186,50 @@ app.get('/fragment/graph', async (c) => {
     Number.isFinite(parsed) ? parsed : undefined,
   )
   return c.html(<GraphFragment {...graph} />, 200)
+})
+
+app.get('/fragment/graph/tail', async (c) => {
+  c.header('Cache-Control', 'no-store')
+  const offset = Math.max(
+    0,
+    Number.parseInt(c.req.query('offset') ?? '0', 10) || 0,
+  )
+  const parsedLimit = Number.parseInt(c.req.query('limit') ?? '', 10)
+  const graphCommitLimit = clampGraphCommitLimit(parsedLimit)
+  try {
+    const head = await headInfo()
+    const rows = await logGraphRows(graphCommitLimit)
+    const commitRows = rows.filter((r) => r.kind === 'commit').length
+    const graphNextLimit = Math.min(
+      graphCommitLimit + GRAPH_COMMIT_STEP,
+      GRAPH_COMMIT_MAX,
+    )
+    const showLoadMore =
+      commitRows >= graphCommitLimit &&
+      commitRows > 0 &&
+      graphCommitLimit < GRAPH_COMMIT_MAX
+    const rowOffset = Math.min(offset, rows.length)
+    return c.html(
+      <GraphTailFragment
+        rows={rows.slice(rowOffset)}
+        detached={head.kind === 'detached'}
+        currentBranch={head.kind === 'branch' ? head.name : null}
+        laneHighlights={graphLaneHighlights(rows).slice(rowOffset)}
+        offset={rows.length}
+        nextLimit={graphNextLimit}
+        showLoadMore={showLoadMore}
+      />,
+      200,
+    )
+  } catch (e) {
+    const stderr =
+      e instanceof GitError
+        ? e.message
+        : e instanceof Error
+          ? e.message
+          : String(e)
+    return c.html(<span class="graph-load-more-error">{stderr}</span>, 200)
+  }
 })
 
 app.get('/fragment/worktree', async (c) => {

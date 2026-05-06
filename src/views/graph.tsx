@@ -241,7 +241,7 @@ function highlightLanesForRow(rows: GraphRow[], i: number): Set<number> | null {
   return lanes.size === 0 ? null : lanes
 }
 
-function graphLaneHighlights(rows: GraphRow[]): Array<Set<number> | null> {
+export function graphLaneHighlights(rows: GraphRow[]): Array<Set<number> | null> {
   return rows.map((_, i) => highlightLanesForRow(rows, i))
 }
 
@@ -562,18 +562,14 @@ function HeadLine(props: { head: HeadInfo }) {
   )
 }
 
-function LogLines(props: {
+export function GraphRows(props: {
   rows: GraphRow[]
   detached: boolean
   currentBranch: string | null
   laneHighlights: Array<Set<number> | null>
 }) {
-  if (props.rows.length === 0) {
-    return <div class="log-lines empty">(no commits yet)</div>
-  }
-
   return (
-    <div class="log-lines">
+    <>
       {props.rows.map((r, i) =>
         r.kind === 'commit' ? (
           <GraphCommitLine
@@ -592,7 +588,54 @@ function LogLines(props: {
           />
         ),
       )}
-    </div>
+    </>
+  )
+}
+
+export function GraphLoadMore(props: {
+  offset: number
+  nextLimit: number
+  show: boolean
+}) {
+  if (!props.show) return null
+  return (
+    <button
+      type="button"
+      class="graph-load-more"
+      title={`git log --graph -n ${props.nextLimit}`}
+      hx-get={`/fragment/graph/tail?offset=${encodeURIComponent(String(props.offset))}&limit=${encodeURIComponent(String(props.nextLimit))}`}
+      hx-target="this"
+      hx-swap="outerHTML show:none"
+      hx-trigger="click, intersect once root:#graph threshold:0.2"
+    >
+      load more
+    </button>
+  )
+}
+
+export function GraphTailFragment(props: {
+  rows: GraphRow[]
+  detached: boolean
+  currentBranch: string | null
+  laneHighlights: Array<Set<number> | null>
+  offset: number
+  nextLimit: number
+  showLoadMore: boolean
+}) {
+  return (
+    <>
+      <GraphRows
+        rows={props.rows}
+        detached={props.detached}
+        currentBranch={props.currentBranch}
+        laneHighlights={props.laneHighlights}
+      />
+      <GraphLoadMore
+        offset={props.offset}
+        nextLimit={props.nextLimit}
+        show={props.showLoadMore}
+      />
+    </>
   )
 }
 
@@ -641,24 +684,21 @@ export function GraphFragment(props: GraphFragmentProps) {
       </div>
       <WorkTreeFragment {...worktree} repoPath={props.repoPath} />
       <div class="graph-body">
-        <LogLines
-          rows={rows}
-          detached={detached}
-          currentBranch={currentBranch}
-          laneHighlights={laneHighlights}
-        />
-        {props.showLoadMore ? (
-          <button
-            type="button"
-            class="graph-load-more"
-            title={`git log --graph -n ${props.graphNextLimit}`}
-            hx-get={`/fragment/graph?limit=${encodeURIComponent(String(props.graphNextLimit))}`}
-            hx-target="#graph"
-            hx-swap="outerHTML"
-          >
-            load more
-          </button>
-        ) : null}
+        <div class={`log-lines${rows.length === 0 ? ' empty' : ''}`}>
+          {rows.length === 0 ? (
+            '(no commits yet)'
+          ) : (
+            <GraphTailFragment
+              rows={rows}
+              detached={detached}
+              currentBranch={currentBranch}
+              laneHighlights={laneHighlights}
+              offset={rows.length}
+              nextLimit={props.graphNextLimit}
+              showLoadMore={props.showLoadMore}
+            />
+          )}
+        </div>
       </div>
     </div>
   )

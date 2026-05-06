@@ -1118,6 +1118,17 @@ document.body.addEventListener('htmx:afterRequest', function (e) {
   if (!e.detail.successful) return;
   var xhr = e.detail.xhr;
   var url = (xhr && xhr.responseURL) || '';
+  if (url.indexOf('/fragment/graph/tail') !== -1) {
+    try {
+      var lim = new URL(url).searchParams.get('limit');
+      var g = document.getElementById('graph');
+      if (g && lim) g.dataset.graphLimit = lim;
+    } catch (err) {
+      /* ignore */
+    }
+    syncViewingHighlight();
+    syncWorktreeFileSelection();
+  }
   if (url.indexOf('/api/repo') !== -1) {
     var rd = document.querySelector('details.repo-bar-details');
     if (rd) rd.removeAttribute('open');
