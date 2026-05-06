@@ -1,5 +1,5 @@
 /** @jsxImportSource hono/jsx */
-import type { CommitFile, CommitSummary } from '../git'
+import type { CommitFile, CommitSummary, WorkTreeChangeKind } from '../git'
 
 export type DiffPanelProps =
   | { state: 'empty'; swapOob?: boolean }
@@ -47,6 +47,56 @@ export function DiffPatchBody(props: { text: string }) {
         </span>
       ))}
     </pre>
+  )
+}
+
+export type WorkTreeDiffPanelProps =
+  | {
+      ok: true
+      kind: WorkTreeChangeKind
+      displayPath: string
+      patch: string
+    }
+  | { ok: false; stderr: string }
+
+export function WorkTreeDiffPanel(props: WorkTreeDiffPanelProps) {
+  if (!props.ok) {
+    return (
+      <div id="diff" class="diff-panel diff-error">
+        <div class="diff-head">
+          <div class="diff-subject">working tree</div>
+          <div class="diff-meta">could not load diff</div>
+        </div>
+        <pre class="diff-body">{props.stderr}</pre>
+      </div>
+    )
+  }
+
+  const kindLabel =
+    props.kind === 'staged'
+      ? 'staged'
+      : props.kind === 'unstaged'
+        ? 'unstaged'
+        : 'untracked'
+
+  const patch = props.patch.trim()
+
+  return (
+    <div id="diff" class="diff-panel diff-summary diff-worktree-file">
+      <div class="diff-head">
+        <div class="diff-subject">working tree · file</div>
+        <div class="diff-meta">
+          {kindLabel} · {props.displayPath}
+        </div>
+      </div>
+      <div id="diff-patch-slot" class="diff-patch-slot diff-patch-slot-inline">
+        {patch ? (
+          <DiffPatchBody text={props.patch} />
+        ) : (
+          <pre class="diff-body diff-patch-empty">(no diff)</pre>
+        )}
+      </div>
+    </div>
   )
 }
 

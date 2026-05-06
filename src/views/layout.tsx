@@ -326,12 +326,25 @@ body {
 .wt-list li {
   display: flex;
   gap: 6px;
+  min-width: 0;
 }
-.wt-path {
+.wt-file-btn {
+  font: inherit;
+  border: none;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  text-align: left;
+  flex: 1;
+  min-width: 0;
+  color: inherit;
+}
+.wt-file-btn .wt-path {
   word-break: break-all;
   color: var(--fg);
 }
-.wt-list li:hover .wt-path {
+.wt-file-btn:hover .wt-path {
   color: var(--accent);
 }
 .graph-body {

@@ -39,38 +39,67 @@ export function WorkTreeFragment(
   }
 
   const hasStaged = staged.length > 0
-  const changes = hasStaged
-    ? [...unstaged, ...untracked]
-    : [...staged, ...unstaged, ...untracked]
+  const stagedRows = staged.map((entry) => ({
+    entry,
+    kind: 'staged' as const,
+  }))
+  const changeRows = hasStaged
+    ? [
+        ...unstaged.map((entry) => ({ entry, kind: 'unstaged' as const })),
+        ...untracked.map((entry) => ({ entry, kind: 'untracked' as const })),
+      ]
+    : [
+        ...staged.map((entry) => ({ entry, kind: 'staged' as const })),
+        ...unstaged.map((entry) => ({ entry, kind: 'unstaged' as const })),
+        ...untracked.map((entry) => ({ entry, kind: 'untracked' as const })),
+      ]
 
   return (
     <div id="worktree" class="worktree-panel" data-repo={repoPath}>
       <div class="worktree-body">
         {hasStaged ? (
-          <Section title="ready to commit" entries={staged} />
+          <Section title="ready to commit" rows={stagedRows} />
         ) : null}
-        {changes.length > 0 ? (
-          <Section title="changes" entries={changes} />
+        {changeRows.length > 0 ? (
+          <Section title="changes" rows={changeRows} />
         ) : null}
       </div>
     </div>
   )
 }
 
-function Section(props: { title: string; entries: WorkTreeEntry[] }) {
-  if (props.entries.length === 0) return null
+function Section(props: {
+  title: string
+  rows: Array<{
+    entry: WorkTreeEntry
+    kind: 'staged' | 'unstaged' | 'untracked'
+  }>
+}) {
+  if (props.rows.length === 0) return null
   return (
     <div class="wt-section">
       <div class="wt-section-title">
         {props.title}{' '}
-        <span class="wt-count">({props.entries.length})</span>
+        <span class="wt-count">({props.rows.length})</span>
       </div>
       <ul class="wt-list">
-        {props.entries.map((e) => {
+        {props.rows.map(({ entry: e, kind }) => {
           const label = markLabel(e.mark)
+          const diffUrl = `/api/worktree/file?kind=${kind}&path=${encodeURIComponent(e.path)}`
           return (
-            <li title={label ? `${label} — ${e.mark}` : e.path}>
-              <span class="wt-path">{e.path}</span>
+            <li>
+              <button
+                type="button"
+                class="wt-file-btn"
+                title={
+                  label ? `${label} — click for diff` : `${e.mark} — click for diff`
+                }
+                hx-get={diffUrl}
+                hx-target="#diff"
+                hx-swap="outerHTML"
+              >
+                <span class="wt-path">{e.path}</span>
+              </button>
             </li>
           )
         })}

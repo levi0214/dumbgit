@@ -1,3 +1,5 @@
+import path from 'node:path'
+
 export class GitError extends Error {
   override readonly name = 'GitError'
 
@@ -418,8 +420,96 @@ export async function workTreeSummary(): Promise<WorkTreeSummary> {
       ? ut.stdout
           .split('\n')
           .filter(Boolean)
-          .map((path) => ({ mark: '??', path }))
+          .map((fp) => ({ mark: '??', path: fp }))
       : []
 
   return { staged, unstaged, untracked }
+}
+
+/** Working-tree slice matching `/fragment/worktree` lists (`displayPath` may use `old → new` from rename rows). */
+export type WorkTreeChangeKind = 'staged' | 'unstaged' | 'untracked'
+
+/** Right-hand side path used by git diff after an `R*` rename (`old → new` → `new`). */
+function gitDiffPath(displayPath: string): string {
+  const parts = displayPath
+    .split(' → ')
+    .map((s) => s.trim())
+    .filter(Boolean)
+  return (parts.length ? parts[parts.length - 1] : displayPath.trim()) ?? ''
+}
+
+/** Resolve `relPath` under repo root; rejects `..` escapes; returns POSIX-ish relative path for git argv. */
+async function strictRepoRelative(relPath: string): Promise<string | null> {
+  const topR = await spawnGit(['rev-parse', '--show-toplevel'])
+  if (topR.code !== 0) return null
+  const top = path.resolve(topR.stdout.trim())
+  const joined = path.resolve(top, relPath)
+  const rel = path.relative(top, joined)
+  if (!rel || rel.startsWith('..') || path.isAbsolute(rel)) return null
+  return rel.split(path.sep).join('/')
+}
+
+/** Unified diff for one working-tree file; `displayPath` must match an entry from the matching bucket of `workTreeSummary()`. */
+export async function workTreeFilePatch(
+  kind: WorkTreeChangeKind,
+  displayPath: string,
+): Promise<{ ok: true; patch: string } | { ok: false; stderr: string }> {
+  const wt = await workTreeSummary()
+  const bucket =
+    kind === 'staged' ? wt.staged : kind === 'unstaged' ? wt.unstaged : wt.untracked
+  if (!bucket.some((e) => e.path === displayPath)) {
+    return {
+      ok: false,
+      stderr: 'path not in current working tree list (try refreshing)',
+    }
+  }
+
+  const raw = gitDiffPath(displayPath)
+  if (!raw) return { ok: false, stderr: 'invalid path' }
+
+  const rel = await strictRepoRelative(raw)
+  if (!rel) return { ok: false, stderr: 'invalid path' }
+
+  if (kind === 'untracked') {
+    const r = await spawnGit([
+      'diff',
+      '--no-index',
+      '--no-color',
+      '--',
+      '/dev/null',
+      rel,
+    ])
+    if (!(r.code === 0 || r.code === 1)) {
+      return {
+        ok: false,
+        stderr: r.stderr.trim() || `git diff failed (${r.code})`,
+      }
+    }
+    const stderrTrim = r.stderr.trim()
+    const stdoutTrim = r.stdout.trimEnd()
+    if (
+      !stdoutTrim &&
+      stderrTrim &&
+      stderrTrim
+        .split('\n')
+        .some((ln) => /^(error|fatal)\s*:/i.test(ln.trim()))
+    ) {
+      return { ok: false, stderr: stderrTrim }
+    }
+    return { ok: true, patch: stdoutTrim }
+  }
+
+  const args =
+    kind === 'staged'
+      ? (['diff', '--cached', '--no-color', '--', rel] as const)
+      : (['diff', '--no-color', '--', rel] as const)
+
+  const r = await spawnGit([...args])
+  if (!(r.code === 0 || r.code === 1)) {
+    return {
+      ok: false,
+      stderr: r.stderr.trim() || `git diff failed (${r.code})`,
+    }
+  }
+  return { ok: true, patch: r.stdout.trimEnd() }
 }

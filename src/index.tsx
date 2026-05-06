@@ -19,12 +19,13 @@ import {
   logGraphRows,
   push,
   setCurrentRepo,
+  workTreeFilePatch,
   workTreeSummary,
 } from './git'
 import { bumpRecent, loadRecents } from './recents'
 import { GraphFragment } from './views/graph'
 import type { GraphFragmentProps } from './views/graph'
-import { DiffPanel, DiffPatchBody } from './views/diff'
+import { DiffPanel, DiffPatchBody, WorkTreeDiffPanel } from './views/diff'
 import { Layout } from './views/layout'
 import { StatusOob } from './views/status'
 import { watchGitRefs } from './watch'
@@ -184,6 +185,34 @@ app.get('/fragment/worktree', async (c) => {
   c.header('Cache-Control', 'no-store')
   const wt = await workTreeSummary()
   return c.html(<WorkTreeFragment {...wt} repoPath={getCurrentRepo()} />, 200)
+})
+
+app.get('/api/worktree/file', async (c) => {
+  c.header('Cache-Control', 'no-store')
+  const kind = c.req.query('kind')
+  const filePath = c.req.query('path') ?? ''
+  if (
+    (kind !== 'staged' && kind !== 'unstaged' && kind !== 'untracked') ||
+    !filePath
+  ) {
+    return c.html(
+      <WorkTreeDiffPanel ok={false} stderr="missing or invalid kind/path" />,
+      200,
+    )
+  }
+  const r = await workTreeFilePatch(kind, filePath)
+  if (!r.ok) {
+    return c.html(<WorkTreeDiffPanel ok={false} stderr={r.stderr} />, 200)
+  }
+  return c.html(
+    <WorkTreeDiffPanel
+      ok={true}
+      kind={kind}
+      displayPath={filePath}
+      patch={r.patch}
+    />,
+    200,
+  )
 })
 
 app.post('/api/repo', async (c) => {
