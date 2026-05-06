@@ -664,16 +664,14 @@ body {
 .log-row:hover .msg-age {
   visibility: hidden;
 }
+/* Out of layout until hover — visibility:hidden still reserved space and crushed the message. */
 .row-tail {
-  display: inline-flex;
+  display: none;
   align-items: center;
   gap: 4px;
-  visibility: hidden;
-  pointer-events: none;
 }
 .log-row:hover .row-tail {
-  visibility: visible;
-  pointer-events: auto;
+  display: inline-flex;
 }
 .hash-peek {
   font-family: inherit;
