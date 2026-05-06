@@ -13,7 +13,7 @@ const CSS = `
   --success: #6a9955;
 }
 * { box-sizing: border-box; }
-html, body { margin: 0; min-height: 100%; }
+html, body { margin: 0; height: 100%; overflow: hidden; }
 body {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
   font-size: 13px;
@@ -24,7 +24,12 @@ body {
 .page {
   max-width: 1700px;
   margin: 0 auto;
-  padding: 12px 16px 24px;
+  padding: 12px 16px;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
 }
 .repo-bar {
   flex-shrink: 0;
@@ -222,14 +227,18 @@ body {
   display: grid;
   grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
   gap: 12px;
-  align-items: start;
+  align-items: stretch;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
 }
 .graph-root {
   border: 1px solid var(--border);
   border-radius: 6px;
-  overflow: hidden;
+  overflow: auto;
   background: #252526;
-  min-height: calc(100vh - 260px);
+  height: 100%;
+  min-height: 0;
   display: flex;
   flex-direction: column;
 }
@@ -305,8 +314,6 @@ body {
 }
 .worktree-body {
   padding: 0 12px 8px;
-  max-height: 26vh;
-  overflow-y: auto;
 }
 .wt-section {
   margin-top: 6px;
@@ -370,10 +377,9 @@ body {
   font-weight: 700;
 }
 .graph-body {
-  flex: 1;
+  flex: 0 0 auto;
   min-height: 0;
-  display: flex;
-  flex-direction: column;
+  display: block;
 }
 .graph-load-more {
   flex-shrink: 0;
@@ -400,8 +406,7 @@ body {
 .log-lines {
   margin: 0;
   padding: 8px 0;
-  overflow: auto;
-  flex: 1;
+  overflow: visible;
   font-family: inherit;
   font-size: 12px;
   line-height: 1.32;
@@ -718,13 +723,11 @@ body {
   border: 1px solid var(--border);
   border-radius: 6px;
   background: #252526;
-  overflow: hidden;
+  overflow: auto;
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 40px);
-  min-height: 320px;
-  position: sticky;
-  top: 12px;
+  height: 100%;
+  min-height: 0;
 }
 .diff-empty {
   padding: 16px;
@@ -935,11 +938,10 @@ body {
   font-size: 12px;
 }
 .diff-patch-slot {
-  flex: 1;
+  flex: 0 0 auto;
   min-height: 0;
   padding: 0;
-  display: flex;
-  flex-direction: column;
+  display: block;
   background: #1f1f1f;
 }
 .diff-patch-slot:not(:empty) {
@@ -949,9 +951,9 @@ body {
 .diff-patch-pre {
   margin: 0 !important;
   padding: 10px 0 0 !important;
-  flex: 1;
+  flex: 0 0 auto;
   min-height: 0;
-  overflow: auto !important;
+  overflow: visible !important;
 }
 .diff-patch-error {
   color: var(--error) !important;
@@ -964,8 +966,6 @@ body {
   margin: 0;
   padding: 8px 12px;
   list-style: none;
-  max-height: 30vh;
-  overflow-y: auto;
 }
 .diff-files li {
   display: flex;
@@ -1026,11 +1026,11 @@ body {
 .diff-body {
   margin: 0;
   padding: 10px 12px;
-  overflow: auto;
+  overflow: visible;
   white-space: pre;
   font-family: inherit;
   font-size: 12px;
-  flex: 1;
+  flex: 0 0 auto;
   min-height: 0;
 }
 .diff-add {
