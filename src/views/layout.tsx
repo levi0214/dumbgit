@@ -409,36 +409,57 @@ body {
 .log-row:hover {
   background: rgba(255, 255, 255, 0.04);
 }
+/* HEAD row: no row color — the ● dot + bold weight already signal "you are here".
+   A neutral left strip just anchors the eye without overloading any color's meaning. */
 .log-row-head {
-  border-left-color: var(--accent);
-  background: rgba(86, 156, 214, 0.09);
+  border-left-color: rgba(255, 255, 255, 0.18);
   font-weight: 600;
-}
-.row-current-dot {
-  flex-shrink: 0;
-  color: #3ddc6c;
-  font-size: 9px;
-  line-height: 1;
-  align-self: baseline;
-  position: relative;
-  top: -1px;
-  text-shadow: 0 0 6px rgba(61, 220, 108, 0.7);
 }
 .log-row-detached {
   border-left-color: #e0a23a !important;
   background: rgba(224, 162, 58, 0.09) !important;
 }
-.log-row-detached .row-current-dot {
-  color: #e0a23a;
-  text-shadow: 0 0 6px rgba(224, 162, 58, 0.7);
-}
 .log-row-detached .branch-prefix {
   background: rgba(224, 162, 58, 0.25) !important;
   color: #ffd58a !important;
 }
+/* HEAD's commit node on the graph rail: a "live" radar pulse — the only HEAD indicator. */
+.graph-node-head {
+  color: #3ddc6c;
+  position: relative;
+  opacity: 1;
+  text-shadow: 0 0 4px rgba(61, 220, 108, 0.65);
+}
+.graph-node-head::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0.55em;
+  height: 0.55em;
+  border-radius: 50%;
+  background: currentColor;
+  transform: translate(-50%, -50%);
+  opacity: 0.5;
+  animation: graph-node-head-radar 2.2s ease-out infinite;
+  pointer-events: none;
+}
+@keyframes graph-node-head-radar {
+  0%   { opacity: 0.5; transform: translate(-50%, -50%) scale(0.85); }
+  80%, 100% { opacity: 0; transform: translate(-50%, -50%) scale(2.6); }
+}
+.graph-node-head-detached {
+  color: #e0a23a;
+  text-shadow: 0 0 4px rgba(224, 162, 58, 0.65);
+}
+@media (prefers-reduced-motion: reduce) {
+  .graph-node-head::after { animation: none; opacity: 0; }
+}
+/* Viewing row: blue is the only "row color" in the log — it means "active focus",
+   and visually pairs with the diff panel chrome on the right. */
 .log-row-commit.log-row-viewing {
   box-shadow: inset 3px 0 0 0 var(--accent);
-  background: rgba(86, 156, 214, 0.07);
+  background: rgba(86, 156, 214, 0.14);
 }
 .log-row-dim {
   opacity: 0.38;
@@ -623,7 +644,7 @@ body {
 }
 .log-row-head .branch-prefix {
   color: #ffffff;
-  background: rgba(86, 156, 214, 0.35);
+  background: rgba(255, 255, 255, 0.14);
 }
 /* Same grid cell: date by default, hash + copy on hover — no floating chip. */
 .row-end {
@@ -738,6 +759,14 @@ body {
 }
 .diff-panel.diff-error .diff-body {
   color: var(--error);
+}
+/* Blue echo — visually pairs the diff panel with the viewing row on the left. */
+.diff-panel.diff-summary {
+  border-color: rgba(86, 156, 214, 0.42);
+}
+.diff-panel.diff-summary .diff-head {
+  background: rgba(86, 156, 214, 0.12);
+  border-bottom-color: rgba(86, 156, 214, 0.30);
 }
 .diff-head {
   padding: 8px 12px;

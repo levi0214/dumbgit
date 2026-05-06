@@ -238,6 +238,8 @@ function graphLaneHighlights(rows: GraphRow[]): Array<Set<number> | null> {
 function GraphLaneSpans(props: {
   ansi: string
   highlightLanes: Set<number> | null
+  isHead?: boolean
+  isDetached?: boolean
 }) {
   const text = stripAnsi(props.ansi)
   const lanes = props.highlightLanes
@@ -250,6 +252,19 @@ function GraphLaneSpans(props: {
     }
     const onSpine = lanes !== null && lanes.has(laneOf(i))
     if (ch === '*') {
+      if (props.isHead) {
+        const hcls = `graph-node graph-node-head${props.isDetached ? ' graph-node-head-detached' : ''}`
+        out.push(
+          <span
+            key={i}
+            class={hcls}
+            title={props.isDetached ? 'detached HEAD' : 'HEAD'}
+          >
+            {'\u2022'}
+          </span>,
+        )
+        continue
+      }
       const color = onSpine ? 'var(--accent)' : 'var(--graph-rail-muted)'
       out.push(
         <span key={i} class="graph-node" style={`color:${color}`}>
@@ -402,17 +417,13 @@ function GraphCommitLine(props: {
   return (
     <div class={cls} data-sha={shaFull}>
       <span class="graph-prefix">
-        <GraphLaneSpans ansi={graphAnsi} highlightLanes={props.highlightLanes} />
+        <GraphLaneSpans
+          ansi={graphAnsi}
+          highlightLanes={props.highlightLanes}
+          isHead={isHead}
+          isDetached={isHead && props.detached}
+        />
       </span>
-      {isHead ? (
-        <span
-          class="row-current-dot"
-          aria-hidden="true"
-          title={props.detached ? 'viewing past commit' : 'current'}
-        >
-          ●
-        </span>
-      ) : null}
       {branchPrefix ? (
         <span
           class="branch-prefix"
