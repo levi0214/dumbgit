@@ -352,6 +352,40 @@ export async function commitPatch(
   return { ok: true, patch: patch.stdout.trimEnd() }
 }
 
+/** Unified diff for one file in a commit; `displayPath` must match `commitSummary()` (renames use `old → new`). */
+export async function commitFilePatch(
+  sha: string,
+  displayPath: string,
+): Promise<{ ok: true; patch: string } | { ok: false; stderr: string }> {
+  const summary = await commitSummary(sha)
+  if (!summary.ok) return summary
+  if (!summary.value.files.some((f) => f.path === displayPath)) {
+    return {
+      ok: false,
+      stderr: 'path not in commit file list',
+    }
+  }
+
+  const raw = gitDiffPath(displayPath)
+  if (!raw) return { ok: false, stderr: 'invalid path' }
+
+  const patch = await spawnGit([
+    'show',
+    '--format=',
+    '--no-color',
+    sha,
+    '--',
+    raw,
+  ])
+  if (patch.code !== 0) {
+    return {
+      ok: false,
+      stderr: patch.stderr.trim() || `git show failed (${patch.code})`,
+    }
+  }
+  return { ok: true, patch: patch.stdout.trimEnd() }
+}
+
 export async function commitDetails(
   sha: string,
 ): Promise<{ ok: true; value: CommitDetails } | { ok: false; stderr: string }> {

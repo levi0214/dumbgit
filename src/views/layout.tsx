@@ -887,21 +887,6 @@ body {
   border-bottom: 1px solid var(--border);
   outline: none;
 }
-.diff-files-block:not(.diff-files-loaded) {
-  cursor: pointer;
-}
-.diff-files-block:not(.diff-files-loaded):hover {
-  background: rgba(255, 255, 255, 0.04);
-}
-.diff-files-block:not(.diff-files-loaded):focus-visible {
-  box-shadow: inset 0 0 0 1px var(--accent);
-}
-.diff-files-loaded {
-  cursor: default;
-}
-.diff-files-loaded .diff-files-hint {
-  display: none;
-}
 .diff-files-head {
   padding: 6px 12px 2px;
   font-size: 10px;
@@ -959,8 +944,37 @@ body {
 }
 .diff-files li {
   display: flex;
+}
+.diff-file-btn {
+  all: unset;
+  cursor: pointer;
+  box-sizing: border-box;
+  display: flex;
   gap: 8px;
   align-items: baseline;
+  width: 100%;
+  min-width: 0;
+  padding: 3px 8px;
+  margin: 0 -8px;
+  border-left: 2px solid transparent;
+  border-radius: 3px;
+  color: inherit;
+}
+.diff-file-btn:hover .file-path {
+  color: var(--accent);
+}
+.diff-file-btn.diff-file-selected {
+  background: rgba(86, 156, 214, 0.2);
+  border-left-color: var(--accent);
+  box-shadow: inset 0 0 0 1px rgba(86, 156, 214, 0.35);
+}
+.diff-file-btn.diff-file-selected .file-path {
+  color: var(--accent);
+  font-weight: 700;
+}
+.diff-file-btn:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 2px;
 }
 .file-status {
   display: inline-block;
@@ -1064,12 +1078,31 @@ document.body.addEventListener('htmx:afterSwap', function (e) {
   if (!t || !t.id) return;
   if (t.id === 'diff' || t.id === 'graph') syncViewingHighlight();
   if (t.id === 'diff-patch-slot') {
+    var trig = e.detail && e.detail.elt;
+    var fileBtn = trig && trig.closest && trig.closest('.diff-file-btn');
+    if (fileBtn && !t.querySelector('.diff-patch-error')) {
+      document.querySelectorAll('.diff-file-selected').forEach(function (b) {
+        b.classList.remove('diff-file-selected');
+      });
+      fileBtn.classList.add('diff-file-selected');
+    }
     var blk = document.getElementById('diff-files-trigger');
-    if (blk && !t.querySelector('.diff-patch-error')) {
+    if (blk && blk.hasAttribute('hx-get') && !t.querySelector('.diff-patch-error')) {
       blk.removeAttribute('hx-get');
       blk.classList.add('diff-files-loaded');
     }
   }
+});
+
+document.addEventListener('click', function (e) {
+  var fileBtn = e.target && e.target.closest && e.target.closest('.diff-file-btn');
+  if (!fileBtn) return;
+  document.querySelectorAll('.diff-file-selected').forEach(function (b) {
+    b.classList.remove('diff-file-selected');
+    b.removeAttribute('aria-current');
+  });
+  fileBtn.classList.add('diff-file-selected');
+  fileBtn.setAttribute('aria-current', 'true');
 });
 
 document.body.addEventListener('htmx:afterRequest', function (e) {

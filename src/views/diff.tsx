@@ -53,7 +53,7 @@ function compactHunkContext(line: string): string {
   return m && m[1] ? m[1].trim() : ''
 }
 
-/** Unified diff body. `compact` strips the per-file framing lines and replaces hunk headers (`@@ … @@ ctx`) with just `ctx` (or omits them). */
+/** Unified diff body. `compact` strips patch framing and replaces hunk headers (`@@ … @@ ctx`) with just `ctx` (or omits them). */
 export function DiffPatchBody(props: { text: string; compact?: boolean }) {
   let lines = props.text.split('\n')
   if (props.compact) {
@@ -162,7 +162,6 @@ export function DiffPanel(props: DiffPanelProps) {
   const { sha, summary } = props
   const checkoutUrl = `/api/checkout/commit?sha=${encodeURIComponent(sha)}`
   const branchUrl = `/api/branch/create?sha=${encodeURIComponent(sha)}`
-  const patchUrl = `/api/diff/${encodeURIComponent(sha)}/patch`
 
   return (
     <div id="diff" class="diff-panel diff-summary">
@@ -220,29 +219,35 @@ export function DiffPanel(props: DiffPanelProps) {
       <div
         id="diff-files-trigger"
         class="diff-files-block"
-        tabindex={0}
-        role="button"
-        title="Load unified diff below"
-        hx-get={patchUrl}
-        hx-target="#diff-patch-slot"
-        hx-swap="innerHTML"
       >
         <div class="diff-files-head">
           changed files{' '}
           <span class="diff-files-count">({summary.files.length})</span>
-          <span class="diff-files-hint"> — click to show patch</span>
+          <span class="diff-files-hint"> — click a file to show changes</span>
         </div>
         {summary.files.length > 0 ? (
           <ul class="diff-files">
-            {summary.files.map((f) => (
-              <li>
-                <span class={`file-status file-${f.status[0] ?? '_'}`}>
-                  {f.status}
-                </span>
-                <span class="file-path">{f.path}</span>
-                <FileNums file={f} />
-              </li>
-            ))}
+            {summary.files.map((f) => {
+              const fileUrl = `/api/commit/${encodeURIComponent(sha)}/file?path=${encodeURIComponent(f.path)}`
+              return (
+                <li>
+                  <button
+                    type="button"
+                    class="diff-file-btn"
+                    title={f.path}
+                    hx-get={fileUrl}
+                    hx-target="#diff-patch-slot"
+                    hx-swap="innerHTML"
+                  >
+                    <span class={`file-status file-${f.status[0] ?? '_'}`}>
+                      {f.status}
+                    </span>
+                    <span class="file-path">{f.path}</span>
+                    <FileNums file={f} />
+                  </button>
+                </li>
+              )
+            })}
           </ul>
         ) : (
           <div class="diff-files-empty">(no file changes)</div>

@@ -8,6 +8,7 @@ import {
   GitError,
   checkoutBranch,
   checkoutCommit,
+  commitFilePatch,
   commitPatch,
   commitSummary,
   createBranchAt,
@@ -302,6 +303,46 @@ app.get('/api/commit/:sha', async (c) => {
     return c.html(<DiffPanel state="error" sha={sha} stderr={r.stderr} />, 200)
   }
   return c.html(<DiffPanel state="summary" sha={sha} summary={r.value} />, 200)
+})
+
+app.get('/api/commit/:sha/file', async (c) => {
+  c.header('Cache-Control', 'no-store')
+  const sha = c.req.param('sha')
+  const filePath = c.req.query('path') ?? ''
+  if (!filePath) {
+    return c.html(
+      <pre class="diff-body diff-patch-error">missing file path</pre>,
+      200,
+    )
+  }
+  const summary = await commitSummary(sha)
+  if (!summary.ok) {
+    return c.html(
+      <pre class="diff-body diff-patch-error">{summary.stderr}</pre>,
+      200,
+    )
+  }
+  const file = summary.value.files.find((f) => f.path === filePath)
+  if (!file) {
+    return c.html(
+      <pre class="diff-body diff-patch-error">path not in commit file list</pre>,
+      200,
+    )
+  }
+  const r = await commitFilePatch(sha, filePath)
+  if (!r.ok) {
+    return c.html(
+      <pre class="diff-body diff-patch-error">{r.stderr}</pre>,
+      200,
+    )
+  }
+  if (!r.patch.trim()) {
+    return c.html(
+      <pre class="diff-body diff-patch-empty">(no diff)</pre>,
+      200,
+    )
+  }
+  return c.html(<DiffPatchBody text={r.patch} compact />, 200)
 })
 
 app.get('/api/diff/:sha/patch', async (c) => {
