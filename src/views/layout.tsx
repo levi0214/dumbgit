@@ -1133,23 +1133,6 @@ document.body.addEventListener('htmx:afterSwap', function (e) {
     syncWorktreeFileSelection();
   }
   if (t.id === 'worktree') syncWorktreeFileSelection();
-  if (t.id === 'diff-patch-slot') {
-    var trig = e.detail && e.detail.elt;
-    var fileBtn = trig && trig.closest && trig.closest('.diff-file-btn');
-    if (fileBtn && !t.querySelector('.diff-patch-error')) {
-      document.querySelectorAll('.diff-file-selected').forEach(function (b) {
-        b.classList.remove('diff-file-selected');
-        b.removeAttribute('aria-current');
-      });
-      fileBtn.classList.add('diff-file-selected');
-      fileBtn.setAttribute('aria-current', 'true');
-    }
-    var blk = document.getElementById('diff-files-trigger');
-    if (blk && blk.hasAttribute('hx-get') && !t.querySelector('.diff-patch-error')) {
-      blk.removeAttribute('hx-get');
-      blk.classList.add('diff-files-loaded');
-    }
-  }
 });
 
 document.addEventListener('click', function (e) {

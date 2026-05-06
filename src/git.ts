@@ -241,10 +241,6 @@ export type CommitSummary = {
   files: CommitFile[]
 }
 
-export type CommitDetails = CommitSummary & {
-  diff: string
-}
-
 type Numstat = { added?: number; deleted?: number; binary: boolean }
 
 function parseNumstat(stdout: string): Map<string, Numstat> {
@@ -345,28 +341,18 @@ export async function commitSummary(
   }
 }
 
-/** Unified diff text only. */
-export async function commitPatch(
-  sha: string,
-): Promise<{ ok: true; patch: string } | { ok: false; stderr: string }> {
-  const patch = await spawnGit(['show', '--format=', '--no-color', sha])
-  if (patch.code !== 0) {
-    return {
-      ok: false,
-      stderr: patch.stderr.trim() || `git show failed (${patch.code})`,
-    }
-  }
-  return { ok: true, patch: patch.stdout.trimEnd() }
-}
-
 /** Unified diff for one file in a commit; `displayPath` must match `commitSummary()` (renames use `old → new`). */
 export async function commitFilePatch(
   sha: string,
   displayPath: string,
+  files?: CommitFile[],
 ): Promise<{ ok: true; patch: string } | { ok: false; stderr: string }> {
-  const summary = await commitSummary(sha)
-  if (!summary.ok) return summary
-  if (!summary.value.files.some((f) => f.path === displayPath)) {
+  if (!files) {
+    const summary = await commitSummary(sha)
+    if (!summary.ok) return summary
+    files = summary.value.files
+  }
+  if (!files.some((f) => f.path === displayPath)) {
     return {
       ok: false,
       stderr: 'path not in commit file list',
@@ -391,16 +377,6 @@ export async function commitFilePatch(
     }
   }
   return { ok: true, patch: patch.stdout.trimEnd() }
-}
-
-export async function commitDetails(
-  sha: string,
-): Promise<{ ok: true; value: CommitDetails } | { ok: false; stderr: string }> {
-  const s = await commitSummary(sha)
-  if (!s.ok) return s
-  const p = await commitPatch(sha)
-  if (!p.ok) return p
-  return { ok: true, value: { ...s.value, diff: p.patch } }
 }
 
 export async function push(): Promise<

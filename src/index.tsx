@@ -9,7 +9,6 @@ import {
   checkoutBranch,
   checkoutCommit,
   commitFilePatch,
-  commitPatch,
   commitSummary,
   createBranchAt,
   ensureGitRepo,
@@ -329,7 +328,7 @@ app.get('/api/commit/:sha/file', async (c) => {
       200,
     )
   }
-  const r = await commitFilePatch(sha, filePath)
+  const r = await commitFilePatch(sha, filePath, summary.value.files)
   if (!r.ok) {
     return c.html(
       <pre class="diff-body diff-patch-error">{r.stderr}</pre>,
@@ -343,21 +342,6 @@ app.get('/api/commit/:sha/file', async (c) => {
     )
   }
   return c.html(<DiffPatchBody text={r.patch} compact />, 200)
-})
-
-app.get('/api/diff/:sha/patch', async (c) => {
-  const sha = c.req.param('sha')
-  const r = await commitPatch(sha)
-  if (!r.ok) {
-    return c.html(<pre class="diff-body diff-patch-error">{r.stderr}</pre>, 200)
-  }
-  if (!r.patch.trim()) {
-    return c.html(
-      <pre class="diff-body diff-patch-empty">(empty patch)</pre>,
-      200,
-    )
-  }
-  return c.html(<DiffPatchBody text={r.patch} />, 200)
 })
 
 app.post('/api/branch/create', async (c) => {
