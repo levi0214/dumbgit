@@ -183,7 +183,6 @@ body {
   border-color: var(--accent);
   color: var(--accent);
 }
-.head-push-btn,
 .head-back-btn {
   font: inherit;
   font-size: 11px;
@@ -199,29 +198,15 @@ body {
   justify-content: center;
   box-sizing: border-box;
 }
-.head-push-btn {
-  margin-left: 0;
-}
 .head-back-btn {
   margin-left: 0;
   border-color: rgba(224, 162, 58, 0.6);
   color: #ffd58a;
 }
-.head-back-btn + .head-push-btn {
-  margin-left: 0;
-}
-.head-push-btn:hover:not(:disabled) {
-  border-color: var(--accent);
-  color: var(--accent);
-}
 .head-back-btn:hover {
   background: rgba(224, 162, 58, 0.18);
   border-color: #e0a23a;
   color: #ffd58a;
-}
-.head-push-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
 }
 .main-grid {
   display: grid;
@@ -544,9 +529,7 @@ body {
   background: #333;
   color: var(--fg);
   flex-shrink: 0;
-  max-width: 28ch;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  overflow: visible;
   white-space: nowrap;
 }
 .ref-pill:hover {
@@ -584,8 +567,6 @@ body {
   opacity: 0.78;
   padding: 0 2px;
   flex-shrink: 0;
-  max-width: 28ch;
-  overflow: hidden;
   white-space: nowrap;
 }
 .ref-tag:hover {
@@ -603,9 +584,7 @@ body {
 }
 .branch-prefix {
   flex-shrink: 0;
-  max-width: 28ch;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  overflow: visible;
   white-space: nowrap;
   font-size: 12px;
   color: #9cdcfe;
@@ -614,6 +593,30 @@ body {
   padding: 0 5px;
   cursor: pointer;
   user-select: none;
+}
+.inline-action-btn,
+.row-action-btn {
+  all: unset;
+  cursor: pointer;
+  font-size: 11px;
+  color: var(--muted);
+  border-radius: 3px;
+  padding: 1px 5px;
+}
+.inline-action-btn {
+  display: none;
+  margin-left: 5px;
+}
+.ref-pill:hover .inline-action-btn,
+.ref-tag:hover .inline-action-btn,
+.branch-prefix:hover .inline-action-btn,
+.head-label:hover .inline-action-btn {
+  display: inline-flex;
+}
+.inline-action-btn:hover,
+.row-action-btn:hover {
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--accent);
 }
 .branch-prefix:hover {
   background: rgba(156, 220, 254, 0.22);
@@ -761,10 +764,15 @@ body {
 .diff-actions {
   grid-area: actions;
   display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
+  gap: 4px;
+  opacity: 0;
+  pointer-events: none;
   justify-content: flex-end;
-  align-items: flex-start;
+}
+.diff-panel:hover .diff-actions,
+.diff-panel:focus-within .diff-actions {
+  opacity: 1;
+  pointer-events: auto;
 }
 .diff-worktree-file .diff-head {
   padding: 7px 12px;
@@ -822,103 +830,6 @@ body {
   margin-top: 0;
   padding-top: 0;
   border-top: none;
-}
-.diff-branch-details {
-  position: relative;
-  display: inline-block;
-}
-.diff-branch-details > summary {
-  list-style: none;
-}
-.diff-branch-details > summary::-webkit-details-marker {
-  display: none;
-}
-.diff-branch-summary {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font: inherit;
-  font-size: 11px;
-  cursor: pointer;
-  padding: 8px 14px;
-  min-height: 36px;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  background: #2d2d2d;
-  color: var(--fg);
-  white-space: nowrap;
-  user-select: none;
-  box-sizing: border-box;
-}
-.diff-branch-summary:hover {
-  border-color: var(--accent);
-  color: var(--accent);
-}
-.diff-branch-details[open] > .diff-branch-summary {
-  border-color: var(--accent);
-  color: var(--accent);
-}
-.diff-branch-panel {
-  position: absolute;
-  right: 0;
-  top: calc(100% + 4px);
-  z-index: 15;
-  min-width: 15rem;
-  max-width: min(22rem, 85vw);
-  padding: 8px 10px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: #252526;
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.45);
-}
-.diff-branch-form {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin: 0;
-}
-.diff-branch-panel-actions {
-  display: flex;
-  gap: 6px;
-  justify-content: flex-end;
-  flex-wrap: wrap;
-}
-.diff-branch-input {
-  font: inherit;
-  font-size: 11px;
-  width: 100%;
-  box-sizing: border-box;
-  padding: 4px 8px;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  background: #1e1e1e;
-  color: var(--fg);
-}
-.diff-branch-input:focus {
-  outline: none;
-  border-color: var(--accent);
-}
-.diff-checkout-btn,
-.diff-branch-btn {
-  font: inherit;
-  font-size: 11px;
-  cursor: pointer;
-  padding: 8px 14px;
-  min-height: 36px;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  background: #2d2d2d;
-  color: var(--fg);
-  white-space: nowrap;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  box-sizing: border-box;
-}
-.diff-checkout-btn:hover,
-.diff-branch-btn:hover {
-  border-color: var(--accent);
-  color: var(--accent);
 }
 .diff-files-block {
   border-bottom: 1px solid var(--border);
@@ -1163,33 +1074,6 @@ document.body.addEventListener('htmx:afterRequest', function (e) {
     var rd = document.querySelector('details.repo-bar-details');
     if (rd) rd.removeAttribute('open');
   }
-  if (url.indexOf('/api/branch/create') !== -1) {
-    var elt = e.detail.elt;
-    var bd = elt && elt.closest && elt.closest('details.diff-branch-details');
-    if (bd) {
-      bd.removeAttribute('open');
-      var f = bd.querySelector('form.diff-branch-form');
-      if (f) f.reset();
-    }
-  }
-});
-
-document.body.addEventListener('toggle', function (e) {
-  var t = e.target;
-  if (!t || !t.matches || !t.matches('details.diff-branch-details')) return;
-  if (!t.open) return;
-  var inp = t.querySelector('.diff-branch-input');
-  if (inp) requestAnimationFrame(function () { inp.focus(); });
-}, true);
-
-document.body.addEventListener('click', function (e) {
-  var btn = e.target.closest('.diff-branch-cancel');
-  if (!btn) return;
-  var det = btn.closest('details.diff-branch-details');
-  if (!det) return;
-  det.removeAttribute('open');
-  var fo = det.querySelector('form.diff-branch-form');
-  if (fo) fo.reset();
 });
 
 document.addEventListener('click', function (e) {
@@ -1197,18 +1081,6 @@ document.addEventListener('click', function (e) {
   if (!rd || !rd.open) return;
   if (rd.contains(e.target)) return;
   rd.removeAttribute('open');
-}, true);
-
-document.addEventListener('keydown', function (e) {
-  if (e.key !== 'Escape') return;
-  var inp = e.target && e.target.closest && e.target.closest('.diff-branch-input');
-  if (!inp) return;
-  var det = inp.closest('details.diff-branch-details');
-  if (!det || !det.open) return;
-  e.preventDefault();
-  det.removeAttribute('open');
-  var fo = det.querySelector('form.diff-branch-form');
-  if (fo) fo.reset();
 }, true);
 
 document.addEventListener('keydown', function (e) {

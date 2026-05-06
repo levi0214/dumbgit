@@ -188,40 +188,20 @@ export function DiffPanel(props: DiffPanelProps) {
           {sha.slice(0, 7)} · {summary.author} · {summary.date}
         </div>
         <div class="diff-actions">
-          <details class="diff-branch-details">
-            <summary class="diff-branch-summary">new branch</summary>
-            <div class="diff-branch-panel">
-              <form
-                class="diff-branch-form"
-                hx-post={branchUrl}
-                hx-target="#graph"
-                hx-swap="outerHTML"
-              >
-                <input
-                  type="text"
-                  name="name"
-                  class="diff-branch-input"
-                  placeholder="branch name"
-                  autocomplete="off"
-                  spellcheck={false}
-                  aria-label="New branch name"
-                  title={`git branch … ${sha.slice(0, 7)}`}
-                  required
-                />
-                <div class="diff-branch-panel-actions">
-                  <button type="submit" class="diff-branch-btn">
-                    create
-                  </button>
-                  <button type="button" class="diff-branch-cancel diff-checkout-btn">
-                    cancel
-                  </button>
-                </div>
-              </form>
-            </div>
-          </details>
           <button
             type="button"
-            class="diff-checkout-btn"
+            class="row-action-btn"
+            title={`git branch … ${sha.slice(0, 7)}`}
+            hx-post={branchUrl}
+            hx-target="#graph"
+            hx-swap="outerHTML"
+            hx-prompt="branch name"
+          >
+            new branch
+          </button>
+          <button
+            type="button"
+            class="row-action-btn"
             title="git switch --detach to this commit"
             hx-post={checkoutUrl}
             hx-target="#graph"

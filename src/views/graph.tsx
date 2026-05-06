@@ -282,6 +282,7 @@ function pillSortKey(plain: string): number {
 function RefPills(props: {
   decorateRaw: string
   branchPrefix: string | null
+  currentBranch: string | null
 }) {
   const tokens = decorationRefs(props.decorateRaw)
   if (tokens.length === 0) return null
@@ -302,32 +303,56 @@ function RefPills(props: {
         if (isTagToken(plain)) {
           const name = tagName(plain)
           return (
-            <button
+            <span
               key={idx}
-              type="button"
               class="ref-tag"
-              title={`tag ${name} — git switch ${name}`}
-              hx-post={`/api/checkout/branch?name=${encodeURIComponent(ref)}`}
-              hx-target="#graph"
-              hx-swap="outerHTML"
+              title={`tag ${name}`}
             >
               {TAG_ICO}
               <span class="ref-tag-name">{name}</span>
-            </button>
+              <button
+                type="button"
+                class="inline-action-btn ref-action-btn"
+                title={`git switch ${ref}`}
+                hx-post={`/api/checkout/branch?name=${encodeURIComponent(ref)}`}
+                hx-target="#graph"
+                hx-swap="outerHTML"
+              >
+                switch
+              </button>
+            </span>
           )
         }
         return (
-          <button
+          <span
             key={idx}
-            type="button"
             class={pillClass(t)}
-            title={`git switch ${ref}`}
-            hx-post={`/api/checkout/branch?name=${encodeURIComponent(ref)}`}
-            hx-target="#graph"
-            hx-swap="outerHTML"
+            title={plain}
           >
             {plain}
-          </button>
+            {ref === props.currentBranch ? (
+              <button
+                type="button"
+                class="inline-action-btn ref-action-btn"
+                title="git push"
+                hx-post="/api/push"
+                hx-swap="none"
+              >
+                push
+              </button>
+            ) : (
+              <button
+                type="button"
+                class="inline-action-btn ref-action-btn"
+                title={`git switch ${ref}`}
+                hx-post={`/api/checkout/branch?name=${encodeURIComponent(ref)}`}
+                hx-target="#graph"
+                hx-swap="outerHTML"
+              >
+                switch
+              </button>
+            )}
+          </span>
         )
       })}
     </span>
@@ -356,6 +381,7 @@ function relTimeAgo(iso: string): string {
 function GraphCommitLine(props: {
   row: GraphCommitRow
   detached: boolean
+  currentBranch: string | null
   highlightLanes: Set<number> | null
 }) {
   const { graphAnsi, shaFull, shaShort, decorateRaw, subject, date, inHistory } =
@@ -390,16 +416,38 @@ function GraphCommitLine(props: {
       {branchPrefix ? (
         <span
           class="branch-prefix"
-          title={`branch: ${branchPrefix} — double-click to switch`}
-          hx-post={`/api/checkout/branch?name=${encodeURIComponent(branchPrefix)}`}
-          hx-target="#graph"
-          hx-swap="outerHTML"
-          hx-trigger="dblclick"
+          title={`branch: ${branchPrefix}`}
         >
           {branchPrefix}
+          {branchPrefix === props.currentBranch ? (
+            <button
+              type="button"
+              class="inline-action-btn branch-prefix-action"
+              title="git push"
+              hx-post="/api/push"
+              hx-swap="none"
+            >
+              push
+            </button>
+          ) : (
+            <button
+              type="button"
+              class="inline-action-btn branch-prefix-action"
+              title={`git switch ${branchPrefix}`}
+              hx-post={`/api/checkout/branch?name=${encodeURIComponent(branchPrefix)}`}
+              hx-target="#graph"
+              hx-swap="outerHTML"
+            >
+              switch
+            </button>
+          )}
         </span>
       ) : null}
-      <RefPills decorateRaw={decorateRaw} branchPrefix={branchPrefix} />
+      <RefPills
+        decorateRaw={decorateRaw}
+        branchPrefix={branchPrefix}
+        currentBranch={props.currentBranch}
+      />
       <button
         type="button"
         class="msg-btn"
@@ -415,6 +463,27 @@ function GraphCommitLine(props: {
           {relTimeAgo(date)}
         </span>
         <span class="row-tail">
+          <button
+            type="button"
+            class="row-action-btn"
+            title={`git branch … ${shaShort}`}
+            hx-post={`/api/branch/create?sha=${encodeURIComponent(shaFull)}`}
+            hx-target="#graph"
+            hx-swap="outerHTML"
+            hx-prompt="branch name"
+          >
+            new branch
+          </button>
+          <button
+            type="button"
+            class="row-action-btn"
+            title="git switch --detach to this commit"
+            hx-post={`/api/checkout/commit?sha=${encodeURIComponent(shaFull)}`}
+            hx-target="#graph"
+            hx-swap="outerHTML"
+          >
+            checkout
+          </button>
           <code class="hash-peek" title={shaFull}>
             {shaShort}
           </code>
@@ -456,8 +525,22 @@ function HeadLine(props: { head: HeadInfo }) {
   return (
     <>
       <span class="head-prep">{prefix}</span>
-      <span class="head-label" title={tip}>
+      <span
+        class="head-label"
+        title={tip}
+      >
         {label}
+        {onBranch ? (
+          <button
+            type="button"
+            class="inline-action-btn head-branch-action"
+            title="git push"
+            hx-post="/api/push"
+            hx-swap="none"
+          >
+            push
+          </button>
+        ) : null}
       </span>
     </>
   )
@@ -466,6 +549,7 @@ function HeadLine(props: { head: HeadInfo }) {
 function LogLines(props: {
   rows: GraphRow[]
   detached: boolean
+  currentBranch: string | null
   laneHighlights: Array<Set<number> | null>
 }) {
   if (props.rows.length === 0) {
@@ -480,6 +564,7 @@ function LogLines(props: {
             key={i}
             row={r.row}
             detached={props.detached}
+            currentBranch={props.currentBranch}
             highlightLanes={props.laneHighlights[i] ?? null}
           />
         ) : (
@@ -508,6 +593,7 @@ export function GraphFragment(props: GraphFragmentProps) {
 
   const { head, rows, worktree } = props
   const detached = head.kind === 'detached'
+  const currentBranch = head.kind === 'branch' ? head.name : null
   const laneHighlights = graphLaneHighlights(rows)
 
   return (
@@ -522,8 +608,8 @@ export function GraphFragment(props: GraphFragmentProps) {
         <div class="graph-head-line">
           <HeadLine head={head} />
         </div>
-        <div class="graph-head-actions">
-          {head.kind === 'detached' && head.previousBranch ? (
+        {head.kind === 'detached' && head.previousBranch ? (
+          <div class="graph-head-actions">
             <button
               type="button"
               class="head-back-btn"
@@ -534,29 +620,15 @@ export function GraphFragment(props: GraphFragmentProps) {
             >
               ← back to {head.previousBranch}
             </button>
-          ) : null}
-          <button
-            type="button"
-            id="push-btn"
-            class="head-push-btn"
-            title={
-              head.kind === 'branch'
-                ? 'git push'
-                : 'detached HEAD has no upstream — switch to a branch first'
-            }
-            disabled={head.kind !== 'branch'}
-            hx-post="/api/push"
-            hx-swap="none"
-          >
-            ↑ push
-          </button>
-        </div>
+          </div>
+        ) : null}
       </div>
       <WorkTreeFragment {...worktree} repoPath={props.repoPath} />
       <div class="graph-body">
         <LogLines
           rows={rows}
           detached={detached}
+          currentBranch={currentBranch}
           laneHighlights={laneHighlights}
         />
         {props.showLoadMore ? (
