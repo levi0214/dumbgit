@@ -615,7 +615,6 @@ body {
   cursor: pointer;
   user-select: none;
 }
-.inline-action-btn,
 .row-action-btn {
   all: unset;
   cursor: pointer;
@@ -624,9 +623,21 @@ body {
   border-radius: 3px;
   padding: 1px 5px;
 }
+.row-action-btn:hover {
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--accent);
+}
 .inline-action-btn {
+  all: unset;
+  cursor: pointer;
   display: none;
   margin-left: 5px;
+  padding: 1px 6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #d7ecff;
+  border-radius: 3px;
+  background: rgba(86, 156, 214, 0.22);
 }
 .ref-pill:hover .inline-action-btn,
 .ref-tag:hover .inline-action-btn,
@@ -634,10 +645,9 @@ body {
 .head-label:hover .inline-action-btn {
   display: inline-flex;
 }
-.inline-action-btn:hover,
-.row-action-btn:hover {
-  background: rgba(255, 255, 255, 0.07);
-  color: var(--accent);
+.inline-action-btn:hover {
+  color: #ffffff;
+  background: rgba(86, 156, 214, 0.34);
 }
 .branch-prefix:hover {
   background: rgba(156, 220, 254, 0.22);
