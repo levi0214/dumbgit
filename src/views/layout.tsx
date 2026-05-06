@@ -781,26 +781,35 @@ body {
   color: var(--fg);
   font-weight: 600;
 }
+.worktree-head-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+.worktree-action-btn {
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--muted);
+  white-space: nowrap;
+}
+.worktree-action-btn:hover {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: var(--accent);
+  color: var(--accent);
+}
 .diff-subject-path {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   min-width: 0;
 }
-.wt-kind {
-  flex-shrink: 0;
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  padding: 2px 6px;
-  border-radius: 3px;
-  border: 1px solid currentColor;
-  line-height: 1.4;
-}
-.wt-kind-staged { color: var(--success); }
-.wt-kind-unstaged { color: #dcdcaa; }
-.wt-kind-untracked { color: var(--accent); }
 .diff-hunk-compact {
   color: var(--muted);
   font-weight: 400;

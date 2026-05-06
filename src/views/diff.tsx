@@ -110,12 +110,12 @@ export function WorkTreeDiffPanel(props: WorkTreeDiffPanelProps) {
     )
   }
 
-  const kindLabel =
+  const actionLabel = props.kind === 'staged' ? 'unstage' : 'discard'
+  const actionUrl = `/api/worktree/action?kind=${props.kind}&path=${encodeURIComponent(props.displayPath)}`
+  const confirmText =
     props.kind === 'staged'
-      ? 'staged'
-      : props.kind === 'unstaged'
-        ? 'unstaged'
-        : 'untracked'
+      ? `Unstage ${props.displayPath}?`
+      : `Discard changes to ${props.displayPath}? This cannot be undone.`
 
   const patch = props.patch.trim()
 
@@ -128,8 +128,19 @@ export function WorkTreeDiffPanel(props: WorkTreeDiffPanelProps) {
     >
       <div class="diff-head">
         <div class="diff-subject" title={props.displayPath}>
-          <span class={`wt-kind wt-kind-${props.kind}`}>{kindLabel}</span>
           <span class="diff-subject-path">{props.displayPath}</span>
+        </div>
+        <div class="worktree-head-actions">
+          <button
+            type="button"
+            class="worktree-action-btn"
+            title={confirmText}
+            hx-post={actionUrl}
+            hx-swap="none"
+            hx-confirm={confirmText}
+          >
+            ↶ {actionLabel}
+          </button>
         </div>
       </div>
       <div id="diff-patch-slot" class="diff-patch-slot diff-patch-slot-inline">

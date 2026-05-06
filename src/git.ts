@@ -546,3 +546,44 @@ export async function workTreeFilePatch(
   }
   return { ok: true, patch: r.stdout.trimEnd() }
 }
+
+/** Staged means unstage; unstaged/untracked means discard. */
+export async function applyWorkTreeAction(
+  kind: WorkTreeChangeKind,
+  displayPath: string,
+): Promise<{ ok: true; message: string } | { ok: false; stderr: string }> {
+  const wt = await workTreeSummary()
+  const bucket =
+    kind === 'staged' ? wt.staged : kind === 'unstaged' ? wt.unstaged : wt.untracked
+  if (!bucket.some((e) => e.path === displayPath)) {
+    return {
+      ok: false,
+      stderr: 'path not in current working tree list (try refreshing)',
+    }
+  }
+
+  const raw = gitDiffPath(displayPath)
+  if (!raw) return { ok: false, stderr: 'invalid path' }
+
+  const rel = await strictRepoRelative(raw)
+  if (!rel) return { ok: false, stderr: 'invalid path' }
+
+  const args =
+    kind === 'staged'
+      ? ['restore', '--staged', '--', rel]
+      : kind === 'unstaged'
+        ? ['restore', '--worktree', '--', rel]
+        : ['clean', '-f', '--', rel]
+
+  const r = await spawnGit(args)
+  if (r.code !== 0) {
+    return {
+      ok: false,
+      stderr: r.stderr.trim() || `git ${args[0]} failed (${r.code})`,
+    }
+  }
+  return {
+    ok: true,
+    message: kind === 'staged' ? `unstaged ${displayPath}` : `discarded ${displayPath}`,
+  }
+}

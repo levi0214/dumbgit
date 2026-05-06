@@ -6,6 +6,7 @@ import os from 'node:os'
 import path from 'node:path'
 import {
   GitError,
+  applyWorkTreeAction,
   checkoutBranch,
   checkoutCommit,
   commitFilePatch,
@@ -211,6 +212,32 @@ app.get('/api/worktree/file', async (c) => {
       displayPath={filePath}
       patch={r.patch}
     />,
+    200,
+  )
+})
+
+app.post('/api/worktree/action', async (c) => {
+  const kind = c.req.query('kind')
+  const filePath = c.req.query('path') ?? ''
+  if (
+    (kind !== 'staged' && kind !== 'unstaged' && kind !== 'untracked') ||
+    !filePath
+  ) {
+    return c.html(<StatusOob error="missing or invalid kind/path" />, 200)
+  }
+
+  const r = await applyWorkTreeAction(kind, filePath)
+  if (!r.ok) {
+    return c.html(<StatusOob error={r.stderr} />, 200)
+  }
+
+  const next = await loadGraph()
+  return c.html(
+    <Fragment>
+      <GraphFragment {...next} swapOob />
+      <DiffPanel state="empty" swapOob />
+      <StatusOob info={r.message} />
+    </Fragment>,
     200,
   )
 })
