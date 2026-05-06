@@ -17,6 +17,7 @@ export type HeadInfo =
 
 /** Working tree all git commands run in (switch via repo picker). */
 let repoRoot = process.cwd()
+const lastBranchByRepo = new Map<string, string>()
 
 export function setCurrentRepo(dir: string): void {
   repoRoot = dir
@@ -24,6 +25,12 @@ export function setCurrentRepo(dir: string): void {
 
 export function getCurrentRepo(): string {
   return repoRoot
+}
+
+async function previousReflogBranch(): Promise<string | undefined> {
+  const prev = await spawnGit(['rev-parse', '--abbrev-ref', '@{-1}'])
+  const name = prev.code === 0 ? prev.stdout.trim() : ''
+  return name && name !== 'HEAD' && !name.includes('@') ? name : undefined
 }
 
 async function spawnGit(
@@ -59,12 +66,12 @@ export async function headInfo(): Promise<HeadInfo> {
   const sha = (await gitOrThrow(['rev-parse', 'HEAD'])).trim()
   const sym = await spawnGit(['symbolic-ref', '-q', '--short', 'HEAD'])
   if (sym.code === 0) {
-    return { kind: 'branch', name: sym.stdout.trim(), sha }
+    const name = sym.stdout.trim()
+    if (name) lastBranchByRepo.set(repoRoot, name)
+    return { kind: 'branch', name, sha }
   }
-  const prev = await spawnGit(['rev-parse', '--abbrev-ref', '@{-1}'])
-  const prevName = prev.code === 0 ? prev.stdout.trim() : ''
-  const previousBranch =
-    prevName && prevName !== 'HEAD' && !prevName.includes('@') ? prevName : undefined
+  const previousBranch = lastBranchByRepo.get(repoRoot) ?? (await previousReflogBranch())
+  if (previousBranch) lastBranchByRepo.set(repoRoot, previousBranch)
   return { kind: 'detached', sha, previousBranch }
 }
 
