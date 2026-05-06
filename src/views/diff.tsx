@@ -35,6 +35,13 @@ function FileNums(props: { file: CommitFile }) {
   )
 }
 
+function shortCommitDate(raw: string): string {
+  const d = new Date(raw)
+  if (Number.isNaN(d.getTime())) return raw
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
 /** Per-file boilerplate (`diff --git`, blob hashes, `---`/`+++`, no-newline marker) — useless when caller already shows the file path. */
 function isCompactNoiseLine(line: string): boolean {
   return (
@@ -178,39 +185,14 @@ export function DiffPanel(props: DiffPanelProps) {
   }
 
   const { sha, summary } = props
-  const checkoutUrl = `/api/checkout/commit?sha=${encodeURIComponent(sha)}`
-  const branchUrl = `/api/branch/create?sha=${encodeURIComponent(sha)}`
 
   return (
     <div id="diff" class="diff-panel diff-summary">
       <input type="hidden" id="viewing-sha" value={sha} autocomplete="off" />
       <div class="diff-head">
         <div class="diff-subject">{summary.subject}</div>
-        <div class="diff-meta">
-          {sha.slice(0, 7)} · {summary.author} · {summary.date}
-        </div>
-        <div class="diff-actions">
-          <button
-            type="button"
-            class="row-action-btn"
-            title={`git branch … ${sha.slice(0, 7)}`}
-            hx-post={branchUrl}
-            hx-target="#graph"
-            hx-swap="outerHTML"
-            hx-prompt="branch name"
-          >
-            new branch
-          </button>
-          <button
-            type="button"
-            class="row-action-btn"
-            title="git switch --detach to this commit"
-            hx-post={checkoutUrl}
-            hx-target="#graph"
-            hx-swap="outerHTML"
-          >
-            checkout
-          </button>
+        <div class="diff-meta" title={summary.date}>
+          {summary.author} · {shortCommitDate(summary.date)}
         </div>
       </div>
 
@@ -221,7 +203,6 @@ export function DiffPanel(props: DiffPanelProps) {
         <div class="diff-files-head">
           changed files{' '}
           <span class="diff-files-count">({summary.files.length})</span>
-          <span class="diff-files-hint"> — click a file to show changes</span>
         </div>
         {summary.files.length > 0 ? (
           <ul class="diff-files">

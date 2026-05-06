@@ -785,36 +785,15 @@ body {
   padding: 8px 12px;
   border-bottom: 1px solid var(--border);
   background: #2d2d30;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  grid-template-areas:
-    "subject subject"
-    "meta    actions";
-  align-items: baseline;
-  gap: 4px 12px;
 }
 .diff-subject {
-  grid-area: subject;
   color: var(--accent);
   word-break: break-word;
 }
 .diff-meta {
-  grid-area: meta;
+  margin-top: 4px;
   color: var(--muted);
   font-size: 11px;
-}
-.diff-actions {
-  grid-area: actions;
-  display: flex;
-  gap: 4px;
-  opacity: 0;
-  pointer-events: none;
-  justify-content: flex-end;
-}
-.diff-panel:hover .diff-actions,
-.diff-panel:focus-within .diff-actions {
-  opacity: 1;
-  pointer-events: auto;
 }
 .diff-worktree-file .diff-head {
   padding: 7px 12px;
@@ -883,12 +862,6 @@ body {
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--muted);
-}
-.diff-files-hint {
-  font-weight: normal;
-  text-transform: none;
-  letter-spacing: normal;
-  opacity: 0.75;
 }
 .diff-files-count {
   font-weight: normal;
