@@ -292,9 +292,9 @@ export function graphBrightCols(rows: GraphRow[]): Array<Set<number> | null> {
   return out.map((cols) => (cols.size === 0 ? null : cols))
 }
 
-const GRAPH_COL_WIDTH = 7
+const GRAPH_COL_WIDTH = 10
 const GRAPH_ROW_HEIGHT = 16
-const GRAPH_CONNECTOR_HEIGHT = 2
+const GRAPH_CONNECTOR_HEIGHT = GRAPH_ROW_HEIGHT
 const GRAPH_NODE_RADIUS = 3.2
 const GRAPH_LINE_OVERLAP = 4
 

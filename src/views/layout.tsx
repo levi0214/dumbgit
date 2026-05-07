@@ -451,10 +451,10 @@ body {
 }
 /* Reachability-off commits recede as a row, but branch anchors stay readable. */
 .log-row-commit.log-row-dim .branch-prefix {
-  color: #d2d2d2;
-  background: rgba(255, 255, 255, 0.08);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
-  opacity: 0.58;
+  color: var(--fg);
+  background: rgba(255, 255, 255, 0.05);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14);
+  opacity: 0.38;
 }
 .log-row-commit.log-row-dim .branch-prefix:hover {
   background: rgba(255, 255, 255, 0.12);
@@ -464,10 +464,10 @@ body {
 }
 .log-row-commit.log-row-dim .ref-pill-branch,
 .log-row-commit.log-row-dim .ref-pill-head {
-  color: #d2d2d2;
-  border-color: rgba(255, 255, 255, 0.2);
-  background: rgba(255, 255, 255, 0.06);
-  opacity: 0.58;
+  color: var(--fg);
+  border-color: rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.05);
+  opacity: 0.38;
 }
 .log-row-commit.log-row-dim .ref-pill-remote {
   color: #b8b8b8;
@@ -482,10 +482,14 @@ body {
   opacity: 0.9;
 }
 .log-row-other {
+  height: 0;
+  min-height: 0;
   padding-top: 0;
   padding-bottom: 0;
   line-height: 0;
   pointer-events: none;
+  position: relative;
+  z-index: 1;
 }
 .graph-prefix {
   display: inline-flex;
@@ -517,14 +521,18 @@ body {
   flex-wrap: nowrap;
   flex-shrink: 0;
   gap: 4px;
-  align-items: baseline;
+  align-items: center;
 }
 .graph-pills:empty {
   display: none;
 }
 .ref-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   font: inherit;
   font-size: 11px;
+  line-height: 14px;
   cursor: pointer;
   padding: 1px 8px;
   border-radius: 10px;
@@ -559,10 +567,14 @@ body {
   color: var(--accent);
 }
 .branch-prefix {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   flex-shrink: 0;
   overflow: visible;
   white-space: nowrap;
   font-size: 12px;
+  line-height: 16px;
   color: #9cdcfe;
   background: rgba(156, 220, 254, 0.12);
   border-radius: 3px;
@@ -587,8 +599,10 @@ body {
   all: unset;
   cursor: pointer;
   display: none;
-  margin-left: 5px;
-  padding: 1px 6px;
+  align-items: center;
+  height: 14px;
+  line-height: 14px;
+  padding: 0 6px;
   font-size: 11px;
   font-weight: 700;
   color: #d7ecff;
