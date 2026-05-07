@@ -467,29 +467,33 @@ body {
 .log-row-dim:hover {
   opacity: 0.85;
 }
-/* Reachability-off commits: branch chrome stays monochrome until hovered. */
+/* Reachability-off commits recede as a row, but branch anchors stay readable. */
 .log-row-commit.log-row-dim .branch-prefix {
-  color: var(--muted);
-  background: rgba(255, 255, 255, 0.04);
+  color: #d2d2d2;
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
 }
 .log-row-commit.log-row-dim .branch-prefix:hover {
-  background: rgba(255, 255, 255, 0.07);
-  color: var(--muted);
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--fg);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.28);
 }
 .log-row-commit.log-row-dim .ref-pill-branch,
 .log-row-commit.log-row-dim .ref-pill-head {
-  color: var(--muted);
-  border-color: var(--border);
-  background: transparent;
+  color: #d2d2d2;
+  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.06);
 }
 .log-row-commit.log-row-dim .ref-pill-remote {
-  color: var(--muted);
-  border-color: var(--border);
-  opacity: 0.92;
+  color: #b8b8b8;
+  border-color: rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.04);
+  opacity: 1;
 }
 .log-row-commit.log-row-dim .ref-pill:hover {
-  border-color: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.3);
   color: var(--fg);
+  background: rgba(255, 255, 255, 0.1);
 }
 .log-row-other {
   padding-top: 1px;
