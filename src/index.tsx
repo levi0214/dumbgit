@@ -49,6 +49,7 @@ const LISTEN_HOST = '127.0.0.1'
 /** Body must contain this line for `bin/dumbgit --stop-all` to identify listeners. */
 const HEALTH_BODY = 'dumbgit ok'
 const IDLE_EXIT_MS = 5000
+const NO_CLIENT_EXIT_MS = 30000
 const PORT_PROBE_LO = 7777
 const PORT_PROBE_HI = 7900
 
@@ -195,6 +196,7 @@ type DumbgitState = {
   liveStreams: number
   sseSeen: boolean
   idleExitTimer?: ReturnType<typeof setTimeout>
+  bootExitTimer?: ReturnType<typeof setTimeout>
 }
 const G = globalThis as { __dumbgit?: DumbgitState }
 if (!G.__dumbgit) {
@@ -211,6 +213,10 @@ if (typeof state.sseSeen !== 'boolean') state.sseSeen = false
 function sseConnected() {
   state.liveStreams++
   state.sseSeen = true
+  if (state.bootExitTimer) {
+    clearTimeout(state.bootExitTimer)
+    state.bootExitTimer = undefined
+  }
   if (state.idleExitTimer) {
     clearTimeout(state.idleExitTimer)
     state.idleExitTimer = undefined
@@ -230,6 +236,15 @@ function armIdleExit() {
     if (state.liveStreams === 0 && state.sseSeen && process.env.DUMBGIT_AUTO_EXIT === '1')
       process.exit(0)
   }, IDLE_EXIT_MS)
+}
+
+function armNoClientExit() {
+  if (process.env.DUMBGIT_AUTO_EXIT !== '1') return
+  if (state.sseSeen || state.bootExitTimer) return
+  state.bootExitTimer = setTimeout(() => {
+    state.bootExitTimer = undefined
+    if (!state.sseSeen && state.liveStreams === 0) process.exit(0)
+  }, NO_CLIENT_EXIT_MS)
 }
 
 if (!state.repoInitialized) {
@@ -732,3 +747,4 @@ if (state.server) {
     }, 200)
   }
 }
+armNoClientExit()

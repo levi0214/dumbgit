@@ -1205,18 +1205,69 @@ document.addEventListener('click', function (e) {
   fileBtn.setAttribute('aria-current', 'true');
 });
 
-document.body.addEventListener('htmx:afterRequest', function (e) {
-  if (!e.detail.successful) return;
-  var xhr = e.detail.xhr;
-  if (!xhr) return;
+var pendingLaunchWindow = null;
+
+function preopenLaunchWindow() {
+  if (pendingLaunchWindow && !pendingLaunchWindow.closed) return;
   try {
-    var launchUrl = xhr.getResponseHeader('X-Dumbgit-Launch');
-    if (launchUrl && launchUrl.trim()) {
-      window.open(launchUrl.trim(), '_blank', 'noopener,noreferrer');
-    }
-  } catch (errLaunch) {
+    pendingLaunchWindow = window.open('', '_blank');
+  } catch (err) {
+    pendingLaunchWindow = null;
+  }
+}
+
+function closePendingLaunchWindow() {
+  if (!pendingLaunchWindow || pendingLaunchWindow.closed) return;
+  try {
+    pendingLaunchWindow.close();
+  } catch (err) {
     /* ignore */
   }
+  pendingLaunchWindow = null;
+}
+
+function openLaunchUrl(url) {
+  if (!url) {
+    closePendingLaunchWindow();
+    return;
+  }
+  if (pendingLaunchWindow && !pendingLaunchWindow.closed) {
+    pendingLaunchWindow.location = url;
+    try {
+      pendingLaunchWindow.opener = null;
+    } catch (err) {
+      /* ignore */
+    }
+    pendingLaunchWindow = null;
+    return;
+  }
+  window.open(url, '_blank', 'noopener,noreferrer');
+}
+
+document.addEventListener('click', function (e) {
+  var btn = e.target && e.target.closest && e.target.closest('.repo-recent-btn');
+  if (!btn) return;
+  preopenLaunchWindow();
+}, true);
+
+document.addEventListener('submit', function (e) {
+  var form = e.target;
+  if (!form || !form.matches || !form.matches('.repo-open-form')) return;
+  preopenLaunchWindow();
+}, true);
+
+document.body.addEventListener('htmx:afterRequest', function (e) {
+  var xhr = e.detail.xhr;
+  if (!xhr) return;
+  var isLaunch = (xhr.responseURL || '').indexOf('/api/launch') !== -1;
+  try {
+    var launchUrl = xhr.getResponseHeader('X-Dumbgit-Launch');
+    if (launchUrl && launchUrl.trim()) openLaunchUrl(launchUrl.trim());
+    else if (isLaunch) closePendingLaunchWindow();
+  } catch (errLaunch) {
+    if (isLaunch) closePendingLaunchWindow();
+  }
+  if (!e.detail.successful) return;
   var url = xhr.responseURL || '';
   if (url.indexOf('/fragment/graph/tail') !== -1) {
     try {
