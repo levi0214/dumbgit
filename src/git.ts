@@ -115,8 +115,8 @@ export async function logGraphRows(limit = 50): Promise<GraphRow[]> {
   const { code, stdout, stderr } = await spawnGit([
     'log',
     '--graph',
-    '--all',
     '--exclude=refs/stash',
+    '--all',
     '--pretty=format:\x1f%H\x1f%h\x1f%d\x1f%s\x1f%an\x1f%aI\x1f',
     '--decorate=short',
     '--color=always',
