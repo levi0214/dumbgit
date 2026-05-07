@@ -290,15 +290,17 @@ app.get('/api/worktree/file', async (c) => {
 
 app.post('/api/worktree/action', async (c) => {
   const kind = c.req.query('kind')
+  const op = c.req.query('op')
   const filePath = c.req.query('path') ?? ''
   if (
     (kind !== 'staged' && kind !== 'unstaged' && kind !== 'untracked') ||
+    (op !== 'stage' && op !== 'unstage' && op !== 'discard') ||
     !filePath
   ) {
-    return c.html(<StatusOob error="missing or invalid kind/path" />, 200)
+    return c.html(<StatusOob error="missing or invalid worktree action" />, 200)
   }
 
-  const r = await applyWorkTreeAction(kind, filePath)
+  const r = await applyWorkTreeAction(kind, op, filePath)
   if (!r.ok) {
     return c.html(<StatusOob error={r.stderr} />, 200)
   }

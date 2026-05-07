@@ -911,6 +911,12 @@ body {
   border-color: var(--accent);
   color: var(--accent);
 }
+.worktree-action-danger:hover,
+.worktree-action-danger.confirm-armed {
+  border-color: var(--error);
+  color: var(--error);
+  background: rgba(244, 71, 71, 0.12);
+}
 .diff-subject-path {
   overflow: hidden;
   text-overflow: ellipsis;

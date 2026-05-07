@@ -1,6 +1,11 @@
 /** @jsxImportSource hono/jsx */
 import { raw } from 'hono/html'
-import type { CommitFile, CommitSummary, WorkTreeChangeKind } from '../git'
+import type {
+  CommitFile,
+  CommitSummary,
+  WorkTreeActionOp,
+  WorkTreeChangeKind,
+} from '../git'
 
 const TAG_ICO = raw(
   `<svg class="tag-ico" xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>`,
@@ -127,14 +132,20 @@ export function WorkTreeDiffPanel(props: WorkTreeDiffPanelProps) {
     )
   }
 
-  const actionLabel = props.kind === 'staged' ? 'unstage' : 'discard'
-  const actionUrl = `/api/worktree/action?kind=${props.kind}&path=${encodeURIComponent(props.displayPath)}`
-  const actionTitle =
+  const actionUrl = (op: WorkTreeActionOp) =>
+    `/api/worktree/action?op=${op}&kind=${props.kind}&path=${encodeURIComponent(props.displayPath)}`
+  const primary =
     props.kind === 'staged'
-      ? `Unstage ${props.displayPath}?`
-      : `Discard changes to ${props.displayPath}? This cannot be undone.`
-  const confirmAttrs =
-    props.kind === 'staged' ? {} : { 'data-confirm-label': 'confirm discard' }
+      ? {
+          op: 'unstage' as const,
+          label: 'unstage',
+          title: `git restore --staged -- ${props.displayPath}`,
+        }
+      : {
+          op: 'stage' as const,
+          label: 'stage',
+          title: `git add -- ${props.displayPath}`,
+        }
 
   const patch = props.patch.trim()
 
@@ -153,13 +164,24 @@ export function WorkTreeDiffPanel(props: WorkTreeDiffPanelProps) {
           <button
             type="button"
             class="worktree-action-btn"
-            title={actionTitle}
-            {...confirmAttrs}
-            hx-post={actionUrl}
+            title={primary.title}
+            hx-post={actionUrl(primary.op)}
             hx-swap="none"
           >
-            ↶ {actionLabel}
+            {primary.label}
           </button>
+          {props.kind === 'staged' ? null : (
+            <button
+              type="button"
+              class="worktree-action-btn worktree-action-danger"
+              title={`Discard changes to ${props.displayPath}? This cannot be undone.`}
+              data-confirm-label="confirm discard"
+              hx-post={actionUrl('discard')}
+              hx-swap="none"
+            >
+              discard
+            </button>
+          )}
         </div>
       </div>
       <div id="diff-patch-slot" class="diff-patch-slot diff-patch-slot-inline">

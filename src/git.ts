@@ -662,6 +662,7 @@ export async function workTreeSummary(): Promise<WorkTreeSummary> {
 
 /** Working-tree slice matching `/fragment/worktree` lists (`displayPath` may use `old → new` from rename rows). */
 export type WorkTreeChangeKind = 'staged' | 'unstaged' | 'untracked'
+export type WorkTreeActionOp = 'stage' | 'unstage' | 'discard'
 
 /** Right-hand side path used by git diff after an `R*` rename (`old → new` → `new`). */
 function gitDiffPath(displayPath: string): string {
@@ -748,9 +749,10 @@ export async function workTreeFilePatch(
   return { ok: true, patch: r.stdout.trimEnd() }
 }
 
-/** Staged means unstage; unstaged/untracked means discard. */
+/** Explicit worktree action from the file detail panel. */
 export async function applyWorkTreeAction(
   kind: WorkTreeChangeKind,
+  op: WorkTreeActionOp,
   displayPath: string,
 ): Promise<{ ok: true; message: string } | { ok: false; stderr: string }> {
   const wt = await workTreeSummary()
@@ -769,12 +771,24 @@ export async function applyWorkTreeAction(
   const rel = await strictRepoRelative(raw)
   if (!rel) return { ok: false, stderr: 'invalid path' }
 
+  if (op === 'stage' && kind === 'staged') {
+    return { ok: false, stderr: `${displayPath} is already staged` }
+  }
+  if (op === 'unstage' && kind !== 'staged') {
+    return { ok: false, stderr: `${displayPath} is not staged` }
+  }
+  if (op === 'discard' && kind === 'staged') {
+    return { ok: false, stderr: 'unstage before discarding this file' }
+  }
+
   const args =
-    kind === 'staged'
-      ? ['restore', '--staged', '--', rel]
-      : kind === 'unstaged'
-        ? ['restore', '--worktree', '--', rel]
-        : ['clean', '-f', '--', rel]
+    op === 'stage'
+      ? ['add', '--', rel]
+      : op === 'unstage'
+        ? ['restore', '--staged', '--', rel]
+        : kind === 'unstaged'
+          ? ['restore', '--worktree', '--', rel]
+          : ['clean', '-f', '--', rel]
 
   const r = await spawnGit(args)
   if (r.code !== 0) {
@@ -785,6 +799,11 @@ export async function applyWorkTreeAction(
   }
   return {
     ok: true,
-    message: kind === 'staged' ? `unstaged ${displayPath}` : `discarded ${displayPath}`,
+    message:
+      op === 'stage'
+        ? `staged ${displayPath}`
+        : op === 'unstage'
+          ? `unstaged ${displayPath}`
+          : `discarded ${displayPath}`,
   }
 }
