@@ -182,16 +182,6 @@ function collectTagNames(tokens: string[]): string[] {
   return out
 }
 
-/**
- * Map a UTF-16 column in the stripped graph prefix to a logical lane index.
- * git draws lane chars at even columns (`|`, `*`) and slants at odd columns
- * (`/`, `\`). Slants connect adjacent lanes; we use the OUTER lane for odd
- * columns (same rule git tracing uses).
- */
-function laneOf(col: number): number {
-  return col % 2 === 0 ? col / 2 : (col + 1) / 2
-}
-
 function graphCommitIsHead(decorateRaw: string): boolean {
   const decoPlain = stripAnsi(decorateRaw)
   return (
@@ -200,104 +190,256 @@ function graphCommitIsHead(decorateRaw: string): boolean {
   )
 }
 
-function starLane(graphAnsi: string): number | null {
-  const text = stripAnsi(graphAnsi)
-  const idx = text.indexOf('*')
-  if (idx === -1) return null
-  return laneOf(idx)
+function graphText(row: GraphRow): string {
+  return stripAnsi(row.kind === 'commit' ? row.row.graphAnsi : row.ansi)
+}
+
+function graphChar(text: string, col: number): string {
+  return col >= 0 && col < text.length ? (text[col] ?? ' ') : ' '
+}
+
+function isGraphChar(ch: string): boolean {
+  return ch !== '' && ch !== ' '
+}
+
+function addIfGraph(set: Set<number>, text: string, col: number): void {
+  if (isGraphChar(graphChar(text, col))) set.add(col)
 }
 
 /**
- * Which logical lane(s) draw the “HEAD ancestry” spine on this row.
- * Bright commits (`inHistory`) tint their `*` column; connector rows between
- * them tint the union of the nearest reachable commits above and below so the
- * colored thread follows the whole ancestry, not a single fixed column.
+ * Bright graph cells flow from reachable commits toward their parents.
+ * We never flow upward, so an unmerged side branch that shares an old base
+ * stays dim while the current main lane beside it remains bright.
  */
-function highlightLanesForRow(rows: GraphRow[], i: number): Set<number> | null {
-  const r = rows[i]
-  if (r.kind === 'commit') {
-    if (!r.row.inHistory) return null
-    const L = starLane(r.row.graphAnsi)
-    return L === null ? null : new Set([L])
-  }
-  if (!r.betweenInHistory) return null
-  const lanes = new Set<number>()
-  for (let j = i - 1; j >= 0; j--) {
-    const x = rows[j]
-    if (x.kind === 'commit' && x.row.inHistory) {
-      const L = starLane(x.row.graphAnsi)
-      if (L !== null) lanes.add(L)
-      break
+export function graphLaneHighlights(rows: GraphRow[]): Array<Set<number> | null> {
+  const texts = rows.map(graphText)
+  const out = rows.map(() => new Set<number>())
+
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i]
+    if (row.kind === 'commit' && row.row.inHistory) {
+      const col = stripAnsi(row.row.graphAnsi).indexOf('*')
+      if (col !== -1) out[i]!.add(col)
     }
   }
-  for (let j = i + 1; j < rows.length; j++) {
-    const x = rows[j]
-    if (x.kind === 'commit' && x.row.inHistory) {
-      const L = starLane(x.row.graphAnsi)
-      if (L !== null) lanes.add(L)
-      break
+
+  for (let y = 0; y < rows.length - 1; y++) {
+    const here = texts[y] ?? ''
+    const next = texts[y + 1] ?? ''
+    for (const x of out[y]!) {
+      const ch = graphChar(here, x)
+      if (ch === '/') {
+        addIfGraph(out[y + 1]!, next, x - 1)
+        continue
+      }
+      if (ch === '\\') {
+        addIfGraph(out[y + 1]!, next, x + 1)
+        continue
+      }
+
+      addIfGraph(out[y + 1]!, next, x)
+      if (graphChar(next, x - 1) === '/') out[y + 1]!.add(x - 1)
+      if (graphChar(next, x + 1) === '\\') out[y + 1]!.add(x + 1)
     }
   }
-  return lanes.size === 0 ? null : lanes
+
+  return out.map((cols) => (cols.size === 0 ? null : cols))
 }
 
-export function graphLaneHighlights(rows: GraphRow[]): Array<Set<number> | null> {
-  return rows.map((_, i) => highlightLanesForRow(rows, i))
+const GRAPH_COL_WIDTH = 7
+const GRAPH_ROW_HEIGHT = 16
+const GRAPH_CONNECTOR_HEIGHT = 10
+const GRAPH_NODE_RADIUS = 3.2
+const GRAPH_LINE_OVERLAP = 4
+
+function graphColX(col: number): number {
+  return col * GRAPH_COL_WIDTH + GRAPH_COL_WIDTH / 2
+}
+
+function graphLaneColor(onSpine: boolean): string {
+  return onSpine ? 'var(--accent)' : 'var(--graph-rail-muted)'
+}
+
+function graphCurvePath(x1: number, y1: number, x2: number, y2: number): string {
+  const bend = Math.abs(y2 - y1) * 0.62
+  const dir = y2 > y1 ? 1 : -1
+  return `M ${x1} ${y1} C ${x1} ${y1 + bend * dir}, ${x2} ${y2 - bend * dir}, ${x2} ${y2}`
 }
 
 /**
- * Render the `git --graph` prefix. Git uses `*` for the commit node; we swap
- * it for `•`. Lanes on the HEAD-reachable spine use `--accent`; others use
- * `--graph-rail-muted`.
+ * Render the `git --graph` prefix as a tiny SVG. Git still owns layout; this
+ * only replaces ASCII glyphs with rounded line segments and commit dots.
  */
 function GraphLaneSpans(props: {
   ansi: string
   highlightLanes: Set<number> | null
   isHead?: boolean
   isDetached?: boolean
+  compact?: boolean
 }) {
   const text = stripAnsi(props.ansi)
   const lanes = props.highlightLanes
-  const out: JSX.Element[] = []
+  const height = props.compact ? GRAPH_CONNECTOR_HEIGHT : GRAPH_ROW_HEIGHT
+  const width = Math.max(GRAPH_COL_WIDTH, text.length * GRAPH_COL_WIDTH)
+  const mid = height / 2
+  const out = []
   for (let i = 0; i < text.length; i++) {
     const ch = text[i]
-    if (ch === ' ') {
-      out.push(<span key={i}> </span>)
+    const onSpine = lanes !== null && lanes.has(i)
+    const color = graphLaneColor(onSpine)
+    const opacity = onSpine ? 1 : 0.34
+    const x = graphColX(i)
+    if (ch === ' ') continue
+    if (ch === '|') {
+      out.push(
+        <line
+          key={i}
+          x1={x}
+          y1={-GRAPH_LINE_OVERLAP}
+          x2={x}
+          y2={height + GRAPH_LINE_OVERLAP}
+          stroke={color}
+          stroke-width="1.8"
+          stroke-linecap="round"
+          opacity={opacity}
+        />,
+      )
       continue
     }
-    const onSpine = lanes !== null && lanes.has(laneOf(i))
+    if (ch === '/') {
+      const x1 = graphColX(i - 1)
+      const y1 = height + GRAPH_LINE_OVERLAP
+      const x2 = graphColX(i + 1)
+      const y2 = -GRAPH_LINE_OVERLAP
+      out.push(
+        <path
+          key={i}
+          d={graphCurvePath(x1, y1, x2, y2)}
+          fill="none"
+          stroke={color}
+          stroke-width="1.8"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          opacity={opacity}
+        />,
+      )
+      continue
+    }
+    if (ch === '\\') {
+      const x1 = graphColX(i - 1)
+      const y1 = -GRAPH_LINE_OVERLAP
+      const x2 = graphColX(i + 1)
+      const y2 = height + GRAPH_LINE_OVERLAP
+      out.push(
+        <path
+          key={i}
+          d={graphCurvePath(x1, y1, x2, y2)}
+          fill="none"
+          stroke={color}
+          stroke-width="1.8"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          opacity={opacity}
+        />,
+      )
+      continue
+    }
+    if (ch === '-' || ch === '_') {
+      out.push(
+        <line
+          key={i}
+          x1={x - GRAPH_COL_WIDTH / 2}
+          y1={mid}
+          x2={x + GRAPH_COL_WIDTH / 2}
+          y2={mid}
+          stroke={color}
+          stroke-width="1.8"
+          stroke-linecap="round"
+          opacity={opacity}
+        />,
+      )
+      continue
+    }
     if (ch === '*') {
       if (props.isHead) {
         const hcls = `graph-node graph-node-head${props.isDetached ? ' graph-node-head-detached' : ''}`
         out.push(
-          <span
+          <g
             key={i}
             class={hcls}
             title={props.isDetached ? 'detached HEAD' : 'HEAD'}
           >
-            {'\u2022'}
-          </span>,
+            <line
+              x1={x}
+              y1={mid + GRAPH_NODE_RADIUS}
+              x2={x}
+              y2={height + GRAPH_LINE_OVERLAP}
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+              opacity="0.3"
+            />
+            <circle
+              cx={x}
+              cy={mid}
+              r="5.2"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.4"
+              opacity="0.3"
+            />
+            <circle cx={x} cy={mid} r={GRAPH_NODE_RADIUS} fill="currentColor" />
+          </g>,
         )
         continue
       }
-      const color = onSpine ? 'var(--accent)' : 'var(--graph-rail-muted)'
       out.push(
-        <span key={i} class="graph-node" style={`color:${color}`}>
-          {'\u2022'}
-        </span>,
+        <g key={i}>
+          <line
+            x1={x}
+            y1={-GRAPH_LINE_OVERLAP}
+            x2={x}
+            y2={height + GRAPH_LINE_OVERLAP}
+            stroke={color}
+            stroke-width="1.8"
+            stroke-linecap="round"
+            opacity={opacity}
+          />
+          <circle
+            class="graph-node"
+            cx={x}
+            cy={mid}
+            r={GRAPH_NODE_RADIUS}
+            fill={color}
+            opacity={onSpine ? 1 : 0.44}
+          />
+        </g>,
       )
       continue
     }
-    const styleStr = onSpine
-      ? 'color:var(--accent);font-weight:600;opacity:0.52'
-      : 'color:var(--graph-rail-muted);font-weight:600;opacity:0.62'
     out.push(
-      <span key={i} style={styleStr}>
+      <text
+        key={i}
+        x={x}
+        y={mid + 4}
+        text-anchor="middle"
+        class="graph-lane-fallback"
+      >
         {ch}
-      </span>,
+      </text>,
     )
   }
-  return <>{out}</>
+  return (
+    <svg
+      class="graph-lanes-svg"
+      viewBox={`0 0 ${width} ${height}`}
+      style={`width:${width}px;height:${height}px`}
+      aria-hidden="true"
+      focusable="false"
+    >
+      {out}
+    </svg>
+  )
 }
 
 /** Order pills as: HEAD ref first, local branch before remote-tracking. */
@@ -525,7 +667,11 @@ function GraphOtherLine(props: {
   return (
     <div class={cls.trim()}>
       <span class="graph-prefix-wide">
-        <GraphLaneSpans ansi={props.ansi} highlightLanes={props.highlightLanes} />
+        <GraphLaneSpans
+          ansi={props.ansi}
+          highlightLanes={props.highlightLanes}
+          compact
+        />
       </span>
     </div>
   )
@@ -533,10 +679,14 @@ function GraphOtherLine(props: {
 
 function HeadLine(props: { head: HeadInfo }) {
   const short = props.head.sha.slice(0, 7)
-  const onBranch = props.head.kind === 'branch'
-  const prefix = onBranch ? 'On branch:' : 'Detached at:'
-  const label = onBranch ? props.head.name : short
-  const tip = onBranch ? `at ${short}` : `detached at ${short}`
+  let prefix = 'Detached at:'
+  let label = short
+  let tip = `detached at ${short}`
+  if (props.head.kind === 'branch') {
+    prefix = 'On branch:'
+    label = props.head.name
+    tip = `at ${short}`
+  }
   return (
     <>
       <span class="head-prep">{prefix}</span>
@@ -545,7 +695,7 @@ function HeadLine(props: { head: HeadInfo }) {
         title={tip}
       >
         {label}
-        {onBranch ? (
+        {props.head.kind === 'branch' ? (
           <button
             type="button"
             class="inline-action-btn head-branch-action"

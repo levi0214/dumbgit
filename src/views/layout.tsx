@@ -400,7 +400,7 @@ body {
 .log-row {
   display: flex;
   flex-wrap: nowrap;
-  align-items: baseline;
+  align-items: center;
   gap: 6px;
   padding: 3px 12px;
   border-left: 2px solid transparent;
@@ -423,37 +423,15 @@ body {
   background: rgba(224, 162, 58, 0.25) !important;
   color: #ffd58a !important;
 }
-/* HEAD's commit node on the graph rail: a "live" radar pulse — the only HEAD indicator. */
+/* HEAD's commit node on the graph rail; the SVG renderer draws the ring. */
 .graph-node-head {
   color: #3ddc6c;
-  position: relative;
   opacity: 1;
-  text-shadow: 0 0 4px rgba(61, 220, 108, 0.65);
-}
-.graph-node-head::after {
-  content: '';
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 0.55em;
-  height: 0.55em;
-  border-radius: 50%;
-  background: currentColor;
-  transform: translate(-50%, -50%);
-  opacity: 0.5;
-  animation: graph-node-head-radar 2.2s ease-out infinite;
-  pointer-events: none;
-}
-@keyframes graph-node-head-radar {
-  0%   { opacity: 0.5; transform: translate(-50%, -50%) scale(0.85); }
-  80%, 100% { opacity: 0; transform: translate(-50%, -50%) scale(2.6); }
+  filter: drop-shadow(0 0 3px rgba(61, 220, 108, 0.65));
 }
 .graph-node-head-detached {
   color: #e0a23a;
-  text-shadow: 0 0 4px rgba(224, 162, 58, 0.65);
-}
-@media (prefers-reduced-motion: reduce) {
-  .graph-node-head::after { animation: none; opacity: 0; }
+  filter: drop-shadow(0 0 3px rgba(224, 162, 58, 0.65));
 }
 /* Viewing row: blue is the only "row color" in the log — it means "active focus",
    and visually pairs with the diff panel chrome on the right. */
@@ -461,10 +439,14 @@ body {
   box-shadow: inset 3px 0 0 0 var(--accent);
   background: rgba(86, 156, 214, 0.14);
 }
-.log-row-dim {
+.log-row-dim .msg-btn,
+.log-row-dim .msg-age,
+.log-row-dim .row-tail {
   opacity: 0.38;
 }
-.log-row-dim:hover {
+.log-row-dim:hover .msg-btn,
+.log-row-dim:hover .msg-age,
+.log-row-dim:hover .row-tail {
   opacity: 0.85;
 }
 /* Reachability-off commits recede as a row, but branch anchors stay readable. */
@@ -472,53 +454,63 @@ body {
   color: #d2d2d2;
   background: rgba(255, 255, 255, 0.08);
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
+  opacity: 0.58;
 }
 .log-row-commit.log-row-dim .branch-prefix:hover {
   background: rgba(255, 255, 255, 0.12);
   color: var(--fg);
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.28);
+  opacity: 0.9;
 }
 .log-row-commit.log-row-dim .ref-pill-branch,
 .log-row-commit.log-row-dim .ref-pill-head {
   color: #d2d2d2;
   border-color: rgba(255, 255, 255, 0.2);
   background: rgba(255, 255, 255, 0.06);
+  opacity: 0.58;
 }
 .log-row-commit.log-row-dim .ref-pill-remote {
   color: #b8b8b8;
   border-color: rgba(255, 255, 255, 0.14);
   background: rgba(255, 255, 255, 0.04);
-  opacity: 1;
+  opacity: 0.5;
 }
 .log-row-commit.log-row-dim .ref-pill:hover {
   border-color: rgba(255, 255, 255, 0.3);
   color: var(--fg);
   background: rgba(255, 255, 255, 0.1);
+  opacity: 0.9;
 }
 .log-row-other {
-  padding-top: 1px;
-  padding-bottom: 1px;
+  padding-top: 0;
+  padding-bottom: 0;
+  line-height: 0;
+  pointer-events: none;
 }
 .graph-prefix {
+  display: inline-flex;
+  align-self: center;
+  align-items: center;
   flex-shrink: 0;
-  white-space: pre;
-  font-family: inherit;
-  font-size: 14px;
-  letter-spacing: normal;
-}
-.graph-prefix .graph-node,
-.graph-prefix-wide .graph-node {
-  font-weight: 600;
-  font-size: 0.92em;
-  vertical-align: -0.05em;
-  opacity: 0.92;
+  overflow: visible;
 }
 .graph-prefix-wide {
-  white-space: pre;
-  font-family: inherit;
-  font-size: 14px;
-  letter-spacing: normal;
-  overflow-x: auto;
+  display: inline-flex;
+  align-self: center;
+  align-items: center;
+  overflow: visible;
+}
+.graph-lanes-svg {
+  display: block;
+  flex-shrink: 0;
+  overflow: visible;
+}
+.graph-node {
+  opacity: 1;
+}
+.graph-lane-fallback {
+  fill: var(--graph-rail-muted);
+  font: 600 12px ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
 }
 .graph-pills {
   display: inline-flex;
@@ -582,6 +574,7 @@ body {
   all: unset;
   cursor: pointer;
   font-size: 11px;
+  line-height: 14px;
   color: var(--muted);
   border-radius: 3px;
   padding: 1px 5px;
@@ -627,7 +620,7 @@ body {
 .row-end {
   display: inline-grid;
   flex-shrink: 0;
-  align-items: baseline;
+  align-items: center;
   justify-items: end;
 }
 .msg-age,
@@ -637,6 +630,7 @@ body {
 .msg-age {
   color: var(--muted);
   font-size: 11px;
+  line-height: 16px;
 }
 .row-tags-marker {
   display: inline-flex;
@@ -656,6 +650,7 @@ body {
   display: none;
   align-items: center;
   gap: 4px;
+  height: 16px;
 }
 .log-row:hover .row-tail {
   display: inline-flex;
@@ -672,7 +667,7 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 2px;
+  padding: 1px;
   border-radius: 3px;
   color: var(--muted);
   vertical-align: middle;
@@ -1196,7 +1191,7 @@ setInterval(function () {
 }, 3000);
 `
 
-export function Layout(props: { children: JSX.Element }) {
+export function Layout(props: { children: any }) {
   return (
     <html lang="en">
       <head>
