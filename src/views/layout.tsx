@@ -404,7 +404,7 @@ body {
   gap: 6px;
   padding: 3px 12px;
   border-left: 2px solid transparent;
-  overflow: hidden;
+  overflow: visible;
 }
 .log-row:hover {
   background: rgba(255, 255, 255, 0.04);
@@ -1191,7 +1191,7 @@ setInterval(function () {
 }, 3000);
 `
 
-export function Layout(props: { children: any }) {
+export function Layout(props: { children: unknown }) {
   return (
     <html lang="en">
       <head>
