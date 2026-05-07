@@ -126,13 +126,12 @@ export function WorkTreeFragment(
       ]
 
   // Save aside is worktree-wide (stashes staged + unstaged + untracked), not
-  // tied to any one bucket. Park it on the bottom-most rendered section so it
-  // shows even when every change is staged (otherwise the "changes" section
-  // collapses to empty and the button vanishes with it).
+  // tied to any one bucket. Park it on the topmost rendered section so it sits
+  // above everything and reads as "set aside the whole worktree" — putting it
+  // on the bottom section would suggest it only touches that bucket.
   const sections: Array<{ title: string; rows: typeof stagedRows | typeof changeRows }> = []
   if (hasStaged) sections.push({ title: 'ready to commit', rows: stagedRows })
   if (changeRows.length > 0) sections.push({ title: 'changes', rows: changeRows })
-  const lastIdx = sections.length - 1
 
   return (
     <div id="worktree" class="worktree-panel" data-repo={repoPath}>
@@ -141,7 +140,7 @@ export function WorkTreeFragment(
           <Section
             title={s.title}
             rows={s.rows}
-            action={i === lastIdx ? stashBtn : undefined}
+            action={i === 0 ? stashBtn : undefined}
           />
         ))}
       </div>
