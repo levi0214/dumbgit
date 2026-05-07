@@ -789,13 +789,48 @@ body {
 .status-slot {
   margin-bottom: 8px;
 }
-.status-inner {
+.status-slot:empty {
   margin: 0;
-  padding: 8px 12px;
+}
+.status-inner {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 10px 8px 12px;
   border-radius: 4px;
-  white-space: pre-wrap;
   font-family: inherit;
   font-size: 12px;
+  transition: opacity 220ms ease;
+}
+.status-inner.status-fading {
+  opacity: 0;
+}
+.status-text {
+  margin: 0;
+  flex: 1 1 auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font: inherit;
+}
+.status-close {
+  flex: 0 0 auto;
+  align-self: center;
+  width: 18px;
+  height: 18px;
+  line-height: 16px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 14px;
+  opacity: 0.55;
+  cursor: pointer;
+}
+.status-close:hover {
+  opacity: 1;
+  border-color: currentColor;
 }
 .status-error {
   border: 1px solid var(--error);
@@ -1231,9 +1266,53 @@ document.addEventListener('click', function (e) {
   rd.removeAttribute('open');
 }, true);
 
+var statusDismissTimer = 0;
+
+function dismissStatus() {
+  var s = document.getElementById('status');
+  if (!s || !s.firstElementChild) return false;
+  if (statusDismissTimer) { clearTimeout(statusDismissTimer); statusDismissTimer = 0; }
+  s.innerHTML = '';
+  return true;
+}
+
+function armStatusDismissTimer() {
+  if (statusDismissTimer) { clearTimeout(statusDismissTimer); statusDismissTimer = 0; }
+  var s = document.getElementById('status');
+  if (!s) return;
+  var inner = s.querySelector('[data-auto-dismiss]');
+  if (!inner) return;
+  var ms = parseInt(inner.getAttribute('data-auto-dismiss') || '0', 10);
+  if (!ms || ms < 0) return;
+  statusDismissTimer = setTimeout(function () {
+    statusDismissTimer = 0;
+    var s2 = document.getElementById('status');
+    var inner2 = s2 && s2.querySelector('[data-auto-dismiss]');
+    if (!s2 || !inner2) return;
+    inner2.classList.add('status-fading');
+    setTimeout(function () {
+      var s3 = document.getElementById('status');
+      var inner3 = s3 && s3.querySelector('.status-fading');
+      if (s3 && inner3) s3.innerHTML = '';
+    }, 240);
+  }, ms);
+}
+
+document.body.addEventListener('htmx:afterSwap', armStatusDismissTimer);
+document.body.addEventListener('htmx:oobAfterSwap', armStatusDismissTimer);
+
+document.addEventListener('click', function (e) {
+  var btn = e.target && e.target.closest && e.target.closest('.status-close');
+  if (!btn) return;
+  e.preventDefault();
+  e.stopPropagation();
+  dismissStatus();
+});
+
 document.addEventListener('keydown', function (e) {
   if (e.target.closest('input, textarea')) return;
   if (e.key === 'Escape') {
+    if (dismissStatus()) return;
     const d = document.getElementById('diff');
     if (d) d.outerHTML = EMPTY_DIFF;
     syncViewingHighlight();
