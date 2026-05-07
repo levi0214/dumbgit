@@ -1267,39 +1267,52 @@ document.addEventListener('click', function (e) {
 }, true);
 
 var statusDismissTimer = 0;
+var statusArmedFor = null;
 
 function dismissStatus() {
   var s = document.getElementById('status');
   if (!s || !s.firstElementChild) return false;
   if (statusDismissTimer) { clearTimeout(statusDismissTimer); statusDismissTimer = 0; }
+  statusArmedFor = null;
   s.innerHTML = '';
   return true;
 }
 
 function armStatusDismissTimer() {
-  if (statusDismissTimer) { clearTimeout(statusDismissTimer); statusDismissTimer = 0; }
   var s = document.getElementById('status');
-  if (!s) return;
-  var inner = s.querySelector('[data-auto-dismiss]');
-  if (!inner) return;
+  var inner = s && s.querySelector('[data-auto-dismiss]');
+  if (!inner) {
+    if (statusDismissTimer) { clearTimeout(statusDismissTimer); statusDismissTimer = 0; }
+    statusArmedFor = null;
+    return;
+  }
+  if (inner === statusArmedFor) return;
+  if (statusDismissTimer) { clearTimeout(statusDismissTimer); statusDismissTimer = 0; }
+  statusArmedFor = inner;
   var ms = parseInt(inner.getAttribute('data-auto-dismiss') || '0', 10);
   if (!ms || ms < 0) return;
   statusDismissTimer = setTimeout(function () {
     statusDismissTimer = 0;
     var s2 = document.getElementById('status');
     var inner2 = s2 && s2.querySelector('[data-auto-dismiss]');
-    if (!s2 || !inner2) return;
+    if (!s2 || !inner2) { statusArmedFor = null; return; }
     inner2.classList.add('status-fading');
     setTimeout(function () {
       var s3 = document.getElementById('status');
       var inner3 = s3 && s3.querySelector('.status-fading');
       if (s3 && inner3) s3.innerHTML = '';
+      statusArmedFor = null;
     }, 240);
   }, ms);
 }
 
-document.body.addEventListener('htmx:afterSwap', armStatusDismissTimer);
-document.body.addEventListener('htmx:oobAfterSwap', armStatusDismissTimer);
+(function () {
+  var page = document.querySelector('.page');
+  var s = document.getElementById('status');
+  if (!page || !s) return;
+  new MutationObserver(armStatusDismissTimer).observe(page, { childList: true });
+  armStatusDismissTimer();
+})();
 
 document.addEventListener('click', function (e) {
   var btn = e.target && e.target.closest && e.target.closest('.status-close');
