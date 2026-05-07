@@ -61,16 +61,17 @@ export function WorkTreeFragment(
 ) {
   const { staged, unstaged, untracked, repoPath, previewStash } = props
   const total = staged.length + unstaged.length + untracked.length
+  const dirty =
+    staged.length > 0 || unstaged.length > 0 || untracked.length > 0
 
-  const showStashToggle =
-    previewStash.hasLocalChanges || previewStash.previewStashPresent
+  const showStashToggle = dirty || previewStash.previewStashPresent
   const stashBtn = showStashToggle ? (
     <button
       type="button"
       class="wt-stash-btn"
-      title={previewStash.hasLocalChanges ? STASH_CMD : UNSH_CMD}
+      title={dirty ? STASH_CMD : UNSH_CMD}
       aria-label={
-        previewStash.hasLocalChanges
+        dirty
           ? `Hide local edits (${STASH_CMD}; untracked files that are not gitignored)`
           : `Restore hidden edits (${UNSH_CMD})`
       }
@@ -78,9 +79,7 @@ export function WorkTreeFragment(
       hx-target="#graph"
       hx-swap="outerHTML"
     >
-      {previewStash.hasLocalChanges
-        ? 'Hide local edits'
-        : 'Restore hidden edits'}
+      {dirty ? 'Hide local edits' : 'Restore hidden edits'}
     </button>
   ) : null
 

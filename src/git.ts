@@ -440,8 +440,7 @@ export type WorkTreeSummary = {
 export const DUMBGIT_PREVIEW_STASH_MSG = 'dumbgit-preview-stash'
 
 export type PreviewStashUi = {
-  /** Staged, unstaged, or untracked paths (anything `git stash push -u` would pick up). */
-  hasLocalChanges: boolean
+  /** There is a dumbgit-owned stash entry to restore via the button. */
   previewStashPresent: boolean
 }
 
@@ -459,16 +458,10 @@ async function findDumbgitPreviewStashRef(): Promise<string | null> {
   return null
 }
 
-/** Whether there is local work worth stashing, or an app-owned stash to restore. */
+/** Whether a dumbgit preview stash exists (`git stash list`). */
 export async function previewStashUiState(): Promise<PreviewStashUi> {
-  const wt = await workTreeSummary()
   const ref = await findDumbgitPreviewStashRef()
-  const hasLocalChanges =
-    wt.staged.length > 0 ||
-    wt.unstaged.length > 0 ||
-    wt.untracked.length > 0
   return {
-    hasLocalChanges,
     previewStashPresent: ref !== null,
   }
 }
