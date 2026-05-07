@@ -55,12 +55,32 @@ function WorkTreeNums(props: {
 }
 
 export function WorkTreeFragment(
-  props: WorkTreeSummary & { repoPath: string; previewStash: PreviewStashUi },
+  props: WorkTreeSummary & {
+    repoPath: string
+    currentSha: string
+    previewStash: PreviewStashUi
+  },
 ) {
   const { staged, unstaged, untracked, repoPath } = props
   const total = staged.length + unstaged.length + untracked.length
   const dirty =
     staged.length > 0 || unstaged.length > 0 || untracked.length > 0
+  const restorable = props.previewStash.stashes.filter(
+    (s) => s.baseSha === props.currentSha,
+  )
+  const restoreBtn =
+    !dirty && restorable.length === 1 ? (
+      <button
+        type="button"
+        class="wt-stash-btn"
+        title={`git stash apply --index ${restorable[0]!.ref}; git stash drop ${restorable[0]!.ref}`}
+        hx-post={`/api/worktree/stash-restore?ref=${encodeURIComponent(restorable[0]!.ref)}`}
+        hx-target="#graph"
+        hx-swap="outerHTML"
+      >
+        Restore saved edits
+      </button>
+    ) : null
 
   const stashBtn = dirty ? (
     <button
@@ -72,7 +92,7 @@ export function WorkTreeFragment(
       hx-target="#graph"
       hx-swap="outerHTML"
     >
-      Hide local edits
+      Save aside
     </button>
   ) : null
 
@@ -84,7 +104,7 @@ export function WorkTreeFragment(
         data-repo={repoPath}
       >
         <span class="worktree-clean">no changes</span>
-        {stashBtn ? <span class="wt-clean-stash-slot">{stashBtn}</span> : null}
+        {restoreBtn ? <span class="wt-clean-stash-slot">{restoreBtn}</span> : null}
       </div>
     )
   }
@@ -108,17 +128,11 @@ export function WorkTreeFragment(
   return (
     <div id="worktree" class="worktree-panel" data-repo={repoPath}>
       <div class="worktree-body">
-        {stashBtn ? (
-          <div class="wt-stash-bar">
-            <span class="wt-stash-bar-label">compare</span>
-            {stashBtn}
-          </div>
-        ) : null}
         {hasStaged ? (
           <Section title="ready to commit" rows={stagedRows} />
         ) : null}
         {changeRows.length > 0 ? (
-          <Section title="changes" rows={changeRows} />
+          <Section title="changes" rows={changeRows} action={stashBtn} />
         ) : null}
       </div>
     </div>
@@ -131,13 +145,16 @@ function Section(props: {
     entry: WorkTreeEntry
     kind: 'staged' | 'unstaged' | 'untracked'
   }>
+  action?: unknown
 }) {
   if (props.rows.length === 0) return null
   return (
     <div class="wt-section">
       <div class="wt-section-title">
-        {props.title}{' '}
-        <span class="wt-count">({props.rows.length})</span>
+        <span>
+          {props.title} <span class="wt-count">({props.rows.length})</span>
+        </span>
+        {props.action ? <span class="wt-section-action">{props.action}</span> : null}
       </div>
       <ul class="wt-list">
         {props.rows.map(({ entry: e, kind }) => {

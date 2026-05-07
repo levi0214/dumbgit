@@ -247,9 +247,15 @@ app.get('/fragment/graph/tail', async (c) => {
 app.get('/fragment/worktree', async (c) => {
   c.header('Cache-Control', 'no-store')
   const wt = await workTreeSummary()
+  const head = await headInfo()
   const previewStash = await previewStashUiState()
   return c.html(
-    <WorkTreeFragment {...wt} previewStash={previewStash} repoPath={getCurrentRepo()} />,
+    <WorkTreeFragment
+      {...wt}
+      currentSha={head.sha}
+      previewStash={previewStash}
+      repoPath={getCurrentRepo()}
+    />,
     200,
   )
 })

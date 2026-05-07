@@ -1032,6 +1032,7 @@ export function GraphFragment(props: GraphFragmentProps) {
       </div>
       <WorkTreeFragment
         {...worktree}
+        currentSha={head.sha}
         previewStash={props.previewStash}
         repoPath={props.repoPath}
       />
