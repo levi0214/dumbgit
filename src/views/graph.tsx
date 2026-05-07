@@ -5,6 +5,7 @@ import {
   type GraphCommitRow,
   type GraphRow,
   type HeadInfo,
+  type PreviewStashUi,
   type WorkTreeSummary,
 } from '../git'
 import { RepoBar } from './repo'
@@ -16,6 +17,7 @@ export type GraphFragmentProps =
       head: HeadInfo
       rows: GraphRow[]
       worktree: WorkTreeSummary
+      previewStash: PreviewStashUi
       /** Absolute repo root; tags #worktree so stale polls cannot overwrite after repo switch. */
       repoPath: string
       repoPickerRoot: string
@@ -909,7 +911,11 @@ export function GraphFragment(props: GraphFragmentProps) {
           </div>
         ) : null}
       </div>
-      <WorkTreeFragment {...worktree} repoPath={props.repoPath} />
+      <WorkTreeFragment
+        {...worktree}
+        previewStash={props.previewStash}
+        repoPath={props.repoPath}
+      />
       <div class="graph-body">
         <div class={`log-lines${rows.length === 0 ? ' empty' : ''}`}>
           {rows.length === 0 ? (

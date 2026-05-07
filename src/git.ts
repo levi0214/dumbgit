@@ -435,6 +435,86 @@ export type WorkTreeSummary = {
   untracked: WorkTreeEntry[]
 }
 
+/** Message marker for `git stash push -m …` created by dumbgit preview toggle (not user stash). */
+export const DUMBGIT_PREVIEW_STASH_MSG = 'dumbgit-preview-stash'
+
+export type PreviewStashUi = {
+  hasTrackedChanges: boolean
+  previewStashPresent: boolean
+}
+
+async function findDumbgitPreviewStashRef(): Promise<string | null> {
+  const r = await spawnGit(['stash', 'list'])
+  if (r.code !== 0) return null
+  const marker = DUMBGIT_PREVIEW_STASH_MSG
+  for (const line of r.stdout.split('\n')) {
+    const t = line.trim()
+    if (!t) continue
+    const m = t.match(/^(stash@\{[0-9]+\}):\s*(.*)$/)
+    if (!m) continue
+    if ((m[2] ?? '').includes(marker)) return m[1]!
+  }
+  return null
+}
+
+/** Tracks whether there is anything to stash (tracked only) vs a dumbgit-owned stash to restore. */
+export async function previewStashUiState(): Promise<PreviewStashUi> {
+  const wt = await workTreeSummary()
+  const ref = await findDumbgitPreviewStashRef()
+  return {
+    hasTrackedChanges: wt.staged.length > 0 || wt.unstaged.length > 0,
+    previewStashPresent: ref !== null,
+  }
+}
+
+/**
+ * Toggle: stash tracked WIP behind app marker, or apply+drop latest matching stash when tree is tracked-clean.
+ */
+export async function togglePreviewStash(): Promise<
+  { ok: true; message: string } | { ok: false; stderr: string }
+> {
+  const wt = await workTreeSummary()
+  const tracked = wt.staged.length > 0 || wt.unstaged.length > 0
+  const ref = await findDumbgitPreviewStashRef()
+
+  if (tracked) {
+    const r = await spawnGit(['stash', 'push', '-m', DUMBGIT_PREVIEW_STASH_MSG])
+    const err = r.stderr.trim() || r.stdout.trim()
+    if (r.code !== 0) {
+      return {
+        ok: false,
+        stderr: err || `git stash push failed (${r.code})`,
+      }
+    }
+    return { ok: true, message: err || 'stashed tracked changes for preview' }
+  }
+
+  if (ref) {
+    const applied = await spawnGit(['stash', 'apply', '--index', ref])
+    if (applied.code !== 0) {
+      return {
+        ok: false,
+        stderr:
+          applied.stderr.trim() ||
+          applied.stdout.trim() ||
+          `git stash apply failed (${applied.code})`,
+      }
+    }
+    const dropped = await spawnGit(['stash', 'drop', ref])
+    if (dropped.code !== 0) {
+      return {
+        ok: false,
+        stderr:
+          dropped.stderr.trim() ||
+          `restored stash but failed to drop ${ref}: ${dropped.code}`,
+      }
+    }
+    return { ok: true, message: 'restored preview stash' }
+  }
+
+  return { ok: false, stderr: 'nothing to stash or restore' }
+}
+
 function parseNameStatus(stdout: string): WorkTreeEntry[] {
   const entries: WorkTreeEntry[] = []
   for (const line of stdout.split('\n')) {

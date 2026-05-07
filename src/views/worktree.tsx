@@ -1,5 +1,14 @@
 /** @jsxImportSource hono/jsx */
-import type { WorkTreeEntry, WorkTreeSummary } from '../git'
+import {
+  DUMBGIT_PREVIEW_STASH_MSG,
+  type PreviewStashUi,
+  type WorkTreeEntry,
+  type WorkTreeSummary,
+} from '../git'
+
+const STASH_CMD = `git stash push -m ${DUMBGIT_PREVIEW_STASH_MSG}`
+const UNSH_CMD =
+  'git stash apply --index <dumbgit-preview-ref>; git stash drop <same-ref>'
 
 const MARK_LABELS: Record<string, string> = {
   M: 'modified',
@@ -48,10 +57,32 @@ function WorkTreeNums(props: {
 }
 
 export function WorkTreeFragment(
-  props: WorkTreeSummary & { repoPath: string },
+  props: WorkTreeSummary & { repoPath: string; previewStash: PreviewStashUi },
 ) {
-  const { staged, unstaged, untracked, repoPath } = props
+  const { staged, unstaged, untracked, repoPath, previewStash } = props
   const total = staged.length + unstaged.length + untracked.length
+
+  const showStashToggle =
+    previewStash.hasTrackedChanges || previewStash.previewStashPresent
+  const stashBtn = showStashToggle ? (
+    <button
+      type="button"
+      class="wt-stash-btn"
+      title={previewStash.hasTrackedChanges ? STASH_CMD : UNSH_CMD}
+      aria-label={
+        previewStash.hasTrackedChanges
+          ? `Hide local edits (${STASH_CMD}; tracked files only)`
+          : `Restore hidden edits (${UNSH_CMD})`
+      }
+      hx-post="/api/worktree/stash-toggle"
+      hx-target="#graph"
+      hx-swap="outerHTML"
+    >
+      {previewStash.hasTrackedChanges
+        ? 'Hide local edits'
+        : 'Restore hidden edits'}
+    </button>
+  ) : null
 
   if (total === 0) {
     return (
@@ -61,6 +92,7 @@ export function WorkTreeFragment(
         data-repo={repoPath}
       >
         <span class="worktree-clean">no changes</span>
+        {stashBtn ? <span class="wt-clean-stash-slot">{stashBtn}</span> : null}
       </div>
     )
   }
@@ -84,6 +116,12 @@ export function WorkTreeFragment(
   return (
     <div id="worktree" class="worktree-panel" data-repo={repoPath}>
       <div class="worktree-body">
+        {stashBtn ? (
+          <div class="wt-stash-bar">
+            <span class="wt-stash-bar-label">compare</span>
+            {stashBtn}
+          </div>
+        ) : null}
         {hasStaged ? (
           <Section title="ready to commit" rows={stagedRows} />
         ) : null}

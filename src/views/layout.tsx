@@ -292,13 +292,49 @@ body {
   background: #252526;
 }
 .worktree-clean-panel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
   padding: 6px 12px 8px;
+}
+.wt-clean-stash-slot {
+  margin-left: auto;
 }
 .worktree-clean {
   color: var(--muted);
 }
 .worktree-body {
   padding: 0 12px 8px;
+}
+.wt-stash-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+  margin-bottom: 4px;
+}
+.wt-stash-bar-label {
+  color: var(--muted);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.wt-stash-btn {
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  padding: 4px 9px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: #2d2d2d;
+  color: var(--fg);
+  white-space: nowrap;
+}
+.wt-stash-btn:hover {
+  background: rgba(86, 156, 214, 0.12);
+  border-color: var(--accent);
+  color: var(--accent);
 }
 .wt-section {
   margin-top: 6px;

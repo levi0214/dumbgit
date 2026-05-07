@@ -18,8 +18,10 @@ import {
   headInfo,
   isGitRepo,
   logGraphRows,
+  previewStashUiState,
   push,
   setCurrentRepo,
+  togglePreviewStash,
   workTreeFilePatch,
   workTreeSummary,
 } from './git'
@@ -77,6 +79,7 @@ async function loadGraph(limit?: number): Promise<GraphFragmentProps> {
     const head = await headInfo()
     const rows = await logGraphRows(graphCommitLimit)
     const worktree = await workTreeSummary()
+    const previewStash = await previewStashUiState()
     const commitRows = rows.filter((r) => r.kind === 'commit').length
     const graphNextLimit = Math.min(
       graphCommitLimit + GRAPH_COMMIT_STEP,
@@ -91,6 +94,7 @@ async function loadGraph(limit?: number): Promise<GraphFragmentProps> {
       head,
       rows,
       worktree,
+      previewStash,
       repoPath: getCurrentRepo(),
       repoPickerRoot: getCurrentRepo(),
       repoPickerRecents: loadRecents(),
@@ -237,7 +241,11 @@ app.get('/fragment/graph/tail', async (c) => {
 app.get('/fragment/worktree', async (c) => {
   c.header('Cache-Control', 'no-store')
   const wt = await workTreeSummary()
-  return c.html(<WorkTreeFragment {...wt} repoPath={getCurrentRepo()} />, 200)
+  const previewStash = await previewStashUiState()
+  return c.html(
+    <WorkTreeFragment {...wt} previewStash={previewStash} repoPath={getCurrentRepo()} />,
+    200,
+  )
 })
 
 app.get('/api/worktree/file', async (c) => {
@@ -289,6 +297,31 @@ app.post('/api/worktree/action', async (c) => {
       <GraphFragment {...next} swapOob />
       <DiffPanel state="empty" swapOob />
       <StatusOob />
+    </Fragment>,
+    200,
+  )
+})
+
+app.post('/api/worktree/stash-toggle', async (c) => {
+  const r = await togglePreviewStash()
+  const next = await loadGraph()
+  if (!next.ok) {
+    return c.html(
+      <Fragment>
+        <GraphFragment {...next} />
+        <StatusOob error={r.ok ? undefined : r.stderr} />
+      </Fragment>,
+      200,
+    )
+  }
+  return c.html(
+    <Fragment>
+      <GraphFragment {...next} swapOob />
+      <DiffPanel state="empty" swapOob />
+      <StatusOob
+        error={r.ok ? undefined : r.stderr}
+        info={r.ok ? r.message : undefined}
+      />
     </Fragment>,
     200,
   )
