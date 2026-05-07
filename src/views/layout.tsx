@@ -423,14 +423,18 @@ body {
   background: rgba(224, 162, 58, 0.25) !important;
   color: #ffd58a !important;
 }
-/* HEAD's commit node on the graph rail; the SVG renderer draws the ring. */
+/* HEAD marker: glow lives on the hollow ring only so the disk stays an opaque knockout. */
 .graph-node-head {
   color: #3ddc6c;
   opacity: 1;
+}
+.graph-node-head .graph-node-head-ring {
   filter: drop-shadow(0 0 3px rgba(61, 220, 108, 0.65));
 }
 .graph-node-head-detached {
   color: #e0a23a;
+}
+.graph-node-head-detached .graph-node-head-ring {
   filter: drop-shadow(0 0 3px rgba(224, 162, 58, 0.65));
 }
 /* Viewing row: blue is the only "row color" in the log — it means "active focus",

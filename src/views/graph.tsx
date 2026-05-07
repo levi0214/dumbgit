@@ -329,7 +329,8 @@ function GraphLaneSpans(props: {
   const height = props.compact ? GRAPH_CONNECTOR_HEIGHT : GRAPH_ROW_HEIGHT
   const width = Math.max(GRAPH_COL_WIDTH, text.length * GRAPH_COL_WIDTH)
   const mid = height / 2
-  const out = []
+  const lanesBack = []
+  const markersFront = []
   for (let i = 0; i < text.length; i++) {
     const ch = text[i]
     const onSpine = brightCols !== null && brightCols.has(i)
@@ -338,7 +339,7 @@ function GraphLaneSpans(props: {
     const x = graphColX(i)
     if (ch === ' ') continue
     if (ch === '|') {
-      out.push(
+      lanesBack.push(
         <line
           key={i}
           x1={x}
@@ -358,7 +359,7 @@ function GraphLaneSpans(props: {
       const y1 = height + GRAPH_LINE_OVERLAP
       const x2 = graphColX(i + 1)
       const y2 = -GRAPH_LINE_OVERLAP
-      out.push(
+      lanesBack.push(
         <path
           key={i}
           d={graphCurvePath(x1, y1, x2, y2)}
@@ -377,7 +378,7 @@ function GraphLaneSpans(props: {
       const y1 = -GRAPH_LINE_OVERLAP
       const x2 = graphColX(i + 1)
       const y2 = height + GRAPH_LINE_OVERLAP
-      out.push(
+      lanesBack.push(
         <path
           key={i}
           d={graphCurvePath(x1, y1, x2, y2)}
@@ -392,7 +393,7 @@ function GraphLaneSpans(props: {
       continue
     }
     if (ch === '-' || ch === '_') {
-      out.push(
+      lanesBack.push(
         <line
           key={i}
           x1={x - GRAPH_COL_WIDTH / 2}
@@ -412,7 +413,7 @@ function GraphLaneSpans(props: {
       const connectsBelow = props.connections?.below.has(i) ?? false
       if (props.isHead) {
         const hcls = `graph-node graph-node-head${props.isDetached ? ' graph-node-head-detached' : ''}`
-        out.push(
+        markersFront.push(
           <g
             key={i}
             class={hcls}
@@ -431,6 +432,7 @@ function GraphLaneSpans(props: {
               />
             ) : null}
             <circle
+              class="graph-node-head-ring"
               cx={x}
               cy={mid}
               r="5.2"
@@ -444,7 +446,7 @@ function GraphLaneSpans(props: {
         )
         continue
       }
-      out.push(
+      markersFront.push(
         <g key={i}>
           {connectsAbove ? (
             <line
@@ -482,7 +484,7 @@ function GraphLaneSpans(props: {
       )
       continue
     }
-    out.push(
+    markersFront.push(
       <text
         key={i}
         x={x}
@@ -502,7 +504,8 @@ function GraphLaneSpans(props: {
       aria-hidden="true"
       focusable="false"
     >
-      {out}
+      {lanesBack}
+      {markersFront}
     </svg>
   )
 }
