@@ -4,17 +4,14 @@ import path from 'node:path'
 export type RepoBarProps = {
   root: string
   recents: string[]
-  /** Out-of-band swap when switching repos from POST /api/repo */
-  oob?: boolean
 }
 
 export function RepoBar(props: RepoBarProps) {
   const base = path.basename(props.root)
   const others = props.recents.filter((p) => path.resolve(p) !== path.resolve(props.root))
-  const oobAttr = props.oob ? ({ 'hx-swap-oob': 'true' } as const) : {}
 
   return (
-    <div id="repo-bar" class="repo-bar" {...oobAttr}>
+    <div id="repo-bar" class="repo-bar">
       <details class="repo-bar-details">
         <summary class="repo-bar-summary" title={props.root}>
           {base}
@@ -31,7 +28,7 @@ export function RepoBar(props: RepoBarProps) {
                       type="button"
                       class="repo-recent-btn"
                       title={p}
-                      hx-post={`/api/repo?path=${encodeURIComponent(p)}`}
+                      hx-post={`/api/launch?path=${encodeURIComponent(p)}`}
                       hx-swap="none"
                     >
                       {path.basename(p)}
@@ -43,7 +40,7 @@ export function RepoBar(props: RepoBarProps) {
           ) : null}
           <form
             class="repo-open-form"
-            hx-post="/api/repo"
+            hx-post="/api/launch"
             hx-swap="none"
           >
             <input

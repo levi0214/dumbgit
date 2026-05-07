@@ -15,11 +15,11 @@ export type HeadInfo =
   | { kind: 'branch'; name: string; sha: string }
   | { kind: 'detached'; sha: string; previousBranch?: string }
 
-/** Working tree all git commands run in (switch via repo picker). */
+/** Working tree all git commands run in (`dumbgit` sets this once per process). */
 let repoRoot = process.cwd()
 const lastBranchByRepo = new Map<string, string>()
 
-export function setCurrentRepo(dir: string): void {
+export function setRepoRoot(dir: string): void {
   repoRoot = dir
 }
 

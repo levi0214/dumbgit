@@ -2,8 +2,10 @@
 import { Fragment } from 'hono/jsx'
 import { Hono } from 'hono'
 import { streamSSE } from 'hono/streaming'
+import { spawn as spawnDetached } from 'node:child_process'
 import os from 'node:os'
 import path from 'node:path'
+import net from 'node:net'
 import {
   GitError,
   applyWorkTreeAction,
@@ -22,7 +24,7 @@ import {
   previewStashUiState,
   push,
   restorePreviewStash,
-  setCurrentRepo,
+  setRepoRoot,
   stashFilePatch,
   stashSummary,
   togglePreviewStash,
@@ -43,7 +45,12 @@ import { StatusOob } from './views/status'
 import { watchGitRefs } from './watch'
 import { WorkTreeFragment } from './views/worktree'
 
-const PORT = 7777
+const LISTEN_HOST = '127.0.0.1'
+/** Body must contain this line for `bin/dumbgit --stop-all` to identify listeners. */
+const HEALTH_BODY = 'dumbgit ok'
+const IDLE_EXIT_MS = 5000
+const PORT_PROBE_LO = 7777
+const PORT_PROBE_HI = 7900
 
 /** Initial / expanded `git log -n` depth (ASCII graph needs full re-fetch each time). */
 const GRAPH_COMMIT_DEFAULT = 50
@@ -62,21 +69,73 @@ function expandUser(p: string): string {
   return p
 }
 
-/** First non-flag argv after script (skip `--open`, etc.). */
-function initialRepoFromArgv(): string {
-  const skip = new Set(['--open'])
+function parseServerArgv(): {
+  port: number
+  openBrowserFlag: boolean
+  repoAbs: string
+} {
+  let port = 7777
+  let openBrowserFlag = false
   const pos: string[] = []
   for (let i = 2; i < process.argv.length; i++) {
-    const a = process.argv[i]!
-    if (a.startsWith('-')) continue
-    if (skip.has(a)) continue
+    const a = process.argv[i]
+    if (a === '--open') {
+      openBrowserFlag = true
+      continue
+    }
+    if (a === '--port') {
+      const n = Number(process.argv[++i])
+      if (Number.isFinite(n) && n >= 1 && n <= 65535) port = Math.floor(n)
+      continue
+    }
+    if (!a || a.startsWith('-')) continue
     pos.push(a)
   }
   const raw = pos[0]
-  if (!raw) return process.cwd()
-  return path.resolve(expandUser(raw))
+  const repoAbs = raw ? path.resolve(expandUser(raw)) : path.resolve(process.cwd())
+  return { port, openBrowserFlag, repoAbs }
 }
 
+const BOOT = parseServerArgv()
+
+function portLooksFree(p: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const s = net.createServer()
+    s.once('error', () => resolve(false))
+    s.listen(p, LISTEN_HOST, () => {
+      s.close(() => resolve(true))
+    })
+  })
+}
+
+async function allocateListenPort(lo: number, hi: number): Promise<number | undefined> {
+  for (let p = lo; p <= hi; p++) {
+    if (await portLooksFree(p)) return p
+  }
+  return undefined
+}
+
+async function waitForHealthy(baseUrl: string, msTotal = 8000): Promise<boolean> {
+  const deadline = Date.now() + msTotal
+  while (Date.now() < deadline) {
+    try {
+      const controller = new AbortController()
+      const tmr = setTimeout(() => controller.abort(), 450)
+      const r = await fetch(`${baseUrl}/healthz`, { signal: controller.signal })
+      clearTimeout(tmr)
+      const text = await r.text()
+      if (
+        r.ok &&
+        text.trim() === HEALTH_BODY
+      )
+        return true
+    } catch {
+      /* down */
+    }
+    await Bun.sleep(100)
+  }
+  return false
+}
 async function loadGraph(limit?: number): Promise<GraphFragmentProps> {
   const graphCommitLimit = clampGraphCommitLimit(limit ?? GRAPH_COMMIT_DEFAULT)
   try {
@@ -133,15 +192,48 @@ type DumbgitState = {
   closeWatch?: () => void
   server?: ReturnType<typeof Bun.serve>
   repoInitialized?: boolean
+  liveStreams: number
+  sseSeen: boolean
+  idleExitTimer?: ReturnType<typeof setTimeout>
 }
 const G = globalThis as { __dumbgit?: DumbgitState }
 if (!G.__dumbgit) {
-  G.__dumbgit = { lastChange: Date.now() }
+  G.__dumbgit = {
+    lastChange: Date.now(),
+    liveStreams: 0,
+    sseSeen: false,
+  }
 }
 const state = G.__dumbgit
+if (typeof state.liveStreams !== 'number') state.liveStreams = 0
+if (typeof state.sseSeen !== 'boolean') state.sseSeen = false
+
+function sseConnected() {
+  state.liveStreams++
+  state.sseSeen = true
+  if (state.idleExitTimer) {
+    clearTimeout(state.idleExitTimer)
+    state.idleExitTimer = undefined
+  }
+}
+
+function sseDisconnected() {
+  state.liveStreams = Math.max(0, state.liveStreams - 1)
+  if (state.liveStreams === 0 && state.sseSeen) armIdleExit()
+}
+
+function armIdleExit() {
+  if (process.env.DUMBGIT_AUTO_EXIT !== '1') return
+  if (state.idleExitTimer) clearTimeout(state.idleExitTimer)
+  state.idleExitTimer = setTimeout(() => {
+    state.idleExitTimer = undefined
+    if (state.liveStreams === 0 && state.sseSeen && process.env.DUMBGIT_AUTO_EXIT === '1')
+      process.exit(0)
+  }, IDLE_EXIT_MS)
+}
 
 if (!state.repoInitialized) {
-  setCurrentRepo(initialRepoFromArgv())
+  setRepoRoot(BOOT.repoAbs)
   state.repoInitialized = true
 }
 
@@ -169,7 +261,7 @@ await attachWatcher()
 
 const app = new Hono()
 
-app.get('/healthz', (c) => c.text('ok\n'))
+app.get('/healthz', (c) => c.text(`${HEALTH_BODY}\n`))
 
 app.get('/', async (c) => {
   const graph = await loadGraph()
@@ -364,7 +456,7 @@ app.post('/api/worktree/stash-drop', async (c) => {
   )
 })
 
-app.post('/api/repo', async (c) => {
+app.post('/api/launch', async (c) => {
   let raw = c.req.query('path')?.trim() ?? ''
   if (!raw) {
     const body = await c.req.parseBody()
@@ -375,27 +467,47 @@ app.post('/api/repo', async (c) => {
     return c.html(<StatusOob error="path required" />, 200)
   }
   const candidate = path.resolve(expandUser(raw))
-  const ok = await isGitRepo(candidate)
-  if (!ok) {
+  const okRepo = await isGitRepo(candidate)
+  if (!okRepo) {
     return c.html(
       <StatusOob error={`not a git repo: ${candidate}`} />,
       200,
     )
   }
 
-  setCurrentRepo(candidate)
-  await attachWatcher()
-  bumpRecent(candidate)
-  const graph = await loadGraph()
+  const childPort = await allocateListenPort(PORT_PROBE_LO, PORT_PROBE_HI)
+  if (childPort === undefined) {
+    return c.html(<StatusOob error="no free port on 127.0.0.1 in range 7777-7900" />, 200)
+  }
 
-  return c.html(
-    <Fragment>
-      <GraphFragment {...graph} swapOob />
-      <DiffPanel state="empty" swapOob />
-      <StatusOob />
-    </Fragment>,
-    200,
+  const appRoot = path.join(import.meta.dir, '..')
+  const kid = spawnDetached(
+    process.execPath,
+    ['run', 'src/index.tsx', '--port', String(childPort), candidate],
+    {
+      cwd: appRoot,
+      detached: true,
+      stdio: 'ignore',
+      env: { ...process.env, DUMBGIT_AUTO_EXIT: '1' },
+    },
   )
+  kid.unref()
+
+  bumpRecent(candidate)
+
+  const base = `http://${LISTEN_HOST}:${childPort}`
+  const up = await waitForHealthy(base)
+  if (!up) {
+    try {
+      kid.kill('SIGTERM')
+    } catch {
+      /* ignore */
+    }
+    return c.html(<StatusOob error="spawned dumbgit never became healthy" />, 200)
+  }
+
+  c.header('X-Dumbgit-Launch', base)
+  return c.text('', 200)
 })
 
 app.post('/api/checkout/branch', async (c) => {
@@ -577,31 +689,46 @@ app.post('/api/push', async (c) => {
 app.get('/events', (c) => {
   c.status(200)
   return streamSSE(c, async (stream) => {
-    let lastSent = state.lastChange
-    await stream.writeSSE({ event: 'ready', data: String(lastSent) })
+    sseConnected()
+    try {
+      let lastSent = state.lastChange
+      await stream.writeSSE({ event: 'ready', data: String(lastSent) })
 
-    while (!stream.aborted && !stream.closed) {
-      if (state.lastChange > lastSent) {
-        lastSent = state.lastChange
-        await stream.writeSSE({ event: 'changed', data: String(lastSent) })
+      while (!stream.aborted && !stream.closed) {
+        if (state.lastChange > lastSent) {
+          lastSent = state.lastChange
+          await stream.writeSSE({ event: 'changed', data: String(lastSent) })
+        }
+        await stream.sleep(100)
       }
-      await stream.sleep(100)
+    } finally {
+      sseDisconnected()
     }
   })
 })
 
+const listenPort = BOOT.port
+
 if (state.server) {
-  state.server.reload({ fetch: app.fetch })
-} else {
-  state.server = Bun.serve({
-    hostname: '127.0.0.1',
-    port: PORT,
+  state.server.reload({
+    hostname: LISTEN_HOST,
+    port: listenPort,
     fetch: app.fetch,
   })
-  console.log(`dumbgit on http://127.0.0.1:${PORT}  (ctrl-c to quit)`)
-  if (process.argv.includes('--open')) {
+} else {
+  state.server = Bun.serve({
+    hostname: LISTEN_HOST,
+    port: listenPort,
+    fetch: app.fetch,
+  })
+  const base = `http://${LISTEN_HOST}:${listenPort}`
+  console.log(`dumbgit on ${base}  (repo: ${BOOT.repoAbs})`)
+  if (process.env.DUMBGIT_AUTO_EXIT === '1')
+    console.log('close all browser tabs on this URL to exit, or ctrl-c')
+  else console.log('auto-exit when idle disabled (development); ctrl-c to quit')
+  if (BOOT.openBrowserFlag) {
     setTimeout(() => {
-      Bun.spawn(['open', `http://127.0.0.1:${PORT}`])
+      Bun.spawn(['open', base])
     }, 200)
   }
 }

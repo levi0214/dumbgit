@@ -1187,30 +1187,6 @@ document.addEventListener('click', function (e) {
   btn.setAttribute('data-confirm-timer', String(timer));
 }, true);
 
-document.body.addEventListener('htmx:beforeSwap', function (e) {
-  var t = e.detail.target;
-  if (!t || t.id !== 'worktree') return;
-  var xhr = e.detail.xhr;
-  if (!xhr || xhr.status !== 200) return;
-  var url = xhr.responseURL || '';
-  if (url.indexOf('/fragment/worktree') === -1) return;
-  var bar = document.querySelector('.repo-bar-summary');
-  var curRoot = bar ? String(bar.getAttribute('title') || '').trim() : '';
-  if (!curRoot) return;
-  try {
-    var txt = xhr.responseText || '';
-    var doc = new DOMParser().parseFromString(txt, 'text/html');
-    var nw = doc.getElementById('worktree');
-    var respRoot = nw ? String(nw.getAttribute('data-repo') || '').trim() : '';
-    if (!respRoot) return;
-    if (respRoot !== curRoot) {
-      e.detail.shouldSwap = false;
-    }
-  } catch (err) {
-    /* allow swap */
-  }
-});
-
 document.body.addEventListener('htmx:afterSwap', function (e) {
   var t = e.detail && e.detail.target;
   if (!t || !t.id) return;
@@ -1232,7 +1208,16 @@ document.addEventListener('click', function (e) {
 document.body.addEventListener('htmx:afterRequest', function (e) {
   if (!e.detail.successful) return;
   var xhr = e.detail.xhr;
-  var url = (xhr && xhr.responseURL) || '';
+  if (!xhr) return;
+  try {
+    var launchUrl = xhr.getResponseHeader('X-Dumbgit-Launch');
+    if (launchUrl && launchUrl.trim()) {
+      window.open(launchUrl.trim(), '_blank', 'noopener,noreferrer');
+    }
+  } catch (errLaunch) {
+    /* ignore */
+  }
+  var url = xhr.responseURL || '';
   if (url.indexOf('/fragment/graph/tail') !== -1) {
     try {
       var lim = new URL(url).searchParams.get('limit');
@@ -1244,7 +1229,7 @@ document.body.addEventListener('htmx:afterRequest', function (e) {
     syncViewingHighlight();
     syncWorktreeFileSelection();
   }
-  if (url.indexOf('/api/repo') !== -1) {
+  if (url.indexOf('/api/launch') !== -1) {
     var rd = document.querySelector('details.repo-bar-details');
     if (rd) rd.removeAttribute('open');
   }

@@ -6,13 +6,15 @@ import {
   openSync,
   realpathSync,
 } from 'node:fs'
+import net from 'node:net'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const PORT = 7777
-const BASE_URL = `http://127.0.0.1:${PORT}`
-const HEALTH_URL = `${BASE_URL}/healthz`
+const LISTEN_HOST = '127.0.0.1'
+const HEALTH_MARK = 'dumbgit ok'
+const PORT_LO = 7777
+const PORT_HI = 7900
 
 const scriptPath = realpathSync(fileURLToPath(import.meta.url))
 const appRoot = path.resolve(path.dirname(scriptPath), '..')
@@ -20,10 +22,13 @@ const logPath = path.join(os.homedir(), 'Library', 'Logs', 'dumbgit.log')
 
 function usage() {
   console.log(`usage: dumbgit [repo-path]
-       dumbgit --stop
+       dumbgit --stop-all
+       dumbgit --stop   (alias for --stop-all)
 
-Open dumbgit for the current Git repo, or for repo-path when provided.
-Stop the background server with --stop.`)
+Open dumbgit for the current Git repo or repo-path (always a new listener).
+Each repo tab binds to its own server; close all tabs — that server exits.
+
+Stop every dumbgit listener (${PORT_LO}-${PORT_HI}) with --stop-all or --stop.`)
   process.exit(0)
 }
 
@@ -50,129 +55,163 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-async function ping() {
+/** True if TCP bind succeeds (port not in use locally). */
+function portLooksFree(port) {
+  return new Promise((resolve) => {
+    const s = net.createServer()
+    s.once('error', () => resolve(false))
+    s.listen(port, LISTEN_HOST, () => {
+      s.close(() => resolve(true))
+    })
+  })
+}
+
+async function allocatePort() {
+  for (let p = PORT_LO; p <= PORT_HI; p++) {
+    if (await portLooksFree(p)) return p
+  }
+  return undefined
+}
+
+async function pingDumbgit(port) {
   const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), 500)
+  const timer = setTimeout(() => controller.abort(), 450)
   try {
-    const r = await fetch(HEALTH_URL, { signal: controller.signal })
+    const r = await fetch(`http://${LISTEN_HOST}:${port}/healthz`, {
+      signal: controller.signal,
+    })
     const text = await r.text()
-    return r.ok && text.trim() === 'ok' ? 'up' : 'occupied'
+    if (r.ok && text.trim() === HEALTH_MARK) return 'dumbgit'
+    return 'other'
   } catch {
-    return 'down'
+    return 'dead'
   } finally {
     clearTimeout(timer)
   }
 }
 
-function startServer(repo) {
-  mkdirSync(path.dirname(logPath), { recursive: true })
-  const log = openSync(logPath, 'a')
-  const child = spawn(process.execPath, ['run', 'src/index.tsx', repo], {
-    cwd: appRoot,
-    detached: true,
-    stdio: ['ignore', log, log],
-  })
-  child.unref()
-  closeSync(log)
-}
-
-function listeningPids() {
-  const r = spawnSync('lsof', ['-ti', `tcp:${PORT}`, '-sTCP:LISTEN'], {
+function listeningPidsOnPort(port) {
+  const r = spawnSync('lsof', ['-ti', `tcp:${port}`, '-sTCP:LISTEN'], {
     encoding: 'utf8',
   })
   return [...new Set(r.stdout.split(/\s+/).filter(Boolean))]
 }
 
-async function stopServer() {
-  const state = await ping()
-  if (state === 'down') {
-    console.log('dumbgit: not running')
-    return
-  }
-  if (state === 'occupied') {
-    console.error(`dumbgit: port ${PORT} is in use, but it is not dumbgit`)
-    process.exit(1)
-  }
-
-  const pids = listeningPids()
-  if (pids.length === 0) {
-    console.error(`dumbgit: no listener found on port ${PORT}`)
-    process.exit(1)
-  }
-
-  for (const pid of pids) {
-    try {
-      process.kill(Number(pid), 'SIGTERM')
-    } catch {}
-  }
-  for (let i = 0; i < 20; i++) {
-    if ((await ping()) === 'down') {
-      console.log('dumbgit: stopped')
-      return
-    }
-    await sleep(100)
-  }
-
-  for (const pid of pids) {
-    try {
-      process.kill(Number(pid), 'SIGKILL')
-    } catch {}
-  }
-  console.log('dumbgit: stopped')
+function startServer(repo, port) {
+  mkdirSync(path.dirname(logPath), { recursive: true })
+  const log = openSync(logPath, 'a')
+  const child = spawn(
+    process.execPath,
+    ['run', 'src/index.tsx', '--port', String(port), repo],
+    {
+      cwd: appRoot,
+      detached: true,
+      stdio: ['ignore', log, log],
+      env: { ...process.env, DUMBGIT_AUTO_EXIT: '1' },
+    },
+  )
+  child.unref()
+  closeSync(log)
 }
 
-async function waitForServer() {
-  for (let i = 0; i < 50; i++) {
-    const state = await ping()
-    if (state === 'up') return
-    if (state === 'occupied') {
-      console.error(`dumbgit: port ${PORT} is in use by another service`)
-      process.exit(1)
-    }
+async function waitForHealthy(port, msTotal = 10000) {
+  const deadline = Date.now() + msTotal
+  while (Date.now() < deadline) {
+    const st = await pingDumbgit(port)
+    if (st === 'dumbgit') return true
+    if (st === 'other') return false
     await sleep(100)
   }
+  return false
+}
+
+async function stopAll() {
+  const seen = new Set()
+  let stopped = false
+  for (let p = PORT_LO; p <= PORT_HI; p++) {
+    const st = await pingDumbgit(p)
+    if (st !== 'dumbgit') continue
+    const pids = listeningPidsOnPort(p)
+    for (const pid of pids) {
+      if (seen.has(pid)) continue
+      seen.add(pid)
+      stopped = true
+      try {
+        process.kill(Number(pid), 'SIGTERM')
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+
+  await sleep(200)
+
+  /** Second pass — anything still dumbgit becomes SIGKILL. */
+  seen.clear()
+  for (let p = PORT_LO; p <= PORT_HI; p++) {
+    const st = await pingDumbgit(p)
+    if (st !== 'dumbgit') continue
+    const pids = listeningPidsOnPort(p)
+    for (const pid of pids) {
+      if (seen.has(pid)) continue
+      seen.add(pid)
+      try {
+        process.kill(Number(pid), 'SIGKILL')
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+
+  if (stopped) {
+    console.log('dumbgit: stopped all listeners')
+    return
+  }
+
+  console.log('dumbgit: no dumbgit listeners running')
+}
+
+function openBrowserAt(port) {
+  const url = `http://${LISTEN_HOST}:${port}`
+  const r = spawnSync('open', [url], {
+    stdio: 'ignore',
+  })
+  if (r.status !== 0) console.log(`dumbgit: open ${url}`)
+}
+
+const argv = process.argv.slice(2)
+const flags = new Set()
+const posArgs = []
+for (const a of argv) {
+  if (a === '--') continue
+  if (a.startsWith('-')) flags.add(a)
+  else posArgs.push(a)
+}
+
+if (flags.has('-h') || flags.has('--help')) usage()
+if (flags.has('--stop-all') || flags.has('--stop')) {
+  if (posArgs.length !== 0) usage()
+  await stopAll()
+  process.exit(0)
+}
+if (posArgs.length > 1) usage()
+
+const repo = repoRoot(posArgs[0] ?? process.cwd())
+
+const port = await allocatePort()
+if (port === undefined) {
+  console.error(`dumbgit: no free TCP port ${PORT_LO}-${PORT_HI}`)
+  process.exit(1)
+}
+
+startServer(repo, port)
+const ok = await waitForHealthy(port)
+if (!ok) {
   console.error(`dumbgit: server did not start; see ${logPath}`)
   process.exit(1)
 }
 
-async function switchRepo(repo) {
-  const url = `${BASE_URL}/api/repo?path=${encodeURIComponent(repo)}`
-  const r = await fetch(url, { method: 'POST' })
-  if (!r.ok) {
-    console.error(`dumbgit: failed to open repo: ${repo}`)
-    process.exit(1)
-  }
-}
-
-function openBrowser() {
-  const r = spawnSync('open', [BASE_URL], {
-    stdio: 'ignore',
-  })
-  if (r.status !== 0) console.log(`dumbgit: open ${BASE_URL}`)
-}
-
-const args = process.argv.slice(2)
-if (args.includes('-h') || args.includes('--help')) usage()
-if (args.includes('--stop')) {
-  if (args.length !== 1) usage()
-  await stopServer()
-  process.exit(0)
-}
-if (args.length > 1) usage()
-
-const repo = repoRoot(args[0] ?? process.cwd())
-const state = await ping()
-
-if (state === 'occupied') {
-  console.error(`dumbgit: port ${PORT} is in use by another service`)
-  process.exit(1)
-}
-
-if (state === 'down') {
-  startServer(repo)
-  await waitForServer()
-}
-
-await switchRepo(repo)
-openBrowser()
+openBrowserAt(port)
+const url = `http://${LISTEN_HOST}:${port}`
 console.log(`dumbgit: ${repo}`)
+console.log(url)
