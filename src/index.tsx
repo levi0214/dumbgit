@@ -330,7 +330,7 @@ app.post('/api/worktree/stash-toggle', async (c) => {
   }
   return c.html(
     <Fragment>
-      <GraphFragment {...next} swapOob />
+      <GraphFragment {...next} />
       <DiffPanel state="empty" swapOob />
       <StatusOob
         error={r.ok ? undefined : r.stderr}
@@ -346,7 +346,7 @@ app.post('/api/worktree/stash-restore', async (c) => {
   const next = await loadGraph()
   return c.html(
     <Fragment>
-      <GraphFragment {...next} swapOob />
+      <GraphFragment {...next} />
       <DiffPanel state="empty" swapOob />
       <StatusOob
         error={r.ok ? undefined : r.stderr}
@@ -362,7 +362,7 @@ app.post('/api/worktree/stash-drop', async (c) => {
   const next = await loadGraph()
   return c.html(
     <Fragment>
-      <GraphFragment {...next} swapOob />
+      <GraphFragment {...next} />
       <DiffPanel state="empty" swapOob />
       <StatusOob
         error={r.ok ? undefined : r.stderr}
