@@ -257,7 +257,7 @@ export function graphLaneConnections(rows: GraphRow[]): GraphLaneConnections[] {
  * We never flow upward, so an unmerged side branch that shares an old base
  * stays dim while the current main lane beside it remains bright.
  */
-export function graphLaneHighlights(rows: GraphRow[]): Array<Set<number> | null> {
+export function graphBrightCols(rows: GraphRow[]): Array<Set<number> | null> {
   const texts = rows.map(graphText)
   const out = rows.map(() => new Set<number>())
 
@@ -318,21 +318,21 @@ function graphCurvePath(x1: number, y1: number, x2: number, y2: number): string 
  */
 function GraphLaneSpans(props: {
   ansi: string
-  highlightLanes: Set<number> | null
+  brightCols: Set<number> | null
   connections?: GraphLaneConnections
   isHead?: boolean
   isDetached?: boolean
   compact?: boolean
 }) {
   const text = stripAnsi(props.ansi)
-  const lanes = props.highlightLanes
+  const brightCols = props.brightCols
   const height = props.compact ? GRAPH_CONNECTOR_HEIGHT : GRAPH_ROW_HEIGHT
   const width = Math.max(GRAPH_COL_WIDTH, text.length * GRAPH_COL_WIDTH)
   const mid = height / 2
   const out = []
   for (let i = 0; i < text.length; i++) {
     const ch = text[i]
-    const onSpine = lanes !== null && lanes.has(i)
+    const onSpine = brightCols !== null && brightCols.has(i)
     const color = graphLaneColor(onSpine)
     const opacity = onSpine ? 1 : 0.34
     const x = graphColX(i)
@@ -597,7 +597,7 @@ function GraphCommitLine(props: {
   row: GraphCommitRow
   detached: boolean
   currentBranch: string | null
-  highlightLanes: Set<number> | null
+  brightCols: Set<number> | null
   connections: GraphLaneConnections
 }) {
   const { graphAnsi, shaFull, shaShort, decorateRaw, subject, date, inHistory } =
@@ -621,7 +621,7 @@ function GraphCommitLine(props: {
       <span class="graph-prefix">
         <GraphLaneSpans
           ansi={graphAnsi}
-          highlightLanes={props.highlightLanes}
+          brightCols={props.brightCols}
           connections={props.connections}
           isHead={isHead}
           isDetached={isHead && props.detached}
@@ -728,7 +728,7 @@ function GraphCommitLine(props: {
 function GraphOtherLine(props: {
   ansi: string
   betweenInHistory: boolean
-  highlightLanes: Set<number> | null
+  brightCols: Set<number> | null
 }) {
   const cls = `log-row log-row-other ${props.betweenInHistory ? '' : 'log-row-dim'}`
   return (
@@ -736,7 +736,7 @@ function GraphOtherLine(props: {
       <span class="graph-prefix-wide">
         <GraphLaneSpans
           ansi={props.ansi}
-          highlightLanes={props.highlightLanes}
+          brightCols={props.brightCols}
           compact
         />
       </span>
@@ -783,7 +783,7 @@ export function GraphRows(props: {
   rows: GraphRow[]
   detached: boolean
   currentBranch: string | null
-  laneHighlights: Array<Set<number> | null>
+  brightColsByRow: Array<Set<number> | null>
   laneConnections: GraphLaneConnections[]
 }) {
   return (
@@ -795,7 +795,7 @@ export function GraphRows(props: {
             row={r.row}
             detached={props.detached}
             currentBranch={props.currentBranch}
-            highlightLanes={props.laneHighlights[i] ?? null}
+            brightCols={props.brightColsByRow[i] ?? null}
             connections={props.laneConnections[i] ?? EMPTY_LANE_CONNECTIONS}
           />
         ) : (
@@ -803,7 +803,7 @@ export function GraphRows(props: {
             key={i}
             ansi={r.ansi}
             betweenInHistory={r.betweenInHistory}
-            highlightLanes={props.laneHighlights[i] ?? null}
+            brightCols={props.brightColsByRow[i] ?? null}
           />
         ),
       )}
@@ -836,7 +836,7 @@ export function GraphTailFragment(props: {
   rows: GraphRow[]
   detached: boolean
   currentBranch: string | null
-  laneHighlights: Array<Set<number> | null>
+  brightColsByRow: Array<Set<number> | null>
   laneConnections: GraphLaneConnections[]
   offset: number
   nextLimit: number
@@ -848,7 +848,7 @@ export function GraphTailFragment(props: {
         rows={props.rows}
         detached={props.detached}
         currentBranch={props.currentBranch}
-        laneHighlights={props.laneHighlights}
+        brightColsByRow={props.brightColsByRow}
         laneConnections={props.laneConnections}
       />
       <GraphLoadMore
@@ -874,7 +874,7 @@ export function GraphFragment(props: GraphFragmentProps) {
   const { head, rows, worktree } = props
   const detached = head.kind === 'detached'
   const currentBranch = head.kind === 'branch' ? head.name : null
-  const laneHighlights = graphLaneHighlights(rows)
+  const brightColsByRow = graphBrightCols(rows)
   const laneConnections = graphLaneConnections(rows)
 
   return (
@@ -914,7 +914,7 @@ export function GraphFragment(props: GraphFragmentProps) {
               rows={rows}
               detached={detached}
               currentBranch={currentBranch}
-              laneHighlights={laneHighlights}
+              brightColsByRow={brightColsByRow}
               laneConnections={laneConnections}
               offset={rows.length}
               nextLimit={props.graphNextLimit}

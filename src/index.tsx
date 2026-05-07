@@ -27,8 +27,8 @@ import { bumpRecent, loadRecents } from './recents'
 import {
   GraphFragment,
   GraphTailFragment,
+  graphBrightCols,
   graphLaneConnections,
-  graphLaneHighlights,
 } from './views/graph'
 import type { GraphFragmentProps } from './views/graph'
 import { DiffPanel, DiffPatchBody, WorkTreeDiffPanel } from './views/diff'
@@ -215,7 +215,7 @@ app.get('/fragment/graph/tail', async (c) => {
         rows={rows.slice(rowOffset)}
         detached={head.kind === 'detached'}
         currentBranch={head.kind === 'branch' ? head.name : null}
-        laneHighlights={graphLaneHighlights(rows).slice(rowOffset)}
+        brightColsByRow={graphBrightCols(rows).slice(rowOffset)}
         laneConnections={graphLaneConnections(rows).slice(rowOffset)}
         offset={rows.length}
         nextLimit={graphNextLimit}
