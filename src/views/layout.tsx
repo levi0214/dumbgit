@@ -493,6 +493,10 @@ body {
   line-height: 0;
   pointer-events: none;
   position: relative;
+  z-index: 0;
+}
+.log-row-commit {
+  position: relative;
   z-index: 1;
 }
 .graph-prefix {

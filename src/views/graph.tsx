@@ -329,6 +329,8 @@ function GraphLaneSpans(props: {
   const height = props.compact ? GRAPH_CONNECTOR_HEIGHT : GRAPH_ROW_HEIGHT
   const width = Math.max(GRAPH_COL_WIDTH, text.length * GRAPH_COL_WIDTH)
   const mid = height / 2
+  const edgeTop = props.compact ? mid : -GRAPH_LINE_OVERLAP
+  const edgeBottom = props.compact ? height : height + GRAPH_LINE_OVERLAP
   const lanesBack = []
   const markersFront = []
   for (let i = 0; i < text.length; i++) {
@@ -343,9 +345,9 @@ function GraphLaneSpans(props: {
         <line
           key={i}
           x1={x}
-          y1={-GRAPH_LINE_OVERLAP}
+          y1={edgeTop}
           x2={x}
-          y2={height + GRAPH_LINE_OVERLAP}
+          y2={edgeBottom}
           stroke={color}
           stroke-width="1.8"
           stroke-linecap="round"
@@ -356,9 +358,9 @@ function GraphLaneSpans(props: {
     }
     if (ch === '/') {
       const x1 = graphColX(i - 1)
-      const y1 = height + GRAPH_LINE_OVERLAP
+      const y1 = edgeBottom
       const x2 = graphColX(i + 1)
-      const y2 = -GRAPH_LINE_OVERLAP
+      const y2 = edgeTop
       lanesBack.push(
         <path
           key={i}
@@ -375,9 +377,9 @@ function GraphLaneSpans(props: {
     }
     if (ch === '\\') {
       const x1 = graphColX(i - 1)
-      const y1 = -GRAPH_LINE_OVERLAP
+      const y1 = edgeTop
       const x2 = graphColX(i + 1)
-      const y2 = height + GRAPH_LINE_OVERLAP
+      const y2 = edgeBottom
       lanesBack.push(
         <path
           key={i}
