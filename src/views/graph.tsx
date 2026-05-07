@@ -823,7 +823,7 @@ function GraphStashLine(props: {
           <button
             type="button"
             class="row-action-btn"
-            title={`git stash apply --index -u ${props.stash.ref}; git stash drop ${props.stash.ref}`}
+            title={`git stash apply --index ${props.stash.ref}; git stash drop ${props.stash.ref}`}
             hx-post={`/api/worktree/stash-restore?ref=${ref}`}
             hx-target="#graph"
             hx-swap="outerHTML"

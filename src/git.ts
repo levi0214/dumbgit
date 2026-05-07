@@ -484,7 +484,7 @@ export async function previewStashUiState(): Promise<PreviewStashUi> {
 async function applyAndDropPreviewStash(
   stash: PreviewStashEntry,
 ): Promise<{ ok: true; message: string } | { ok: false; stderr: string }> {
-  const applied = await spawnGit(['stash', 'apply', '--index', '-u', stash.ref])
+  const applied = await spawnGit(['stash', 'apply', '--index', stash.ref])
   if (applied.code !== 0) {
     return {
       ok: false,
