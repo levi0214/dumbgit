@@ -1,43 +1,22 @@
 /** @jsxImportSource hono/jsx */
 
 /**
- * Out-of-band fragment so endpoints can update #status alongside another swap.
+ * Out-of-band fragment for the top status slot.
  *
- * Feedback model:
- *   - info: ephemeral. The real UI already changed elsewhere; this is just a
- *     receipt. Auto-dismisses after a short delay (driven by the client via
- *     `data-auto-dismiss`).
- *   - error: sticky. The user may need to read or copy the message. A close
- *     button (and Esc) dismisses it.
- *   - empty: no inner; the slot collapses to zero height (CSS).
+ * Feedback model: the screen is the receipt. When an action mutates state, the
+ * affected UI region (graph row, worktree panel, diff panel) updates and that
+ * IS the success signal — no narration needed. Only failures get a bar, and
+ * they stick until the user dismisses them with × or Esc.
+ *
+ *   - error: sticky bar, manually dismissed.
+ *   - empty: slot collapses (CSS `:empty { margin: 0 }`).
  */
-export function StatusOob(props: { error?: string; info?: string }) {
+export function StatusOob(props: { error?: string }) {
   if (props.error) {
     return (
       <div id="status" class="status-slot" hx-swap-oob="true">
         <div class="status-inner status-error" role="alert">
           <pre class="status-text">{props.error}</pre>
-          <button
-            type="button"
-            class="status-close"
-            aria-label="dismiss"
-            title="dismiss (Esc)"
-          >
-            ×
-          </button>
-        </div>
-      </div>
-    )
-  }
-  if (props.info) {
-    return (
-      <div id="status" class="status-slot" hx-swap-oob="true">
-        <div
-          class="status-inner status-info"
-          role="status"
-          data-auto-dismiss="3500"
-        >
-          <pre class="status-text">{props.info}</pre>
           <button
             type="button"
             class="status-close"

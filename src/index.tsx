@@ -332,10 +332,7 @@ app.post('/api/worktree/stash-toggle', async (c) => {
     <Fragment>
       <GraphFragment {...next} />
       <DiffPanel state="empty" swapOob />
-      <StatusOob
-        error={r.ok ? undefined : r.stderr}
-        info={r.ok ? r.message : undefined}
-      />
+      <StatusOob error={r.ok ? undefined : r.stderr} />
     </Fragment>,
     200,
   )
@@ -348,10 +345,7 @@ app.post('/api/worktree/stash-restore', async (c) => {
     <Fragment>
       <GraphFragment {...next} />
       <DiffPanel state="empty" swapOob />
-      <StatusOob
-        error={r.ok ? undefined : r.stderr}
-        info={r.ok ? r.message : undefined}
-      />
+      <StatusOob error={r.ok ? undefined : r.stderr} />
     </Fragment>,
     200,
   )
@@ -364,10 +358,7 @@ app.post('/api/worktree/stash-drop', async (c) => {
     <Fragment>
       <GraphFragment {...next} />
       <DiffPanel state="empty" swapOob />
-      <StatusOob
-        error={r.ok ? undefined : r.stderr}
-        info={r.ok ? r.message : undefined}
-      />
+      <StatusOob error={r.ok ? undefined : r.stderr} />
     </Fragment>,
     200,
   )
@@ -578,7 +569,7 @@ app.post('/api/branch/create', async (c) => {
 app.post('/api/push', async (c) => {
   const r = await push()
   if (r.ok) {
-    return c.html(<StatusOob info={r.message} />, 200)
+    return c.html(<StatusOob />, 200)
   }
   return c.html(<StatusOob error={r.stderr} />, 200)
 })

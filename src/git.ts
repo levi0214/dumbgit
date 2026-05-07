@@ -401,12 +401,11 @@ export async function commitFilePatch(
 }
 
 export async function push(): Promise<
-  { ok: true; message: string } | { ok: false; stderr: string }
+  { ok: true } | { ok: false; stderr: string }
 > {
   const { code, stdout, stderr } = await spawnGit(['push'])
-  const out = stderr.trim() || stdout.trim() || '(no output)'
-  if (code === 0) return { ok: true, message: out }
-  return { ok: false, stderr: out }
+  if (code === 0) return { ok: true }
+  return { ok: false, stderr: stderr.trim() || stdout.trim() || `git push failed (${code})` }
 }
 
 export async function ensureGitRepo(): Promise<void> {
@@ -483,7 +482,7 @@ export async function previewStashUiState(): Promise<PreviewStashUi> {
 
 async function applyAndDropPreviewStash(
   stash: PreviewStashEntry,
-): Promise<{ ok: true; message: string } | { ok: false; stderr: string }> {
+): Promise<{ ok: true } | { ok: false; stderr: string }> {
   const applied = await spawnGit(['stash', 'apply', '--index', stash.ref])
   if (applied.code !== 0) {
     return {
@@ -503,14 +502,14 @@ async function applyAndDropPreviewStash(
         `restored stash but failed to drop ${stash.ref}: ${dropped.code}`,
     }
   }
-  return { ok: true, message: 'restored hidden edits' }
+  return { ok: true }
 }
 
 /**
  * Toggle: stash WIP (+ untracked) behind app marker, or apply+drop latest matching stash when clean.
  */
 export async function togglePreviewStash(): Promise<
-  { ok: true; message: string } | { ok: false; stderr: string }
+  { ok: true } | { ok: false; stderr: string }
 > {
   const wt = await workTreeSummary()
   const dirty =
@@ -526,14 +525,13 @@ export async function togglePreviewStash(): Promise<
       '-m',
       DUMBGIT_PREVIEW_STASH_MSG,
     ])
-    const err = r.stderr.trim() || r.stdout.trim()
     if (r.code !== 0) {
       return {
         ok: false,
-        stderr: err || `git stash push failed (${r.code})`,
+        stderr: r.stderr.trim() || r.stdout.trim() || `git stash push failed (${r.code})`,
       }
     }
-    return { ok: true, message: err || 'stashed local changes for preview' }
+    return { ok: true }
   }
 
   const stash = await findDumbgitPreviewStash()
@@ -543,7 +541,7 @@ export async function togglePreviewStash(): Promise<
 }
 
 export async function restorePreviewStash(ref?: string): Promise<
-  { ok: true; message: string } | { ok: false; stderr: string }
+  { ok: true } | { ok: false; stderr: string }
 > {
   const stash = await findDumbgitPreviewStash(ref)
   if (!stash) return { ok: false, stderr: 'no dumbgit preview stash to restore' }
@@ -551,7 +549,7 @@ export async function restorePreviewStash(ref?: string): Promise<
 }
 
 export async function dropPreviewStash(ref?: string): Promise<
-  { ok: true; message: string } | { ok: false; stderr: string }
+  { ok: true } | { ok: false; stderr: string }
 > {
   const stash = await findDumbgitPreviewStash(ref)
   if (!stash) return { ok: false, stderr: 'no dumbgit preview stash to drop' }
@@ -562,7 +560,7 @@ export async function dropPreviewStash(ref?: string): Promise<
       stderr: r.stderr.trim() || `git stash drop failed (${r.code})`,
     }
   }
-  return { ok: true, message: 'dropped hidden edits' }
+  return { ok: true }
 }
 
 export async function stashSummary(
@@ -754,7 +752,7 @@ export async function applyWorkTreeAction(
   kind: WorkTreeChangeKind,
   op: WorkTreeActionOp,
   displayPath: string,
-): Promise<{ ok: true; message: string } | { ok: false; stderr: string }> {
+): Promise<{ ok: true } | { ok: false; stderr: string }> {
   const wt = await workTreeSummary()
   const bucket =
     kind === 'staged' ? wt.staged : kind === 'unstaged' ? wt.unstaged : wt.untracked
@@ -797,13 +795,5 @@ export async function applyWorkTreeAction(
       stderr: r.stderr.trim() || `git ${args[0]} failed (${r.code})`,
     }
   }
-  return {
-    ok: true,
-    message:
-      op === 'stage'
-        ? `staged ${displayPath}`
-        : op === 'unstage'
-          ? `unstaged ${displayPath}`
-          : `discarded ${displayPath}`,
-  }
+  return { ok: true }
 }

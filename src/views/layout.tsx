@@ -800,10 +800,6 @@ body {
   border-radius: 4px;
   font-family: inherit;
   font-size: 12px;
-  transition: opacity 220ms ease;
-}
-.status-inner.status-fading {
-  opacity: 0;
 }
 .status-text {
   margin: 0;
@@ -836,11 +832,6 @@ body {
   border: 1px solid var(--error);
   background: #3c2020;
   color: var(--error);
-}
-.status-info {
-  border: 1px solid var(--success);
-  background: #1f2d1f;
-  color: var(--success);
 }
 .diff-panel {
   border: 1px solid var(--border);
@@ -1266,53 +1257,12 @@ document.addEventListener('click', function (e) {
   rd.removeAttribute('open');
 }, true);
 
-var statusDismissTimer = 0;
-var statusArmedFor = null;
-
 function dismissStatus() {
   var s = document.getElementById('status');
   if (!s || !s.firstElementChild) return false;
-  if (statusDismissTimer) { clearTimeout(statusDismissTimer); statusDismissTimer = 0; }
-  statusArmedFor = null;
   s.innerHTML = '';
   return true;
 }
-
-function armStatusDismissTimer() {
-  var s = document.getElementById('status');
-  var inner = s && s.querySelector('[data-auto-dismiss]');
-  if (!inner) {
-    if (statusDismissTimer) { clearTimeout(statusDismissTimer); statusDismissTimer = 0; }
-    statusArmedFor = null;
-    return;
-  }
-  if (inner === statusArmedFor) return;
-  if (statusDismissTimer) { clearTimeout(statusDismissTimer); statusDismissTimer = 0; }
-  statusArmedFor = inner;
-  var ms = parseInt(inner.getAttribute('data-auto-dismiss') || '0', 10);
-  if (!ms || ms < 0) return;
-  statusDismissTimer = setTimeout(function () {
-    statusDismissTimer = 0;
-    var s2 = document.getElementById('status');
-    var inner2 = s2 && s2.querySelector('[data-auto-dismiss]');
-    if (!s2 || !inner2) { statusArmedFor = null; return; }
-    inner2.classList.add('status-fading');
-    setTimeout(function () {
-      var s3 = document.getElementById('status');
-      var inner3 = s3 && s3.querySelector('.status-fading');
-      if (s3 && inner3) s3.innerHTML = '';
-      statusArmedFor = null;
-    }, 240);
-  }, ms);
-}
-
-(function () {
-  var page = document.querySelector('.page');
-  var s = document.getElementById('status');
-  if (!page || !s) return;
-  new MutationObserver(armStatusDismissTimer).observe(page, { childList: true });
-  armStatusDismissTimer();
-})();
 
 document.addEventListener('click', function (e) {
   var btn = e.target && e.target.closest && e.target.closest('.status-close');
