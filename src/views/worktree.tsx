@@ -6,9 +6,9 @@ import {
   type WorkTreeSummary,
 } from '../git'
 
-const STASH_CMD = `git stash push -m ${DUMBGIT_PREVIEW_STASH_MSG}`
+const STASH_CMD = `git stash push -u -m ${DUMBGIT_PREVIEW_STASH_MSG}`
 const UNSH_CMD =
-  'git stash apply --index <dumbgit-preview-ref>; git stash drop <same-ref>'
+  'git stash apply --index -u <dumbgit-preview-ref>; git stash drop <same-ref>'
 
 const MARK_LABELS: Record<string, string> = {
   M: 'modified',
@@ -63,22 +63,22 @@ export function WorkTreeFragment(
   const total = staged.length + unstaged.length + untracked.length
 
   const showStashToggle =
-    previewStash.hasTrackedChanges || previewStash.previewStashPresent
+    previewStash.hasLocalChanges || previewStash.previewStashPresent
   const stashBtn = showStashToggle ? (
     <button
       type="button"
       class="wt-stash-btn"
-      title={previewStash.hasTrackedChanges ? STASH_CMD : UNSH_CMD}
+      title={previewStash.hasLocalChanges ? STASH_CMD : UNSH_CMD}
       aria-label={
-        previewStash.hasTrackedChanges
-          ? `Hide local edits (${STASH_CMD}; tracked files only)`
+        previewStash.hasLocalChanges
+          ? `Hide local edits (${STASH_CMD}; untracked files that are not gitignored)`
           : `Restore hidden edits (${UNSH_CMD})`
       }
       hx-post="/api/worktree/stash-toggle"
       hx-target="#graph"
       hx-swap="outerHTML"
     >
-      {previewStash.hasTrackedChanges
+      {previewStash.hasLocalChanges
         ? 'Hide local edits'
         : 'Restore hidden edits'}
     </button>

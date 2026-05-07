@@ -440,7 +440,8 @@ export type WorkTreeSummary = {
 export const DUMBGIT_PREVIEW_STASH_MSG = 'dumbgit-preview-stash'
 
 export type PreviewStashUi = {
-  hasTrackedChanges: boolean
+  /** Staged, unstaged, or untracked paths (anything `git stash push -u` would pick up). */
+  hasLocalChanges: boolean
   previewStashPresent: boolean
 }
 
@@ -458,28 +459,41 @@ async function findDumbgitPreviewStashRef(): Promise<string | null> {
   return null
 }
 
-/** Tracks whether there is anything to stash (tracked only) vs a dumbgit-owned stash to restore. */
+/** Whether there is local work worth stashing, or an app-owned stash to restore. */
 export async function previewStashUiState(): Promise<PreviewStashUi> {
   const wt = await workTreeSummary()
   const ref = await findDumbgitPreviewStashRef()
+  const hasLocalChanges =
+    wt.staged.length > 0 ||
+    wt.unstaged.length > 0 ||
+    wt.untracked.length > 0
   return {
-    hasTrackedChanges: wt.staged.length > 0 || wt.unstaged.length > 0,
+    hasLocalChanges,
     previewStashPresent: ref !== null,
   }
 }
 
 /**
- * Toggle: stash tracked WIP behind app marker, or apply+drop latest matching stash when tree is tracked-clean.
+ * Toggle: stash WIP (+ untracked) behind app marker, or apply+drop latest matching stash when clean.
  */
 export async function togglePreviewStash(): Promise<
   { ok: true; message: string } | { ok: false; stderr: string }
 > {
   const wt = await workTreeSummary()
-  const tracked = wt.staged.length > 0 || wt.unstaged.length > 0
+  const dirty =
+    wt.staged.length > 0 ||
+    wt.unstaged.length > 0 ||
+    wt.untracked.length > 0
   const ref = await findDumbgitPreviewStashRef()
 
-  if (tracked) {
-    const r = await spawnGit(['stash', 'push', '-m', DUMBGIT_PREVIEW_STASH_MSG])
+  if (dirty) {
+    const r = await spawnGit([
+      'stash',
+      'push',
+      '-u',
+      '-m',
+      DUMBGIT_PREVIEW_STASH_MSG,
+    ])
     const err = r.stderr.trim() || r.stdout.trim()
     if (r.code !== 0) {
       return {
@@ -487,11 +501,11 @@ export async function togglePreviewStash(): Promise<
         stderr: err || `git stash push failed (${r.code})`,
       }
     }
-    return { ok: true, message: err || 'stashed tracked changes for preview' }
+    return { ok: true, message: err || 'stashed local changes for preview' }
   }
 
   if (ref) {
-    const applied = await spawnGit(['stash', 'apply', '--index', ref])
+    const applied = await spawnGit(['stash', 'apply', '--index', '-u', ref])
     if (applied.code !== 0) {
       return {
         ok: false,
