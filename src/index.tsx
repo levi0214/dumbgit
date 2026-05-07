@@ -12,6 +12,7 @@ import {
   commitFilePatch,
   commitSummary,
   createBranchAt,
+  dropPreviewStash,
   ensureGitRepo,
   getCurrentRepo,
   gitDir,
@@ -20,7 +21,10 @@ import {
   logGraphRows,
   previewStashUiState,
   push,
+  restorePreviewStash,
   setCurrentRepo,
+  stashFilePatch,
+  stashSummary,
   togglePreviewStash,
   workTreeFilePatch,
   workTreeSummary,
@@ -204,6 +208,7 @@ app.get('/fragment/graph/tail', async (c) => {
   try {
     const head = await headInfo()
     const rows = await logGraphRows(graphCommitLimit)
+    const previewStash = await previewStashUiState()
     const commitRows = rows.filter((r) => r.kind === 'commit').length
     const graphNextLimit = Math.min(
       graphCommitLimit + GRAPH_COMMIT_STEP,
@@ -219,6 +224,7 @@ app.get('/fragment/graph/tail', async (c) => {
         rows={rows.slice(rowOffset)}
         detached={head.kind === 'detached'}
         currentBranch={head.kind === 'branch' ? head.name : null}
+        stashes={previewStash.stashes}
         brightColsByRow={graphBrightCols(rows).slice(rowOffset)}
         laneConnections={graphLaneConnections(rows).slice(rowOffset)}
         offset={rows.length}
@@ -314,6 +320,38 @@ app.post('/api/worktree/stash-toggle', async (c) => {
       200,
     )
   }
+  return c.html(
+    <Fragment>
+      <GraphFragment {...next} swapOob />
+      <DiffPanel state="empty" swapOob />
+      <StatusOob
+        error={r.ok ? undefined : r.stderr}
+        info={r.ok ? r.message : undefined}
+      />
+    </Fragment>,
+    200,
+  )
+})
+
+app.post('/api/worktree/stash-restore', async (c) => {
+  const r = await restorePreviewStash(c.req.query('ref'))
+  const next = await loadGraph()
+  return c.html(
+    <Fragment>
+      <GraphFragment {...next} swapOob />
+      <DiffPanel state="empty" swapOob />
+      <StatusOob
+        error={r.ok ? undefined : r.stderr}
+        info={r.ok ? r.message : undefined}
+      />
+    </Fragment>,
+    200,
+  )
+})
+
+app.post('/api/worktree/stash-drop', async (c) => {
+  const r = await dropPreviewStash(c.req.query('ref'))
+  const next = await loadGraph()
   return c.html(
     <Fragment>
       <GraphFragment {...next} swapOob />
@@ -452,6 +490,50 @@ app.get('/api/commit/:sha/file', async (c) => {
       <pre class="diff-body diff-patch-empty">(no diff)</pre>,
       200,
     )
+  }
+  return c.html(<DiffPatchBody text={r.patch} compact />, 200)
+})
+
+app.get('/api/stash', async (c) => {
+  const ref = c.req.query('ref') ?? ''
+  if (!ref) {
+    return c.html(<DiffPanel state="error" sha="stash" stderr="missing stash ref" />, 200)
+  }
+  const r = await stashSummary(ref)
+  if (!r.ok) {
+    return c.html(<DiffPanel state="error" sha={ref} stderr={r.stderr} />, 200)
+  }
+  return c.html(
+    <DiffPanel
+      state="summary"
+      sha={ref}
+      summary={r.value}
+      fileUrlBase={`/api/stash/file?ref=${encodeURIComponent(ref)}`}
+    />,
+    200,
+  )
+})
+
+app.get('/api/stash/file', async (c) => {
+  c.header('Cache-Control', 'no-store')
+  const ref = c.req.query('ref') ?? ''
+  const filePath = c.req.query('path') ?? ''
+  if (!ref || !filePath) {
+    return c.html(
+      <pre class="diff-body diff-patch-error">missing stash ref or file path</pre>,
+      200,
+    )
+  }
+  const summary = await stashSummary(ref)
+  if (!summary.ok) {
+    return c.html(
+      <pre class="diff-body diff-patch-error">{summary.stderr}</pre>,
+      200,
+    )
+  }
+  const r = await stashFilePatch(ref, filePath, summary.value.files)
+  if (!r.ok) {
+    return c.html(<pre class="diff-body diff-patch-error">{r.stderr}</pre>, 200)
   }
   return c.html(<DiffPatchBody text={r.patch} compact />, 200)
 })

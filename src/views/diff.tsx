@@ -8,7 +8,12 @@ const TAG_ICO = raw(
 
 export type DiffPanelProps =
   | { state: 'empty'; swapOob?: boolean }
-  | { state: 'summary'; sha: string; summary: CommitSummary }
+  | {
+      state: 'summary'
+      sha: string
+      summary: CommitSummary
+      fileUrlBase?: string
+    }
   | { state: 'error'; sha: string; stderr: string }
 
 function diffLineClass(line: string): string {
@@ -222,7 +227,9 @@ export function DiffPanel(props: DiffPanelProps) {
         {summary.files.length > 0 ? (
           <ul class="diff-files">
             {summary.files.map((f) => {
-              const fileUrl = `/api/commit/${encodeURIComponent(sha)}/file?path=${encodeURIComponent(f.path)}`
+              const fileUrl = props.fileUrlBase
+                ? `${props.fileUrlBase}&path=${encodeURIComponent(f.path)}`
+                : `/api/commit/${encodeURIComponent(sha)}/file?path=${encodeURIComponent(f.path)}`
               return (
                 <li>
                   <button

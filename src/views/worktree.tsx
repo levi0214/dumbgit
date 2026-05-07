@@ -7,8 +7,6 @@ import {
 } from '../git'
 
 const STASH_CMD = `git stash push -u -m ${DUMBGIT_PREVIEW_STASH_MSG}`
-const UNSH_CMD =
-  'git stash apply --index -u <dumbgit-preview-ref>; git stash drop <same-ref>'
 
 const MARK_LABELS: Record<string, string> = {
   M: 'modified',
@@ -59,27 +57,22 @@ function WorkTreeNums(props: {
 export function WorkTreeFragment(
   props: WorkTreeSummary & { repoPath: string; previewStash: PreviewStashUi },
 ) {
-  const { staged, unstaged, untracked, repoPath, previewStash } = props
+  const { staged, unstaged, untracked, repoPath } = props
   const total = staged.length + unstaged.length + untracked.length
   const dirty =
     staged.length > 0 || unstaged.length > 0 || untracked.length > 0
 
-  const showStashToggle = dirty || previewStash.previewStashPresent
-  const stashBtn = showStashToggle ? (
+  const stashBtn = dirty ? (
     <button
       type="button"
       class="wt-stash-btn"
-      title={dirty ? STASH_CMD : UNSH_CMD}
-      aria-label={
-        dirty
-          ? `Hide local edits (${STASH_CMD}; untracked files that are not gitignored)`
-          : `Restore hidden edits (${UNSH_CMD})`
-      }
+      title={STASH_CMD}
+      aria-label={`Hide local edits (${STASH_CMD}; untracked files that are not gitignored)`}
       hx-post="/api/worktree/stash-toggle"
       hx-target="#graph"
       hx-swap="outerHTML"
     >
-      {dirty ? 'Hide local edits' : 'Restore hidden edits'}
+      Hide local edits
     </button>
   ) : null
 

@@ -439,31 +439,71 @@ export type WorkTreeSummary = {
 /** Message marker for `git stash push -m …` created by dumbgit preview toggle (not user stash). */
 export const DUMBGIT_PREVIEW_STASH_MSG = 'dumbgit-preview-stash'
 
-export type PreviewStashUi = {
-  /** There is a dumbgit-owned stash entry to restore via the button. */
-  previewStashPresent: boolean
+export type PreviewStashEntry = {
+  ref: string
+  baseSha: string
+  subject: string
+  age: string
 }
 
-async function findDumbgitPreviewStashRef(): Promise<string | null> {
-  const r = await spawnGit(['stash', 'list'])
-  if (r.code !== 0) return null
+export type PreviewStashUi = {
+  /** Dumbgit-owned stash entries; user stashes are intentionally ignored. */
+  stashes: PreviewStashEntry[]
+}
+
+async function dumbgitPreviewStashes(): Promise<PreviewStashEntry[]> {
+  const r = await spawnGit(['stash', 'list', '--format=%gd%x1f%gs%x1f%cr'])
+  if (r.code !== 0) return []
   const marker = DUMBGIT_PREVIEW_STASH_MSG
+  const out: PreviewStashEntry[] = []
   for (const line of r.stdout.split('\n')) {
     const t = line.trim()
     if (!t) continue
-    const m = t.match(/^(stash@\{[0-9]+\}):\s*(.*)$/)
-    if (!m) continue
-    if ((m[2] ?? '').includes(marker)) return m[1]!
+    const [ref = '', subject = '', age = ''] = t.split('\x1f')
+    if (!ref || !subject.includes(marker)) continue
+    const base = await spawnGit(['rev-parse', `${ref}^1`])
+    if (base.code !== 0) continue
+    out.push({ ref, baseSha: base.stdout.trim(), subject, age })
   }
-  return null
+  return out
+}
+
+async function findDumbgitPreviewStash(
+  ref?: string,
+): Promise<PreviewStashEntry | null> {
+  const stashes = await dumbgitPreviewStashes()
+  if (!ref) return stashes[0] ?? null
+  return stashes.find((s) => s.ref === ref) ?? null
 }
 
 /** Whether a dumbgit preview stash exists (`git stash list`). */
 export async function previewStashUiState(): Promise<PreviewStashUi> {
-  const ref = await findDumbgitPreviewStashRef()
-  return {
-    previewStashPresent: ref !== null,
+  return { stashes: await dumbgitPreviewStashes() }
+}
+
+async function applyAndDropPreviewStash(
+  stash: PreviewStashEntry,
+): Promise<{ ok: true; message: string } | { ok: false; stderr: string }> {
+  const applied = await spawnGit(['stash', 'apply', '--index', '-u', stash.ref])
+  if (applied.code !== 0) {
+    return {
+      ok: false,
+      stderr:
+        applied.stderr.trim() ||
+        applied.stdout.trim() ||
+        `git stash apply failed (${applied.code})`,
+    }
   }
+  const dropped = await spawnGit(['stash', 'drop', stash.ref])
+  if (dropped.code !== 0) {
+    return {
+      ok: false,
+      stderr:
+        dropped.stderr.trim() ||
+        `restored stash but failed to drop ${stash.ref}: ${dropped.code}`,
+    }
+  }
+  return { ok: true, message: 'restored hidden edits' }
 }
 
 /**
@@ -477,7 +517,6 @@ export async function togglePreviewStash(): Promise<
     wt.staged.length > 0 ||
     wt.unstaged.length > 0 ||
     wt.untracked.length > 0
-  const ref = await findDumbgitPreviewStashRef()
 
   if (dirty) {
     const r = await spawnGit([
@@ -497,30 +536,84 @@ export async function togglePreviewStash(): Promise<
     return { ok: true, message: err || 'stashed local changes for preview' }
   }
 
-  if (ref) {
-    const applied = await spawnGit(['stash', 'apply', '--index', '-u', ref])
-    if (applied.code !== 0) {
-      return {
-        ok: false,
-        stderr:
-          applied.stderr.trim() ||
-          applied.stdout.trim() ||
-          `git stash apply failed (${applied.code})`,
-      }
-    }
-    const dropped = await spawnGit(['stash', 'drop', ref])
-    if (dropped.code !== 0) {
-      return {
-        ok: false,
-        stderr:
-          dropped.stderr.trim() ||
-          `restored stash but failed to drop ${ref}: ${dropped.code}`,
-      }
-    }
-    return { ok: true, message: 'restored preview stash' }
-  }
+  const stash = await findDumbgitPreviewStash()
+  if (stash) return applyAndDropPreviewStash(stash)
 
   return { ok: false, stderr: 'nothing to stash or restore' }
+}
+
+export async function restorePreviewStash(ref?: string): Promise<
+  { ok: true; message: string } | { ok: false; stderr: string }
+> {
+  const stash = await findDumbgitPreviewStash(ref)
+  if (!stash) return { ok: false, stderr: 'no dumbgit preview stash to restore' }
+  return applyAndDropPreviewStash(stash)
+}
+
+export async function dropPreviewStash(ref?: string): Promise<
+  { ok: true; message: string } | { ok: false; stderr: string }
+> {
+  const stash = await findDumbgitPreviewStash(ref)
+  if (!stash) return { ok: false, stderr: 'no dumbgit preview stash to drop' }
+  const r = await spawnGit(['stash', 'drop', stash.ref])
+  if (r.code !== 0) {
+    return {
+      ok: false,
+      stderr: r.stderr.trim() || `git stash drop failed (${r.code})`,
+    }
+  }
+  return { ok: true, message: 'dropped hidden edits' }
+}
+
+export async function stashSummary(
+  ref: string,
+): Promise<{ ok: true; value: CommitSummary } | { ok: false; stderr: string }> {
+  const stash = await findDumbgitPreviewStash(ref)
+  if (!stash) return { ok: false, stderr: 'stash not found' }
+  const meta = await spawnGit(['log', '-1', '--format=%an%n%aI', stash.ref])
+  if (meta.code !== 0) {
+    return { ok: false, stderr: meta.stderr.trim() || `git log failed (${meta.code})` }
+  }
+  const [author = 'git stash', date = ''] = meta.stdout.trimEnd().split('\n')
+  const fileShow = await spawnGit([
+    'show',
+    '--name-status',
+    '--format=',
+    '--no-color',
+    stash.ref,
+  ])
+  if (fileShow.code !== 0) {
+    return {
+      ok: false,
+      stderr:
+        fileShow.stderr.trim() || `git show --name-status failed (${fileShow.code})`,
+    }
+  }
+  const numstat = await spawnGit(['show', '--numstat', '--format=', stash.ref])
+  let files = parseShowNameStatus(fileShow.stdout)
+  if (numstat.code === 0) {
+    files = mergeNumstat(files, parseNumstat(numstat.stdout))
+  }
+  return {
+    ok: true,
+    value: {
+      subject: stash.subject,
+      author,
+      date,
+      tags: [],
+      files,
+    },
+  }
+}
+
+export async function stashFilePatch(
+  ref: string,
+  displayPath: string,
+  files?: CommitFile[],
+): Promise<{ ok: true; patch: string } | { ok: false; stderr: string }> {
+  const stash = await findDumbgitPreviewStash(ref)
+  if (!stash) return { ok: false, stderr: 'stash not found' }
+  return commitFilePatch(stash.ref, displayPath, files)
 }
 
 function parseNameStatus(stdout: string): WorkTreeEntry[] {

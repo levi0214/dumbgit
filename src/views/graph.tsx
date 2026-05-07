@@ -5,6 +5,7 @@ import {
   type GraphCommitRow,
   type GraphRow,
   type HeadInfo,
+  type PreviewStashEntry,
   type PreviewStashUi,
   type WorkTreeSummary,
 } from '../git'
@@ -751,6 +752,101 @@ function GraphOtherLine(props: {
   )
 }
 
+function StashLaneSpans(props: { graphAnsi: string }) {
+  const text = stripAnsi(props.graphAnsi)
+  const width = Math.max(GRAPH_COL_WIDTH, text.length * GRAPH_COL_WIDTH)
+  const height = GRAPH_ROW_HEIGHT
+  const mid = height / 2
+  const col = Math.max(0, text.indexOf('*'))
+  const x = graphColX(col)
+  const r = 3.4
+  return (
+    <svg
+      class="graph-lanes-svg"
+      viewBox={`0 0 ${width} ${height}`}
+      style={`width:${width}px;height:${height}px`}
+      aria-hidden="true"
+      focusable="false"
+    >
+      <line
+        x1={x}
+        y1={-GRAPH_LINE_OVERLAP}
+        x2={x}
+        y2={height + GRAPH_LINE_OVERLAP}
+        stroke="var(--graph-rail-muted)"
+        stroke-width="1.8"
+        stroke-linecap="round"
+        opacity="0.55"
+      />
+      <rect
+        class="graph-stash-node"
+        x={x - r}
+        y={mid - r}
+        width={r * 2}
+        height={r * 2}
+        rx="1.2"
+        transform={`rotate(45 ${x} ${mid})`}
+      />
+    </svg>
+  )
+}
+
+function GraphStashLine(props: {
+  stash: PreviewStashEntry
+  baseRow: GraphCommitRow
+}) {
+  const ref = encodeURIComponent(props.stash.ref)
+  const summaryUrl = `/api/stash?ref=${ref}`
+  return (
+    <div class="log-row log-row-commit log-row-stash">
+      <span class="graph-prefix">
+        <StashLaneSpans graphAnsi={props.baseRow.graphAnsi} />
+      </span>
+      <span class="ref-pill ref-pill-stash" title={`stash: ${props.stash.ref}`}>
+        {props.stash.ref}
+      </span>
+      <button
+        type="button"
+        class="msg-btn stash-msg"
+        title={props.stash.subject}
+        hx-get={summaryUrl}
+        hx-target="#diff"
+        hx-swap="outerHTML"
+      >
+        {props.stash.subject}
+      </button>
+      <span class="row-end">
+        <span class="msg-age" title={props.stash.subject}>
+          {props.stash.age}
+        </span>
+        <span class="row-tail">
+          <button
+            type="button"
+            class="row-action-btn"
+            title={`git stash apply --index -u ${props.stash.ref}; git stash drop ${props.stash.ref}`}
+            hx-post={`/api/worktree/stash-restore?ref=${ref}`}
+            hx-target="#graph"
+            hx-swap="outerHTML"
+          >
+            restore
+          </button>
+          <button
+            type="button"
+            class="row-action-btn stash-drop-btn"
+            title={`git stash drop ${props.stash.ref}`}
+            data-confirm-label="drop"
+            hx-post={`/api/worktree/stash-drop?ref=${ref}`}
+            hx-target="#graph"
+            hx-swap="outerHTML"
+          >
+            drop
+          </button>
+        </span>
+      </span>
+    </div>
+  )
+}
+
 function HeadLine(props: { head: HeadInfo }) {
   const short = props.head.sha.slice(0, 7)
   let prefix = 'Detached at:'
@@ -790,30 +886,51 @@ export function GraphRows(props: {
   rows: GraphRow[]
   detached: boolean
   currentBranch: string | null
+  stashes: PreviewStashEntry[]
   brightColsByRow: Array<Set<number> | null>
   laneConnections: GraphLaneConnections[]
 }) {
+  const stashesByBase = new Map<string, PreviewStashEntry[]>()
+  for (const stash of props.stashes) {
+    const bucket = stashesByBase.get(stash.baseSha) ?? []
+    bucket.push(stash)
+    stashesByBase.set(stash.baseSha, bucket)
+  }
+
   return (
     <>
-      {props.rows.map((r, i) =>
-        r.kind === 'commit' ? (
-          <GraphCommitLine
-            key={i}
-            row={r.row}
-            detached={props.detached}
-            currentBranch={props.currentBranch}
-            brightCols={props.brightColsByRow[i] ?? null}
-            connections={props.laneConnections[i] ?? EMPTY_LANE_CONNECTIONS}
-          />
-        ) : (
-          <GraphOtherLine
-            key={i}
-            ansi={r.ansi}
-            betweenInHistory={r.betweenInHistory}
-            brightCols={props.brightColsByRow[i] ?? null}
-          />
-        ),
-      )}
+      {props.rows.map((r, i) => {
+        if (r.kind !== 'commit') {
+          return (
+            <GraphOtherLine
+              key={i}
+              ansi={r.ansi}
+              betweenInHistory={r.betweenInHistory}
+              brightCols={props.brightColsByRow[i] ?? null}
+            />
+          )
+        }
+        const stashes = stashesByBase.get(r.row.shaFull) ?? []
+        return (
+          <>
+            {stashes.map((stash) => (
+              <GraphStashLine
+                key={stash.ref}
+                stash={stash}
+                baseRow={r.row}
+              />
+            ))}
+            <GraphCommitLine
+              key={i}
+              row={r.row}
+              detached={props.detached}
+              currentBranch={props.currentBranch}
+              brightCols={props.brightColsByRow[i] ?? null}
+              connections={props.laneConnections[i] ?? EMPTY_LANE_CONNECTIONS}
+            />
+          </>
+        )
+      })}
     </>
   )
 }
@@ -843,6 +960,7 @@ export function GraphTailFragment(props: {
   rows: GraphRow[]
   detached: boolean
   currentBranch: string | null
+  stashes: PreviewStashEntry[]
   brightColsByRow: Array<Set<number> | null>
   laneConnections: GraphLaneConnections[]
   offset: number
@@ -855,6 +973,7 @@ export function GraphTailFragment(props: {
         rows={props.rows}
         detached={props.detached}
         currentBranch={props.currentBranch}
+        stashes={props.stashes}
         brightColsByRow={props.brightColsByRow}
         laneConnections={props.laneConnections}
       />
@@ -925,6 +1044,7 @@ export function GraphFragment(props: GraphFragmentProps) {
               rows={rows}
               detached={detached}
               currentBranch={currentBranch}
+              stashes={props.previewStash.stashes}
               brightColsByRow={brightColsByRow}
               laneConnections={laneConnections}
               offset={rows.length}

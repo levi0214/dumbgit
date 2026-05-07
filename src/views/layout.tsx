@@ -556,6 +556,12 @@ body {
 .graph-node {
   opacity: 1;
 }
+.graph-stash-node {
+  fill: #252526;
+  stroke: var(--graph-rail-muted);
+  stroke-width: 1.7;
+  opacity: 0.58;
+}
 .graph-lane-fallback {
   fill: var(--graph-rail-muted);
   font: 600 12px ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
@@ -609,6 +615,33 @@ body {
   opacity: 1;
   border-color: var(--accent);
   color: var(--accent);
+}
+.log-row-stash {
+  color: var(--muted);
+}
+.log-row-stash .ref-pill-stash {
+  color: var(--fg);
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.14);
+  opacity: 0.5;
+}
+.log-row-stash .stash-msg {
+  cursor: default;
+  color: var(--fg);
+  opacity: 0.38;
+}
+.log-row-stash .msg-age {
+  opacity: 0.5;
+}
+.log-row-stash:hover .ref-pill-stash,
+.log-row-stash:hover .stash-msg,
+.log-row-stash:hover .msg-age {
+  opacity: 0.85;
+}
+.log-row-stash .stash-drop-btn:hover,
+.log-row-stash .stash-drop-btn.confirm-armed {
+  color: var(--error);
+  background: rgba(244, 71, 71, 0.12);
 }
 .branch-prefix {
   display: inline-flex;
