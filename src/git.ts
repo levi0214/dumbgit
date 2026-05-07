@@ -116,6 +116,7 @@ export async function logGraphRows(limit = 50): Promise<GraphRow[]> {
     'log',
     '--graph',
     '--all',
+    '--exclude=refs/stash',
     '--pretty=format:\x1f%H\x1f%h\x1f%d\x1f%s\x1f%an\x1f%aI\x1f',
     '--decorate=short',
     '--color=always',
