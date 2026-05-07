@@ -27,6 +27,7 @@ import { bumpRecent, loadRecents } from './recents'
 import {
   GraphFragment,
   GraphTailFragment,
+  graphLaneConnections,
   graphLaneHighlights,
 } from './views/graph'
 import type { GraphFragmentProps } from './views/graph'
@@ -215,6 +216,7 @@ app.get('/fragment/graph/tail', async (c) => {
         detached={head.kind === 'detached'}
         currentBranch={head.kind === 'branch' ? head.name : null}
         laneHighlights={graphLaneHighlights(rows).slice(rowOffset)}
+        laneConnections={graphLaneConnections(rows).slice(rowOffset)}
         offset={rows.length}
         nextLimit={graphNextLimit}
         showLoadMore={showLoadMore}

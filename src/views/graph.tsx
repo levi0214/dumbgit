@@ -206,6 +206,52 @@ function addIfGraph(set: Set<number>, text: string, col: number): void {
   if (isGraphChar(graphChar(text, col))) set.add(col)
 }
 
+function isVerticalGraphChar(ch: string): boolean {
+  return ch === '|' || ch === '*'
+}
+
+type GraphLaneConnections = {
+  above: Set<number>
+  below: Set<number>
+}
+
+const EMPTY_LANE_CONNECTIONS: GraphLaneConnections = {
+  above: new Set(),
+  below: new Set(),
+}
+
+function graphConnectsDown(text: string, col: number): boolean {
+  return (
+    isVerticalGraphChar(graphChar(text, col)) ||
+    graphChar(text, col - 1) === '/' ||
+    graphChar(text, col + 1) === '\\'
+  )
+}
+
+function graphConnectsUp(text: string, col: number): boolean {
+  return (
+    isVerticalGraphChar(graphChar(text, col)) ||
+    graphChar(text, col - 1) === '\\' ||
+    graphChar(text, col + 1) === '/'
+  )
+}
+
+export function graphLaneConnections(rows: GraphRow[]): GraphLaneConnections[] {
+  const texts = rows.map(graphText)
+  return texts.map((text, i) => {
+    const above = new Set<number>()
+    const below = new Set<number>()
+    for (let col = 0; col < text.length; col++) {
+      if (graphChar(text, col) !== '*') continue
+      if (i > 0 && graphConnectsDown(texts[i - 1] ?? '', col)) above.add(col)
+      if (i < texts.length - 1 && graphConnectsUp(texts[i + 1] ?? '', col)) {
+        below.add(col)
+      }
+    }
+    return { above, below }
+  })
+}
+
 /**
  * Bright graph cells flow from reachable commits toward their parents.
  * We never flow upward, so an unmerged side branch that shares an old base
@@ -248,7 +294,7 @@ export function graphLaneHighlights(rows: GraphRow[]): Array<Set<number> | null>
 
 const GRAPH_COL_WIDTH = 7
 const GRAPH_ROW_HEIGHT = 16
-const GRAPH_CONNECTOR_HEIGHT = 10
+const GRAPH_CONNECTOR_HEIGHT = 2
 const GRAPH_NODE_RADIUS = 3.2
 const GRAPH_LINE_OVERLAP = 4
 
@@ -273,6 +319,7 @@ function graphCurvePath(x1: number, y1: number, x2: number, y2: number): string 
 function GraphLaneSpans(props: {
   ansi: string
   highlightLanes: Set<number> | null
+  connections?: GraphLaneConnections
   isHead?: boolean
   isDetached?: boolean
   compact?: boolean
@@ -361,6 +408,8 @@ function GraphLaneSpans(props: {
       continue
     }
     if (ch === '*') {
+      const connectsAbove = props.connections?.above.has(i) ?? false
+      const connectsBelow = props.connections?.below.has(i) ?? false
       if (props.isHead) {
         const hcls = `graph-node graph-node-head${props.isDetached ? ' graph-node-head-detached' : ''}`
         out.push(
@@ -369,16 +418,18 @@ function GraphLaneSpans(props: {
             class={hcls}
             title={props.isDetached ? 'detached HEAD' : 'HEAD'}
           >
-            <line
-              x1={x}
-              y1={mid + GRAPH_NODE_RADIUS}
-              x2={x}
-              y2={height + GRAPH_LINE_OVERLAP}
-              stroke="currentColor"
-              stroke-width="1.8"
-              stroke-linecap="round"
-              opacity="0.3"
-            />
+            {connectsBelow ? (
+              <line
+                x1={x}
+                y1={mid + GRAPH_NODE_RADIUS}
+                x2={x}
+                y2={height + GRAPH_LINE_OVERLAP}
+                stroke="currentColor"
+                stroke-width="1.8"
+                stroke-linecap="round"
+                opacity="0.3"
+              />
+            ) : null}
             <circle
               cx={x}
               cy={mid}
@@ -395,16 +446,30 @@ function GraphLaneSpans(props: {
       }
       out.push(
         <g key={i}>
-          <line
-            x1={x}
-            y1={-GRAPH_LINE_OVERLAP}
-            x2={x}
-            y2={height + GRAPH_LINE_OVERLAP}
-            stroke={color}
-            stroke-width="1.8"
-            stroke-linecap="round"
-            opacity={opacity}
-          />
+          {connectsAbove ? (
+            <line
+              x1={x}
+              y1={-GRAPH_LINE_OVERLAP}
+              x2={x}
+              y2={mid - GRAPH_NODE_RADIUS}
+              stroke={color}
+              stroke-width="1.8"
+              stroke-linecap="round"
+              opacity={opacity}
+            />
+          ) : null}
+          {connectsBelow ? (
+            <line
+              x1={x}
+              y1={mid + GRAPH_NODE_RADIUS}
+              x2={x}
+              y2={height + GRAPH_LINE_OVERLAP}
+              stroke={color}
+              stroke-width="1.8"
+              stroke-linecap="round"
+              opacity={opacity}
+            />
+          ) : null}
           <circle
             class="graph-node"
             cx={x}
@@ -533,6 +598,7 @@ function GraphCommitLine(props: {
   detached: boolean
   currentBranch: string | null
   highlightLanes: Set<number> | null
+  connections: GraphLaneConnections
 }) {
   const { graphAnsi, shaFull, shaShort, decorateRaw, subject, date, inHistory } =
     props.row
@@ -556,6 +622,7 @@ function GraphCommitLine(props: {
         <GraphLaneSpans
           ansi={graphAnsi}
           highlightLanes={props.highlightLanes}
+          connections={props.connections}
           isHead={isHead}
           isDetached={isHead && props.detached}
         />
@@ -717,6 +784,7 @@ export function GraphRows(props: {
   detached: boolean
   currentBranch: string | null
   laneHighlights: Array<Set<number> | null>
+  laneConnections: GraphLaneConnections[]
 }) {
   return (
     <>
@@ -728,6 +796,7 @@ export function GraphRows(props: {
             detached={props.detached}
             currentBranch={props.currentBranch}
             highlightLanes={props.laneHighlights[i] ?? null}
+            connections={props.laneConnections[i] ?? EMPTY_LANE_CONNECTIONS}
           />
         ) : (
           <GraphOtherLine
@@ -768,6 +837,7 @@ export function GraphTailFragment(props: {
   detached: boolean
   currentBranch: string | null
   laneHighlights: Array<Set<number> | null>
+  laneConnections: GraphLaneConnections[]
   offset: number
   nextLimit: number
   showLoadMore: boolean
@@ -779,6 +849,7 @@ export function GraphTailFragment(props: {
         detached={props.detached}
         currentBranch={props.currentBranch}
         laneHighlights={props.laneHighlights}
+        laneConnections={props.laneConnections}
       />
       <GraphLoadMore
         offset={props.offset}
@@ -804,6 +875,7 @@ export function GraphFragment(props: GraphFragmentProps) {
   const detached = head.kind === 'detached'
   const currentBranch = head.kind === 'branch' ? head.name : null
   const laneHighlights = graphLaneHighlights(rows)
+  const laneConnections = graphLaneConnections(rows)
 
   return (
     <div
@@ -843,6 +915,7 @@ export function GraphFragment(props: GraphFragmentProps) {
               detached={detached}
               currentBranch={currentBranch}
               laneHighlights={laneHighlights}
+              laneConnections={laneConnections}
               offset={rows.length}
               nextLimit={props.graphNextLimit}
               showLoadMore={props.showLoadMore}
