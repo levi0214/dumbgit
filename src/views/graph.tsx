@@ -580,16 +580,18 @@ function RefPills(props: {
             ) : null}
             <CopyBtn title="copy name" />
             {ref === props.currentBranch ? (
-              <button
-                type="button"
-                class="inline-action-btn ref-action-btn"
-                title="git push"
-                data-confirm-label="confirm push"
-                hx-post="/api/push"
-                hx-swap="none"
-              >
-                push
-              </button>
+              originPeer ? null : (
+                <button
+                  type="button"
+                  class="inline-action-btn ref-action-btn"
+                  title="git push"
+                  data-confirm-label="confirm push"
+                  hx-post="/api/push"
+                  hx-swap="none"
+                >
+                  push
+                </button>
+              )
             ) : (
               <button
                 type="button"
@@ -683,16 +685,18 @@ function GraphCommitLine(props: {
           ) : null}
           <CopyBtn title="copy name" />
           {branchPrefix === props.currentBranch ? (
-            <button
-              type="button"
-              class="inline-action-btn branch-prefix-action"
-              title="git push"
-              data-confirm-label="confirm push"
-              hx-post="/api/push"
-              hx-swap="none"
-            >
-              push
-            </button>
+            branchPrefixOrigin ? null : (
+              <button
+                type="button"
+                class="inline-action-btn branch-prefix-action"
+                title="git push"
+                data-confirm-label="confirm push"
+                hx-post="/api/push"
+                hx-swap="none"
+              >
+                push
+              </button>
+            )
           ) : (
             <button
               type="button"
