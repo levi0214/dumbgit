@@ -13,15 +13,14 @@ import {
   commitSummary,
   createBranchAt,
   dropPreviewStash,
-  ensureGitRepo,
   getCurrentRepo,
   gitDir,
   headInfo,
+  initRepo,
   logGraphRows,
   previewStashUiState,
   push,
   restorePreviewStash,
-  setRepoRoot,
   stashFilePatch,
   stashSummary,
   togglePreviewStash,
@@ -154,17 +153,15 @@ if (!G.__dumbgit) {
 const state = G.__dumbgit
 
 if (!state.repoInitialized) {
-  setRepoRoot(BOOT.repoAbs)
-  state.repoInitialized = true
-}
-
-try {
-  await ensureGitRepo()
-} catch (e) {
-  const msg = e instanceof Error ? e.message : String(e)
-  console.error(`dumbgit: ${msg}`)
-  console.error(`run dumbgit from inside a git working tree`)
-  process.exit(1)
+  try {
+    await initRepo(BOOT.repoAbs)
+    state.repoInitialized = true
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
+    console.error(`dumbgit: ${msg}`)
+    console.error(`run dumbgit from inside a git working tree`)
+    process.exit(1)
+  }
 }
 
 async function attachWatcher() {

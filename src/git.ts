@@ -15,12 +15,21 @@ export type HeadInfo =
   | { kind: 'branch'; name: string; sha: string }
   | { kind: 'detached'; sha: string; previousBranch?: string }
 
-/** Working tree all git commands run in (`dumbgit` sets this once per process). */
+/** Working tree all git commands run in. `initRepo` sets this once per process. */
 let repoRoot = process.cwd()
 const lastBranchByRepo = new Map<string, string>()
 
-export function setRepoRoot(dir: string): void {
+/**
+ * Bind dumbgit to a working tree at boot: validates `dir` is inside a
+ * git repo and stores it as the process-wide root. Throws GitError if
+ * the directory is not a git tree.
+ */
+export async function initRepo(dir: string): Promise<void> {
   repoRoot = dir
+  const { code, stderr } = await spawnGit(['rev-parse', '--git-dir'])
+  if (code !== 0) {
+    throw new GitError(stderr.trim() || 'not a git repository', code)
+  }
 }
 
 export function getCurrentRepo(): string {
@@ -406,13 +415,6 @@ export async function push(): Promise<
   const { code, stdout, stderr } = await spawnGit(['push'])
   if (code === 0) return { ok: true }
   return { ok: false, stderr: stderr.trim() || stdout.trim() || `git push failed (${code})` }
-}
-
-export async function ensureGitRepo(): Promise<void> {
-  const { code, stderr } = await spawnGit(['rev-parse', '--git-dir'])
-  if (code !== 0) {
-    throw new GitError(stderr.trim() || 'not a git repository', code)
-  }
 }
 
 /** Absolute path to the .git directory for the current cwd. */
