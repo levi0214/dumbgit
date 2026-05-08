@@ -21,6 +21,27 @@ body {
   background: var(--bg);
   color: var(--fg);
 }
+.sse-disconnect-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.55);
+  color: var(--fg);
+  font-size: 15px;
+  text-align: center;
+  padding: 24px;
+}
+.sse-disconnect-overlay.is-visible {
+  display: flex;
+}
+.sse-disconnect-overlay p {
+  margin: 0;
+  max-width: 28em;
+  line-height: 1.5;
+}
 .page {
   max-width: 1700px;
   margin: 0 auto;
@@ -1126,9 +1147,37 @@ document.addEventListener('click', function (e) {
 
 const SSE_SCRIPT = `
 (function () {
+  var DISCONNECT_MS = 1200;
+  function overlayEl() {
+    return document.getElementById('sse-disconnect-overlay');
+  }
+  function showDisconnect() {
+    var el = overlayEl();
+    if (!el) return;
+    el.classList.add('is-visible');
+    el.setAttribute('aria-hidden', 'false');
+  }
+  function hideDisconnect() {
+    var el = overlayEl();
+    if (!el) return;
+    el.classList.remove('is-visible');
+    el.setAttribute('aria-hidden', 'true');
+  }
   function start() {
     if (typeof htmx === 'undefined') { setTimeout(start, 50); return; }
     var es = new EventSource('/events');
+    var showTimer = null;
+    es.addEventListener('open', function () {
+      if (showTimer) { clearTimeout(showTimer); showTimer = null; }
+      hideDisconnect();
+    });
+    es.addEventListener('error', function () {
+      if (showTimer) clearTimeout(showTimer);
+      showTimer = setTimeout(function () {
+        showTimer = null;
+        if (es.readyState !== EventSource.OPEN) showDisconnect();
+      }, DISCONNECT_MS);
+    });
     es.addEventListener('changed', function () {
       var g = document.getElementById('graph');
       var limRaw = g && g.dataset ? g.dataset.graphLimit : '';
@@ -1166,6 +1215,13 @@ export function Layout(props: { children: unknown }) {
         <style>{raw(CSS)}</style>
       </head>
       <body>
+        <div
+          id="sse-disconnect-overlay"
+          class="sse-disconnect-overlay"
+          aria-hidden="true"
+        >
+          <p>Disconnected from the server.</p>
+        </div>
         {props.children}
         <script>{raw(KEY_SCRIPT)}</script>
         <script>{raw(SSE_SCRIPT)}</script>
