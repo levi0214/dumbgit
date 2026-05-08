@@ -26,7 +26,7 @@ function usage() {
        dumbgit --stop   (alias for --stop-all)
 
 Open dumbgit for the current Git repo or repo-path (always a new listener).
-Each repo tab binds to its own server; close all tabs — that server exits.
+Each repo binds to its own server; servers run until you stop them.
 
 Stop every dumbgit listener (${PORT_LO}-${PORT_HI}) with --stop-all or --stop.`)
   process.exit(0)
@@ -107,7 +107,6 @@ function startServer(repo, port) {
       cwd: appRoot,
       detached: true,
       stdio: ['ignore', log, log],
-      env: { ...process.env, DUMBGIT_AUTO_EXIT: '1' },
     },
   )
   child.unref()

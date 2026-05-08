@@ -44,8 +44,6 @@ import { WorkTreeFragment } from './views/worktree'
 const LISTEN_HOST = '127.0.0.1'
 /** Body must contain this line for `bin/dumbgit --stop-all` to identify listeners. */
 const HEALTH_BODY = 'dumbgit ok'
-const IDLE_EXIT_MS = 5000
-const NO_CLIENT_EXIT_MS = 30000
 
 /** Initial / expanded `git log -n` depth (ASCII graph needs full re-fetch each time). */
 const GRAPH_COMMIT_DEFAULT = 50
@@ -146,59 +144,14 @@ type DumbgitState = {
   closeWatch?: () => void
   server?: ReturnType<typeof Bun.serve>
   repoInitialized?: boolean
-  liveStreams: number
-  sseSeen: boolean
-  idleExitTimer?: ReturnType<typeof setTimeout>
-  bootExitTimer?: ReturnType<typeof setTimeout>
 }
 const G = globalThis as { __dumbgit?: DumbgitState }
 if (!G.__dumbgit) {
   G.__dumbgit = {
     lastChange: Date.now(),
-    liveStreams: 0,
-    sseSeen: false,
   }
 }
 const state = G.__dumbgit
-if (typeof state.liveStreams !== 'number') state.liveStreams = 0
-if (typeof state.sseSeen !== 'boolean') state.sseSeen = false
-
-function sseConnected() {
-  state.liveStreams++
-  state.sseSeen = true
-  if (state.bootExitTimer) {
-    clearTimeout(state.bootExitTimer)
-    state.bootExitTimer = undefined
-  }
-  if (state.idleExitTimer) {
-    clearTimeout(state.idleExitTimer)
-    state.idleExitTimer = undefined
-  }
-}
-
-function sseDisconnected() {
-  state.liveStreams = Math.max(0, state.liveStreams - 1)
-  if (state.liveStreams === 0 && state.sseSeen) armIdleExit()
-}
-
-function armIdleExit() {
-  if (process.env.DUMBGIT_AUTO_EXIT !== '1') return
-  if (state.idleExitTimer) clearTimeout(state.idleExitTimer)
-  state.idleExitTimer = setTimeout(() => {
-    state.idleExitTimer = undefined
-    if (state.liveStreams === 0 && state.sseSeen && process.env.DUMBGIT_AUTO_EXIT === '1')
-      process.exit(0)
-  }, IDLE_EXIT_MS)
-}
-
-function armNoClientExit() {
-  if (process.env.DUMBGIT_AUTO_EXIT !== '1') return
-  if (state.sseSeen || state.bootExitTimer) return
-  state.bootExitTimer = setTimeout(() => {
-    state.bootExitTimer = undefined
-    if (!state.sseSeen && state.liveStreams === 0) process.exit(0)
-  }, NO_CLIENT_EXIT_MS)
-}
 
 if (!state.repoInitialized) {
   setRepoRoot(BOOT.repoAbs)
@@ -601,20 +554,15 @@ app.post('/api/push', async (c) => {
 app.get('/events', (c) => {
   c.status(200)
   return streamSSE(c, async (stream) => {
-    sseConnected()
-    try {
-      let lastSent = state.lastChange
-      await stream.writeSSE({ event: 'ready', data: String(lastSent) })
+    let lastSent = state.lastChange
+    await stream.writeSSE({ event: 'ready', data: String(lastSent) })
 
-      while (!stream.aborted && !stream.closed) {
-        if (state.lastChange > lastSent) {
-          lastSent = state.lastChange
-          await stream.writeSSE({ event: 'changed', data: String(lastSent) })
-        }
-        await stream.sleep(100)
+    while (!stream.aborted && !stream.closed) {
+      if (state.lastChange > lastSent) {
+        lastSent = state.lastChange
+        await stream.writeSSE({ event: 'changed', data: String(lastSent) })
       }
-    } finally {
-      sseDisconnected()
+      await stream.sleep(100)
     }
   })
 })
@@ -635,13 +583,10 @@ if (state.server) {
   })
   const base = `http://${LISTEN_HOST}:${listenPort}`
   console.log(`dumbgit on ${base}  (repo: ${BOOT.repoAbs})`)
-  if (process.env.DUMBGIT_AUTO_EXIT === '1')
-    console.log('close all browser tabs on this URL to exit, or ctrl-c')
-  else console.log('auto-exit when idle disabled (development); ctrl-c to quit')
+  console.log('ctrl-c to quit, or `dumbgit --stop-all` to stop every dumbgit')
   if (BOOT.openBrowserFlag) {
     setTimeout(() => {
       Bun.spawn(['open', base])
     }, 200)
   }
 }
-armNoClientExit()
