@@ -21,14 +21,10 @@ const appRoot = path.resolve(path.dirname(scriptPath), '..')
 const logPath = path.join(os.homedir(), 'Library', 'Logs', 'dumbgit.log')
 
 function usage() {
-  console.log(`usage: dumbgit [repo-path]
-       dumbgit --stop-all
-       dumbgit --stop   (alias for --stop-all)
+  console.log(`usage: dumbgit [dir]
+       dumbgit --stop
 
-Open dumbgit for the current Git repo or repo-path (always a new listener).
-Each repo binds to its own server; servers run until you stop them.
-
-Stop every dumbgit listener (${PORT_LO}-${PORT_HI}) with --stop-all or --stop.`)
+Open the UI for one repo (default: .). --stop shuts down every dumbgit.`)
   process.exit(0)
 }
 
