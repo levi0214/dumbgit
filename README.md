@@ -1,86 +1,81 @@
 # dumbgit
 
-A tiny self-use Git GUI for Mac. One Bun process, server-rendered HTML,
-htmx for swaps. No build step, no app bundle.
+A tiny Git GUI for one person on one Mac.
 
-Pick any repo from the bar at the top (recent paths + open-by-path), or
-launch as `dumbgit /path/to/repo`; omit the path to use the cwd.
+It exists because sometimes you just want the Git Graph view back: branches,
+commits, local edits, and a few obvious actions, without opening a full Git
+client or turning the terminal into another UI.
 
-For the "why" and the deliberate non-features, see [`PLAN.md`](./PLAN.md).
+dumbgit is a local web app. Bun serves plain HTML, Hono renders JSX on the
+server, htmx swaps fragments, and `git` remains the source of truth. There is
+no frontend build, no app bundle, no settings screen, no accounts, no cloud.
 
-## Install (once)
+## Install
 
 ```bash
 bun install
 bun link
 ```
 
-Requires Bun ≥ 1.0, `git` on `PATH`, and Bun's global bin directory on
-`PATH`. Built and used on macOS.
+Requires Bun, `git` on `PATH`, and Bun's global bin directory on `PATH`.
+Built and used on macOS.
 
 ## Run
 
 ```bash
-dumbgit              # current repo
-dumbgit /path/to/x   # explicit repo
-dumbgit --stop       # stop the background server
+dumbgit              # open the current repo
+dumbgit /path/to/x   # open another repo
+dumbgit --stop       # stop all dumbgit servers
 ```
 
-`dumbgit` resolves the repo root, starts the local server in the background
-if needed, switches an already-running server to that repo, then opens
-<http://127.0.0.1:7777>. You usually don't need to stop it; use
-`dumbgit --stop` when you want the port free or want a clean restart.
+Each repo gets its own local server process. The launcher picks a free port
+from `7777` to `7900`, opens the browser, and prints the URL.
 
-Use `bun run dev` when iterating on dumbgit itself. It runs the server in
-the foreground with `bun --watch src/index.tsx`; reload the browser tab to
-see your change.
+Use `bun run dev` when working on dumbgit itself. It runs the server in the
+foreground with `bun --watch src/index.tsx`; if `7777` is busy, it picks the
+next free port.
 
-If the cwd isn't a Git working tree, dumbgit prints a single `git` error
-and exits with code 1.
+If the path is not inside a Git working tree, dumbgit prints the Git error and
+exits.
 
-One server, one current repo: switching the repo from any tab also
-changes what every other tab sees on the next request. If you really
-need two side-by-side, start a second instance on another port.
+## What It Does
 
-## What you get
+- Shows the current repo, HEAD, local branches, remote refs, tags, stashes,
+  and recent commits in a compact graph.
+- Shows `main | origin` when a local branch and `origin/main` point at the
+  same commit.
+- Copy a branch name by clicking it; hover to reveal switch or push when there
+  is a useful action.
+- Click a commit message to see changed files; click a file to load its patch.
+- Hover a commit row to copy its full hash, create a branch, or checkout.
+- Shows staged, unstaged, and untracked files. Click a file to inspect its
+  patch, then stage, unstage, or discard from the diff panel.
+- `Save aside` hides all local edits in a small preview stash; restore or drop
+  it from the graph.
+- Updates itself when refs move, and checks visible working-tree changes every
+  few seconds.
+- Shows a full-screen disconnected overlay if the local server goes away.
 
-- HEAD line, colored `git log --graph` (ANSI lanes from Git), last 50 commits
-- Ref pills on each commit (`HEAD ->`, branches, remotes, tags) → `git switch <ref>`
-- Click a commit message → changed-files panel (`git show --name-status` + line counts from `--numstat` when available)
-- Click the changed-files block → full patch loads **below** the list (`git show`), without hiding the list
-- Hover a graph row → `· <short hash>` + copy icon (copies full hash); detach checkout lives in the commit panel header
-- `↑ push` button → `git push` (status shown inline; no graph re-render)
-- Working tree panel: staged / unstaged / untracked file paths only
-  (no hunks; open the file in your editor if you want the diff)
+## Keys
 
-### Updates
+- `P` pushes the current branch.
+- `Esc` closes the diff panel or dismisses an error.
 
-- Branch / commit / tag changes (anything under `.git/refs` or `HEAD`)
-  reflect in the page within ~100ms via `fs.watch` + SSE.
-- Working-tree edits don't touch refs, so they're picked up by a 3s
-  poll that runs only while the tab is visible.
-- There is no refresh button. If something doesn't update, that's a bug.
+## What It Avoids
 
-### Keys
+dumbgit does not try to be a complete Git client. Rebase, merge, cherry-pick,
+conflict resolution, settings, themes, plugins, packaging, and auto-update are
+out of scope. For those, use Git, your editor, or an agent.
 
-- `P` — push current branch
-- `Esc` — close the diff panel
+The rule is simple: if the UI does not make the common case easier at a glance,
+it does not belong here.
 
-## Layout
+## Shape
 
+```text
+bin/dumbgit     launcher
+src/index.tsx   Hono routes and server boot
+src/git.ts      thin wrappers around the Git CLI
+src/watch.ts    ref watcher
+src/views/      server-rendered HTML fragments
 ```
-bin/dumbgit     global launcher
-src/
-  index.tsx       Hono routes + server start
-  git.ts          all git CLI calls live here
-  watch.ts        fs.watch on .git/refs with debounce
-  views/
-    layout.tsx    page shell, css, htmx + SSE + poll bootstrap
-    graph.tsx    colored graph log + ref pills + embedded #worktree
-    worktree.tsx staged / unstaged / untracked lists
-    diff.tsx     right-side commit diff panel
-    status.tsx   small status / error fragment (oob swap)
-```
-
-Total ~500 lines. If you're tempted to add a feature, re-read the
-"Out of scope" section in [`PLAN.md`](./PLAN.md) first.
