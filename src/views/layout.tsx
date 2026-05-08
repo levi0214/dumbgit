@@ -1245,13 +1245,13 @@ setInterval(function () {
 }, 3000);
 `
 
-export function Layout(props: { children: unknown }) {
+export function Layout(props: { children: unknown; title?: string }) {
   return (
     <html lang="en">
       <head>
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <title>dumbgit</title>
+        <title>{props.title ?? 'dumbgit'}</title>
         <script
           src="https://unpkg.com/htmx.org@2.0.4/dist/htmx.min.js"
           defer

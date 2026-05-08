@@ -211,8 +211,9 @@ app.get('/healthz', (c) => c.text(`${HEALTH_BODY}\n`))
 
 app.get('/', async (c) => {
   const graph = await loadGraph()
+  const tabTitle = `dumbgit: ${path.basename(graph.repoPath)}`
   return c.html(
-    <Layout>
+    <Layout title={tabTitle}>
       <div class="page">
         <div id="status" class="status-slot"></div>
         <div class="main-grid">
