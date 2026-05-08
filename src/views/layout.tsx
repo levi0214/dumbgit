@@ -599,35 +599,40 @@ body {
   color: #ffffff;
   background: rgba(86, 156, 214, 0.34);
 }
-.head-label[data-copy-name] {
+.head-label[data-copy] {
   cursor: pointer;
 }
-.copy-name-btn {
+.copy-btn {
   all: unset;
   cursor: pointer;
-  display: none;
+  display: inline-flex;
   align-items: center;
-  height: 14px;
-  padding: 0 2px;
+  padding: 1px 2px;
+  border-radius: 3px;
   color: inherit;
   opacity: 0.7;
-  border-radius: 3px;
 }
-.ref-pill:hover .copy-name-btn,
-.branch-prefix:hover .copy-name-btn,
-.head-label:hover .copy-name-btn {
-  display: inline-flex;
-}
-.copy-name-btn:hover {
+.copy-btn:hover {
   opacity: 1;
   background: rgba(255, 255, 255, 0.1);
 }
-.copy-name-btn .check-ico { display: none; }
-.copy-name-btn.copy-name-flash .copy-ico { display: none; }
-.copy-name-btn.copy-name-flash .check-ico { display: block; }
-.copy-name-flash {
+.copy-ico { display: block; }
+.check-ico { display: none; }
+.copy-btn.copy-flash .copy-ico { display: none; }
+.copy-btn.copy-flash .check-ico { display: block; }
+.copy-flash {
   color: var(--success) !important;
   opacity: 1 !important;
+}
+.ref-pill .copy-btn,
+.branch-prefix .copy-btn,
+.head-label .copy-btn {
+  display: none;
+}
+.ref-pill:hover .copy-btn,
+.branch-prefix:hover .copy-btn,
+.head-label:hover .copy-btn {
+  display: inline-flex;
 }
 .confirm-armed {
   color: #ffd58a !important;
@@ -685,27 +690,6 @@ body {
   font-size: 11px;
   color: var(--muted);
   user-select: all;
-}
-.copy-sha-btn {
-  all: unset;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 1px;
-  border-radius: 3px;
-  color: var(--muted);
-  vertical-align: middle;
-}
-.copy-sha-btn:hover {
-  color: var(--accent);
-  background: rgba(255, 255, 255, 0.06);
-}
-.copy-ico {
-  display: block;
-}
-.copy-sha-flash {
-  color: var(--success) !important;
 }
 .msg-btn {
   font: inherit;
@@ -1190,31 +1174,18 @@ document.addEventListener('keydown', function (e) {
 });
 
 document.addEventListener('click', function (e) {
-  const btn = e.target.closest('.copy-sha-btn');
-  if (!btn) return;
-  e.preventDefault();
-  e.stopPropagation();
-  var sha = btn.getAttribute('data-sha');
-  if (!sha || !navigator.clipboard || !navigator.clipboard.writeText) return;
-  navigator.clipboard.writeText(sha);
-  btn.classList.add('copy-sha-flash');
-  setTimeout(function () { btn.classList.remove('copy-sha-flash'); }, 700);
-});
-
-document.addEventListener('click', function (e) {
   if (e.target.closest('.inline-action-btn')) return;
-  var nameBtn = e.target.closest('.copy-name-btn');
-  var host = nameBtn || e.target.closest('[data-copy-name]');
+  var host = e.target.closest('[data-copy]');
   if (!host) return;
-  var name = (nameBtn || host).getAttribute('data-copy-name');
-  if (!name || !navigator.clipboard || !navigator.clipboard.writeText) return;
+  var text = host.getAttribute('data-copy');
+  if (!text || !navigator.clipboard || !navigator.clipboard.writeText) return;
   e.preventDefault();
   e.stopPropagation();
-  navigator.clipboard.writeText(name);
-  var icon = nameBtn || host.querySelector('.copy-name-btn');
+  navigator.clipboard.writeText(text);
+  var icon = host.matches('.copy-btn') ? host : host.querySelector('.copy-btn');
   if (!icon) return;
-  icon.classList.add('copy-name-flash');
-  setTimeout(function () { icon.classList.remove('copy-name-flash'); }, 1500);
+  icon.classList.add('copy-flash');
+  setTimeout(function () { icon.classList.remove('copy-flash'); }, 1500);
 });
 `
 

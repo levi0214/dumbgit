@@ -41,13 +41,13 @@ const COPY_ICO = raw(
 const CHECK_ICO = raw(
   `<svg class="check-ico" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>`,
 )
-function CopyNameBtn(props: { name: string }) {
+function CopyBtn(props: { dataCopy?: string; title?: string }) {
   return (
     <button
       type="button"
-      class="copy-name-btn"
-      data-copy-name={props.name}
-      title="copy name"
+      class="copy-btn"
+      data-copy={props.dataCopy}
+      title={props.title ?? 'copy'}
     >
       {COPY_ICO}
       {CHECK_ICO}
@@ -563,10 +563,10 @@ function RefPills(props: {
             key={idx}
             class={pillClass(plain)}
             title={plain}
-            data-copy-name={plain}
+            data-copy={plain}
           >
             {plain}
-            <CopyNameBtn name={plain} />
+            <CopyBtn title="copy name" />
             {ref === props.currentBranch ? (
               <button
                 type="button"
@@ -654,10 +654,10 @@ function GraphCommitLine(props: {
         <span
           class="branch-prefix"
           title={`branch: ${branchPrefix}`}
-          data-copy-name={branchPrefix}
+          data-copy={branchPrefix}
         >
           {branchPrefix}
-          <CopyNameBtn name={branchPrefix} />
+          <CopyBtn title="copy name" />
           {branchPrefix === props.currentBranch ? (
             <button
               type="button"
@@ -736,14 +736,7 @@ function GraphCommitLine(props: {
           <code class="hash-peek" title={shaFull}>
             {shaShort}
           </code>
-          <button
-            type="button"
-            class="copy-sha-btn"
-            data-sha={shaFull}
-            title="copy full hash"
-          >
-            {COPY_ICO}
-          </button>
+          <CopyBtn dataCopy={shaFull} title="copy full hash" />
         </span>
       </span>
     </div>
@@ -881,10 +874,10 @@ function HeadLine(props: { head: HeadInfo }) {
       <span
         class="head-label"
         title={tip}
-        data-copy-name={isBranch ? label : undefined}
+        data-copy={isBranch ? label : undefined}
       >
         {label}
-        {isBranch ? <CopyNameBtn name={label} /> : null}
+        {isBranch ? <CopyBtn title="copy name" /> : null}
         {isBranch ? (
           <button
             type="button"
