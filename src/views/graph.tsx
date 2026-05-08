@@ -895,29 +895,11 @@ function HeadLine(props: { head: HeadInfo }) {
     label = props.head.name
     tip = `at ${short}`
   }
-  const isBranch = props.head.kind === 'branch'
   return (
     <>
       <span class="head-prep">{prefix}</span>
-      <span
-        class="head-label"
-        title={tip}
-        data-copy={isBranch ? label : undefined}
-      >
+      <span class="head-label" title={tip}>
         {label}
-        {isBranch ? <CopyBtn title="copy name" /> : null}
-        {isBranch ? (
-          <button
-            type="button"
-            class="inline-action-btn head-branch-action"
-            title="git push"
-            data-confirm-label="confirm push"
-            hx-post="/api/push"
-            hx-swap="none"
-          >
-            push
-          </button>
-        ) : null}
       </span>
     </>
   )

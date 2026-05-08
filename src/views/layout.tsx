@@ -599,16 +599,12 @@ body {
   background: rgba(86, 156, 214, 0.22);
 }
 .ref-pill:hover .inline-action-btn,
-.branch-prefix:hover .inline-action-btn,
-.head-label:hover .inline-action-btn {
+.branch-prefix:hover .inline-action-btn {
   display: inline-flex;
 }
 .inline-action-btn:hover {
   color: #ffffff;
   background: rgba(86, 156, 214, 0.34);
-}
-.head-label[data-copy] {
-  cursor: pointer;
 }
 .copy-btn {
   all: unset;
@@ -633,13 +629,11 @@ body {
   opacity: 1 !important;
 }
 .ref-pill .copy-btn,
-.branch-prefix .copy-btn,
-.head-label .copy-btn {
+.branch-prefix .copy-btn {
   display: none;
 }
 .ref-pill:hover .copy-btn,
-.branch-prefix:hover .copy-btn,
-.head-label:hover .copy-btn {
+.branch-prefix:hover .copy-btn {
   display: inline-flex;
 }
 .confirm-armed {
