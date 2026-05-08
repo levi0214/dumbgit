@@ -197,14 +197,6 @@ body {
   font-weight: 700;
   color: #ffffff;
 }
-.head-synced {
-  margin-left: 6px;
-  color: var(--success);
-  font-size: 9px;
-  font-weight: 400;
-  opacity: 0.85;
-  vertical-align: middle;
-}
 .worktree-panel {
   border-bottom: 1px solid var(--border);
   font-size: 11px;
@@ -527,6 +519,14 @@ body {
   opacity: 1;
   border-color: var(--accent);
   color: var(--accent);
+}
+.ref-peer-sep {
+  color: var(--muted);
+  opacity: 0.8;
+}
+.ref-peer {
+  color: var(--muted);
+  font-weight: 600;
 }
 .log-row-stash {
   color: var(--muted);

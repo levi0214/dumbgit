@@ -176,6 +176,11 @@ function isRemoteShadowingLocal(plain: string, locals: Set<string>): boolean {
   return locals.has(m[1])
 }
 
+function hasOriginPeer(tokens: string[], branch: string | null): boolean {
+  if (!branch) return false
+  return tokens.some((t) => stripAnsi(t).trim() === `origin/${branch}`)
+}
+
 function pillClass(tokenPlain: string): string {
   if (/HEAD\s*->/i.test(tokenPlain)) return 'ref-pill ref-pill-head'
   if (tokenPlain.includes('/')) return 'ref-pill ref-pill-remote'
@@ -558,14 +563,21 @@ function RefPills(props: {
         if (isRemoteShadowingLocal(plain, locals)) return null
         const ref = refForCheckout(t)
         if (!ref) return null
+        const originPeer = !plain.includes('/') && hasOriginPeer(tokens, plain)
         return (
           <span
             key={idx}
             class={pillClass(plain)}
-            title={plain}
+            title={originPeer ? `${plain}, origin/${plain}` : plain}
             data-copy={plain}
           >
             {plain}
+            {originPeer ? (
+              <>
+                <span class="ref-peer-sep">|</span>
+                <span class="ref-peer">origin</span>
+              </>
+            ) : null}
             <CopyBtn title="copy name" />
             {ref === props.currentBranch ? (
               <button
@@ -626,8 +638,10 @@ function GraphCommitLine(props: {
   const { graphAnsi, shaFull, shaShort, decorateRaw, subject, date, inHistory } =
     props.row
   const isHead = graphCommitIsHead(decorateRaw)
+  const tokens = decorationRefs(decorateRaw)
   const branchPrefix = branchPrefixFromDecorations(decorateRaw)
-  const tagNames = collectTagNames(decorationRefs(decorateRaw))
+  const branchPrefixOrigin = hasOriginPeer(tokens, branchPrefix)
+  const tagNames = collectTagNames(tokens)
   const diffUrl = `/api/commit/${encodeURIComponent(shaFull)}`
   const cls = [
     'log-row',
@@ -653,10 +667,20 @@ function GraphCommitLine(props: {
       {branchPrefix ? (
         <span
           class="branch-prefix"
-          title={`branch: ${branchPrefix}`}
+          title={
+            branchPrefixOrigin
+              ? `branch: ${branchPrefix}, origin/${branchPrefix}`
+              : `branch: ${branchPrefix}`
+          }
           data-copy={branchPrefix}
         >
           {branchPrefix}
+          {branchPrefixOrigin ? (
+            <>
+              <span class="ref-peer-sep">|</span>
+              <span class="ref-peer">origin</span>
+            </>
+          ) : null}
           <CopyBtn title="copy name" />
           {branchPrefix === props.currentBranch ? (
             <button
@@ -868,10 +892,6 @@ function HeadLine(props: { head: HeadInfo }) {
     tip = `at ${short}`
   }
   const isBranch = props.head.kind === 'branch'
-  const synced =
-    props.head.kind === 'branch' &&
-    props.head.upstreamSha !== undefined &&
-    props.head.upstreamSha === props.head.sha
   return (
     <>
       <span class="head-prep">{prefix}</span>
@@ -881,15 +901,6 @@ function HeadLine(props: { head: HeadInfo }) {
         data-copy={isBranch ? label : undefined}
       >
         {label}
-        {synced ? (
-          <span
-            class="head-synced"
-            title="in sync with upstream"
-            aria-hidden="true"
-          >
-            ●
-          </span>
-        ) : null}
         {isBranch ? <CopyBtn title="copy name" /> : null}
         {isBranch ? (
           <button
