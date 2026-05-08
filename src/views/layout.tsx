@@ -622,6 +622,9 @@ body {
   opacity: 1;
   background: rgba(255, 255, 255, 0.1);
 }
+.copy-name-btn .check-ico { display: none; }
+.copy-name-btn.copy-name-flash .copy-ico { display: none; }
+.copy-name-btn.copy-name-flash .check-ico { display: block; }
 .copy-name-flash {
   color: var(--success) !important;
   opacity: 1 !important;
@@ -1211,7 +1214,7 @@ document.addEventListener('click', function (e) {
   var icon = nameBtn || host.querySelector('.copy-name-btn');
   if (!icon) return;
   icon.classList.add('copy-name-flash');
-  setTimeout(function () { icon.classList.remove('copy-name-flash'); }, 700);
+  setTimeout(function () { icon.classList.remove('copy-name-flash'); }, 1500);
 });
 `
 
