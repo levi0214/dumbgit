@@ -1,4 +1,5 @@
 /** @jsxImportSource hono/jsx */
+import path from 'node:path'
 import { raw } from 'hono/html'
 import {
   stripAnsi,
@@ -9,7 +10,6 @@ import {
   type PreviewStashUi,
   type WorkTreeSummary,
 } from '../git'
-import { RepoBar } from './repo'
 import { WorkTreeFragment } from './worktree'
 
 export type GraphFragmentProps =
@@ -19,10 +19,8 @@ export type GraphFragmentProps =
       rows: GraphRow[]
       worktree: WorkTreeSummary
       previewStash: PreviewStashUi
-      /** Absolute repo root; tags #worktree so stale polls cannot overwrite after repo switch. */
+      /** Absolute repo root; tags #worktree so stale polls cannot overwrite cross-origin. */
       repoPath: string
-      repoPickerRoot: string
-      repoPickerRecents: string[]
       /** Current `git log -n` window size (shown commits cap). */
       graphCommitLimit: number
       /** Next limit for “load more” (`min(limit + step, max)`). */
@@ -33,8 +31,7 @@ export type GraphFragmentProps =
   | {
       ok: false
       stderr: string
-      repoPickerRoot: string
-      repoPickerRecents: string[]
+      repoPath: string
       swapOob?: boolean
     }
 
@@ -991,7 +988,11 @@ export function GraphFragment(props: GraphFragmentProps) {
   if (!props.ok) {
     return (
       <div id="graph" class="graph-root graph-error" {...oob}>
-        <RepoBar root={props.repoPickerRoot} recents={props.repoPickerRecents} />
+        <div class="graph-error-head">
+          <span class="graph-repo-name" title={props.repoPath}>
+            {path.basename(props.repoPath)}
+          </span>
+        </div>
         <p class="msg">{props.stderr}</p>
       </div>
     )
@@ -1011,7 +1012,9 @@ export function GraphFragment(props: GraphFragmentProps) {
       {...oob}
     >
       <div class={`graph-head${detached ? ' graph-head-detached' : ''}`}>
-        <RepoBar root={props.repoPickerRoot} recents={props.repoPickerRecents} />
+        <span class="graph-repo-name" title={props.repoPath}>
+          {path.basename(props.repoPath)}
+        </span>
         <div class="graph-head-line">
           <HeadLine head={head} />
         </div>

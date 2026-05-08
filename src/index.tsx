@@ -2,10 +2,8 @@
 import { Fragment } from 'hono/jsx'
 import { Hono } from 'hono'
 import { streamSSE } from 'hono/streaming'
-import { spawn as spawnDetached } from 'node:child_process'
 import os from 'node:os'
 import path from 'node:path'
-import net from 'node:net'
 import {
   GitError,
   applyWorkTreeAction,
@@ -19,7 +17,6 @@ import {
   getCurrentRepo,
   gitDir,
   headInfo,
-  isGitRepo,
   logGraphRows,
   previewStashUiState,
   push,
@@ -31,7 +28,7 @@ import {
   workTreeFilePatch,
   workTreeSummary,
 } from './git'
-import { bumpRecent, loadRecents } from './recents'
+import { watchGitRefs } from './watch'
 import {
   GraphFragment,
   GraphTailFragment,
@@ -42,7 +39,6 @@ import type { GraphFragmentProps } from './views/graph'
 import { DiffPanel, DiffPatchBody, WorkTreeDiffPanel } from './views/diff'
 import { Layout } from './views/layout'
 import { StatusOob } from './views/status'
-import { watchGitRefs } from './watch'
 import { WorkTreeFragment } from './views/worktree'
 
 const LISTEN_HOST = '127.0.0.1'
@@ -50,8 +46,6 @@ const LISTEN_HOST = '127.0.0.1'
 const HEALTH_BODY = 'dumbgit ok'
 const IDLE_EXIT_MS = 5000
 const NO_CLIENT_EXIT_MS = 30000
-const PORT_PROBE_LO = 7777
-const PORT_PROBE_HI = 7900
 
 /** Initial / expanded `git log -n` depth (ASCII graph needs full re-fetch each time). */
 const GRAPH_COMMIT_DEFAULT = 50
@@ -99,44 +93,6 @@ function parseServerArgv(): {
 
 const BOOT = parseServerArgv()
 
-function portLooksFree(p: number): Promise<boolean> {
-  return new Promise((resolve) => {
-    const s = net.createServer()
-    s.once('error', () => resolve(false))
-    s.listen(p, LISTEN_HOST, () => {
-      s.close(() => resolve(true))
-    })
-  })
-}
-
-async function allocateListenPort(lo: number, hi: number): Promise<number | undefined> {
-  for (let p = lo; p <= hi; p++) {
-    if (await portLooksFree(p)) return p
-  }
-  return undefined
-}
-
-async function waitForHealthy(baseUrl: string, msTotal = 8000): Promise<boolean> {
-  const deadline = Date.now() + msTotal
-  while (Date.now() < deadline) {
-    try {
-      const controller = new AbortController()
-      const tmr = setTimeout(() => controller.abort(), 450)
-      const r = await fetch(`${baseUrl}/healthz`, { signal: controller.signal })
-      clearTimeout(tmr)
-      const text = await r.text()
-      if (
-        r.ok &&
-        text.trim() === HEALTH_BODY
-      )
-        return true
-    } catch {
-      /* down */
-    }
-    await Bun.sleep(100)
-  }
-  return false
-}
 async function loadGraph(limit?: number): Promise<GraphFragmentProps> {
   const graphCommitLimit = clampGraphCommitLimit(limit ?? GRAPH_COMMIT_DEFAULT)
   try {
@@ -160,8 +116,6 @@ async function loadGraph(limit?: number): Promise<GraphFragmentProps> {
       worktree,
       previewStash,
       repoPath: getCurrentRepo(),
-      repoPickerRoot: getCurrentRepo(),
-      repoPickerRecents: loadRecents(),
       graphCommitLimit,
       graphNextLimit,
       showLoadMore,
@@ -176,8 +130,7 @@ async function loadGraph(limit?: number): Promise<GraphFragmentProps> {
     return {
       ok: false,
       stderr,
-      repoPickerRoot: getCurrentRepo(),
-      repoPickerRecents: loadRecents(),
+      repoPath: getCurrentRepo(),
     }
   }
 }
@@ -260,8 +213,6 @@ try {
   console.error(`run dumbgit from inside a git working tree`)
   process.exit(1)
 }
-
-bumpRecent(getCurrentRepo())
 
 async function attachWatcher() {
   state.closeWatch?.()
@@ -469,60 +420,6 @@ app.post('/api/worktree/stash-drop', async (c) => {
     </Fragment>,
     200,
   )
-})
-
-app.post('/api/launch', async (c) => {
-  let raw = c.req.query('path')?.trim() ?? ''
-  if (!raw) {
-    const body = await c.req.parseBody()
-    const p = body.path
-    raw = typeof p === 'string' ? p.trim() : ''
-  }
-  if (!raw) {
-    return c.html(<StatusOob error="path required" />, 200)
-  }
-  const candidate = path.resolve(expandUser(raw))
-  const okRepo = await isGitRepo(candidate)
-  if (!okRepo) {
-    return c.html(
-      <StatusOob error={`not a git repo: ${candidate}`} />,
-      200,
-    )
-  }
-
-  const childPort = await allocateListenPort(PORT_PROBE_LO, PORT_PROBE_HI)
-  if (childPort === undefined) {
-    return c.html(<StatusOob error="no free port on 127.0.0.1 in range 7777-7900" />, 200)
-  }
-
-  const appRoot = path.join(import.meta.dir, '..')
-  const kid = spawnDetached(
-    process.execPath,
-    ['run', 'src/index.tsx', '--port', String(childPort), candidate],
-    {
-      cwd: appRoot,
-      detached: true,
-      stdio: 'ignore',
-      env: { ...process.env, DUMBGIT_AUTO_EXIT: '1' },
-    },
-  )
-  kid.unref()
-
-  bumpRecent(candidate)
-
-  const base = `http://${LISTEN_HOST}:${childPort}`
-  const up = await waitForHealthy(base)
-  if (!up) {
-    try {
-      kid.kill('SIGTERM')
-    } catch {
-      /* ignore */
-    }
-    return c.html(<StatusOob error="spawned dumbgit never became healthy" />, 200)
-  }
-
-  c.header('X-Dumbgit-Launch', base)
-  return c.text('', 200)
 })
 
 app.post('/api/checkout/branch', async (c) => {

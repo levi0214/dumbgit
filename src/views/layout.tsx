@@ -31,158 +31,6 @@ body {
   min-height: 0;
   overflow: hidden;
 }
-.repo-bar {
-  flex-shrink: 0;
-  margin: 0;
-}
-.repo-bar-details {
-  position: relative;
-  display: inline-block;
-}
-.repo-bar-summary {
-  list-style: none;
-  cursor: pointer;
-  padding: 6px 10px;
-  border: 1px solid transparent;
-  border-radius: 4px;
-  background: transparent;
-  color: var(--fg);
-  font-size: 13px;
-  font-weight: 700;
-  min-height: 32px;
-  display: inline-flex;
-  align-items: center;
-  box-sizing: border-box;
-}
-.repo-bar-summary::-webkit-details-marker {
-  display: none;
-}
-.repo-bar-summary::after {
-  content: ' ▾';
-  font-size: 9px;
-  color: var(--muted);
-  font-weight: 400;
-  margin-left: 5px;
-}
-.repo-bar-summary:hover {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(255, 255, 255, 0.12);
-  color: var(--accent);
-}
-.repo-bar-details[open] .repo-bar-summary {
-  background: rgba(255, 255, 255, 0.07);
-  border-color: rgba(86, 156, 214, 0.45);
-  color: var(--accent);
-}
-.repo-bar-details[open] .repo-bar-summary::after {
-  color: var(--accent);
-}
-.repo-popover {
-  position: absolute;
-  left: 0;
-  top: calc(100% + 4px);
-  z-index: 20;
-  min-width: 320px;
-  max-width: min(90vw, 520px);
-  padding: 10px 12px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: #252526;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
-}
-.repo-popover-path {
-  font-size: 11px;
-  color: var(--muted);
-  word-break: break-all;
-  margin-bottom: 8px;
-}
-.repo-recents {
-  margin: 0 -12px 10px;
-}
-.repo-recents-label {
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--muted);
-  margin-bottom: 4px;
-  padding: 0 12px;
-}
-.repo-recents-list {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.repo-recents-list li {
-  margin: 0;
-}
-.repo-recents-list li + li {
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
-}
-.repo-recent-btn {
-  all: unset;
-  appearance: none;
-  cursor: pointer;
-  box-sizing: border-box;
-  display: flex;
-  align-items: center;
-  width: 100%;
-  padding: 10px 16px;
-  min-height: 40px;
-  font: inherit;
-  font-size: 13px;
-  line-height: 1.35;
-  color: var(--accent);
-  text-align: left;
-}
-.repo-recent-btn:hover {
-  background: rgba(255, 255, 255, 0.09);
-  color: #7ebef0;
-}
-.repo-recent-btn:active {
-  background: rgba(255, 255, 255, 0.13);
-}
-.repo-recent-btn:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: -2px;
-  background: rgba(255, 255, 255, 0.07);
-}
-.repo-open-form {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-}
-.repo-open-input {
-  flex: 1;
-  min-width: 0;
-  font: inherit;
-  font-size: 12px;
-  padding: 8px 10px;
-  min-height: 36px;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  background: #1e1e1e;
-  color: var(--fg);
-  box-sizing: border-box;
-}
-.repo-open-submit {
-  font: inherit;
-  font-size: 11px;
-  cursor: pointer;
-  padding: 8px 14px;
-  min-height: 36px;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  background: #2d2d2d;
-  color: var(--fg);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  box-sizing: border-box;
-}
-.repo-open-submit:hover {
-  border-color: var(--accent);
-  color: var(--accent);
-}
 .head-back-btn {
   font: inherit;
   font-size: 11px;
@@ -249,10 +97,25 @@ body {
   flex-wrap: wrap;
   gap: 8px 10px;
 }
-.graph-head .repo-bar {
+.graph-repo-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--fg);
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  box-sizing: border-box;
+  flex-shrink: 0;
+}
+.graph-head .graph-repo-name {
   padding-right: 12px;
   margin-right: 2px;
   border-right: 1px solid rgba(255, 255, 255, 0.12);
+}
+.graph-error-head {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  background: #2d2d30;
 }
 .graph-head-line {
   flex: 1;
@@ -1205,69 +1068,10 @@ document.addEventListener('click', function (e) {
   fileBtn.setAttribute('aria-current', 'true');
 });
 
-var pendingLaunchWindow = null;
-
-function preopenLaunchWindow() {
-  if (pendingLaunchWindow && !pendingLaunchWindow.closed) return;
-  try {
-    pendingLaunchWindow = window.open('', '_blank');
-  } catch (err) {
-    pendingLaunchWindow = null;
-  }
-}
-
-function closePendingLaunchWindow() {
-  if (!pendingLaunchWindow || pendingLaunchWindow.closed) return;
-  try {
-    pendingLaunchWindow.close();
-  } catch (err) {
-    /* ignore */
-  }
-  pendingLaunchWindow = null;
-}
-
-function openLaunchUrl(url) {
-  if (!url) {
-    closePendingLaunchWindow();
-    return;
-  }
-  if (pendingLaunchWindow && !pendingLaunchWindow.closed) {
-    pendingLaunchWindow.location = url;
-    try {
-      pendingLaunchWindow.opener = null;
-    } catch (err) {
-      /* ignore */
-    }
-    pendingLaunchWindow = null;
-    return;
-  }
-  window.open(url, '_blank', 'noopener,noreferrer');
-}
-
-document.addEventListener('click', function (e) {
-  var btn = e.target && e.target.closest && e.target.closest('.repo-recent-btn');
-  if (!btn) return;
-  preopenLaunchWindow();
-}, true);
-
-document.addEventListener('submit', function (e) {
-  var form = e.target;
-  if (!form || !form.matches || !form.matches('.repo-open-form')) return;
-  preopenLaunchWindow();
-}, true);
-
 document.body.addEventListener('htmx:afterRequest', function (e) {
+  if (!e.detail.successful) return;
   var xhr = e.detail.xhr;
   if (!xhr) return;
-  var isLaunch = (xhr.responseURL || '').indexOf('/api/launch') !== -1;
-  try {
-    var launchUrl = xhr.getResponseHeader('X-Dumbgit-Launch');
-    if (launchUrl && launchUrl.trim()) openLaunchUrl(launchUrl.trim());
-    else if (isLaunch) closePendingLaunchWindow();
-  } catch (errLaunch) {
-    if (isLaunch) closePendingLaunchWindow();
-  }
-  if (!e.detail.successful) return;
   var url = xhr.responseURL || '';
   if (url.indexOf('/fragment/graph/tail') !== -1) {
     try {
@@ -1280,18 +1084,7 @@ document.body.addEventListener('htmx:afterRequest', function (e) {
     syncViewingHighlight();
     syncWorktreeFileSelection();
   }
-  if (url.indexOf('/api/launch') !== -1) {
-    var rd = document.querySelector('details.repo-bar-details');
-    if (rd) rd.removeAttribute('open');
-  }
 });
-
-document.addEventListener('click', function (e) {
-  var rd = document.querySelector('details.repo-bar-details');
-  if (!rd || !rd.open) return;
-  if (rd.contains(e.target)) return;
-  rd.removeAttribute('open');
-}, true);
 
 function dismissStatus() {
   var s = document.getElementById('status');
