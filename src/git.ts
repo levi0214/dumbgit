@@ -12,7 +12,13 @@ export class GitError extends Error {
 }
 
 export type HeadInfo =
-  | { kind: 'branch'; name: string; sha: string }
+  | {
+      kind: 'branch'
+      name: string
+      sha: string
+      /** Upstream commit if a tracking branch exists (`<name>@{u}`). */
+      upstreamSha?: string
+    }
   | { kind: 'detached'; sha: string; previousBranch?: string }
 
 /** Working tree all git commands run in. `initRepo` sets this once per process. */
@@ -77,7 +83,14 @@ export async function headInfo(): Promise<HeadInfo> {
   if (sym.code === 0) {
     const name = sym.stdout.trim()
     if (name) lastBranchByRepo.set(repoRoot, name)
-    return { kind: 'branch', name, sha }
+    const ups = await spawnGit([
+      'rev-parse',
+      '--verify',
+      '--quiet',
+      `${name}@{u}`,
+    ])
+    const upstreamSha = ups.code === 0 ? ups.stdout.trim() || undefined : undefined
+    return { kind: 'branch', name, sha, upstreamSha }
   }
   const previousBranch = lastBranchByRepo.get(repoRoot) ?? (await previousReflogBranch())
   if (previousBranch) lastBranchByRepo.set(repoRoot, previousBranch)

@@ -868,6 +868,10 @@ function HeadLine(props: { head: HeadInfo }) {
     tip = `at ${short}`
   }
   const isBranch = props.head.kind === 'branch'
+  const synced =
+    props.head.kind === 'branch' &&
+    props.head.upstreamSha !== undefined &&
+    props.head.upstreamSha === props.head.sha
   return (
     <>
       <span class="head-prep">{prefix}</span>
@@ -877,6 +881,15 @@ function HeadLine(props: { head: HeadInfo }) {
         data-copy={isBranch ? label : undefined}
       >
         {label}
+        {synced ? (
+          <span
+            class="head-synced"
+            title="in sync with upstream"
+            aria-hidden="true"
+          >
+            ●
+          </span>
+        ) : null}
         {isBranch ? <CopyBtn title="copy name" /> : null}
         {isBranch ? (
           <button
