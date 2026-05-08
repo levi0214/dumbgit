@@ -599,6 +599,33 @@ body {
   color: #ffffff;
   background: rgba(86, 156, 214, 0.34);
 }
+.head-label[data-copy-name] {
+  cursor: pointer;
+}
+.copy-name-btn {
+  all: unset;
+  cursor: pointer;
+  display: none;
+  align-items: center;
+  height: 14px;
+  padding: 0 2px;
+  color: inherit;
+  opacity: 0.7;
+  border-radius: 3px;
+}
+.ref-pill:hover .copy-name-btn,
+.branch-prefix:hover .copy-name-btn,
+.head-label:hover .copy-name-btn {
+  display: inline-flex;
+}
+.copy-name-btn:hover {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.1);
+}
+.copy-name-flash {
+  color: var(--success) !important;
+  opacity: 1 !important;
+}
 .confirm-armed {
   color: #ffd58a !important;
   border-color: rgba(224, 162, 58, 0.6) !important;
@@ -1169,6 +1196,22 @@ document.addEventListener('click', function (e) {
   navigator.clipboard.writeText(sha);
   btn.classList.add('copy-sha-flash');
   setTimeout(function () { btn.classList.remove('copy-sha-flash'); }, 700);
+});
+
+document.addEventListener('click', function (e) {
+  if (e.target.closest('.inline-action-btn')) return;
+  var nameBtn = e.target.closest('.copy-name-btn');
+  var host = nameBtn || e.target.closest('[data-copy-name]');
+  if (!host) return;
+  var name = (nameBtn || host).getAttribute('data-copy-name');
+  if (!name || !navigator.clipboard || !navigator.clipboard.writeText) return;
+  e.preventDefault();
+  e.stopPropagation();
+  navigator.clipboard.writeText(name);
+  var icon = nameBtn || host.querySelector('.copy-name-btn');
+  if (!icon) return;
+  icon.classList.add('copy-name-flash');
+  setTimeout(function () { icon.classList.remove('copy-name-flash'); }, 700);
 });
 `
 

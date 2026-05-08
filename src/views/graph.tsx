@@ -38,6 +38,18 @@ export type GraphFragmentProps =
 const COPY_ICO = raw(
   `<svg class="copy-ico" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`,
 )
+function CopyNameBtn(props: { name: string }) {
+  return (
+    <button
+      type="button"
+      class="copy-name-btn"
+      data-copy-name={props.name}
+      title="copy name"
+    >
+      {COPY_ICO}
+    </button>
+  )
+}
 const TAG_ICO = raw(
   `<svg class="tag-ico" xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>`,
 )
@@ -547,8 +559,10 @@ function RefPills(props: {
             key={idx}
             class={pillClass(plain)}
             title={plain}
+            data-copy-name={plain}
           >
             {plain}
+            <CopyNameBtn name={plain} />
             {ref === props.currentBranch ? (
               <button
                 type="button"
@@ -636,8 +650,10 @@ function GraphCommitLine(props: {
         <span
           class="branch-prefix"
           title={`branch: ${branchPrefix}`}
+          data-copy-name={branchPrefix}
         >
           {branchPrefix}
+          <CopyNameBtn name={branchPrefix} />
           {branchPrefix === props.currentBranch ? (
             <button
               type="button"
@@ -854,15 +870,18 @@ function HeadLine(props: { head: HeadInfo }) {
     label = props.head.name
     tip = `at ${short}`
   }
+  const isBranch = props.head.kind === 'branch'
   return (
     <>
       <span class="head-prep">{prefix}</span>
       <span
         class="head-label"
         title={tip}
+        data-copy-name={isBranch ? label : undefined}
       >
         {label}
-        {props.head.kind === 'branch' ? (
+        {isBranch ? <CopyNameBtn name={label} /> : null}
+        {isBranch ? (
           <button
             type="button"
             class="inline-action-btn head-branch-action"
