@@ -2,6 +2,7 @@
 import { Fragment } from 'hono/jsx'
 import { Hono } from 'hono'
 import { streamSSE } from 'hono/streaming'
+import net from 'node:net'
 import os from 'node:os'
 import path from 'node:path'
 import {
@@ -44,6 +45,10 @@ const LISTEN_HOST = '127.0.0.1'
 /** Body must contain this line for `bin/dumbgit --stop-all` to identify listeners. */
 const HEALTH_BODY = 'dumbgit ok'
 
+/** Same scan range as `bin/dumbgit` allocatePort (implicit port only). */
+const PORT_PROBE_LO = 7777
+const PORT_PROBE_HI = 7900
+
 /** Initial / expanded `git log -n` depth (ASCII graph needs full re-fetch each time). */
 const GRAPH_COMMIT_DEFAULT = 50
 const GRAPH_COMMIT_STEP = 50
@@ -63,10 +68,12 @@ function expandUser(p: string): string {
 
 function parseServerArgv(): {
   port: number
+  portExplicit: boolean
   openBrowserFlag: boolean
   repoAbs: string
 } {
   let port = 7777
+  let portExplicit = false
   let openBrowserFlag = false
   const pos: string[] = []
   for (let i = 2; i < process.argv.length; i++) {
@@ -76,6 +83,7 @@ function parseServerArgv(): {
       continue
     }
     if (a === '--port') {
+      portExplicit = true
       const n = Number(process.argv[++i])
       if (Number.isFinite(n) && n >= 1 && n <= 65535) port = Math.floor(n)
       continue
@@ -85,7 +93,17 @@ function parseServerArgv(): {
   }
   const raw = pos[0]
   const repoAbs = raw ? path.resolve(expandUser(raw)) : path.resolve(process.cwd())
-  return { port, openBrowserFlag, repoAbs }
+  return { port, portExplicit, openBrowserFlag, repoAbs }
+}
+
+function portLooksFree(p: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const s = net.createServer()
+    s.once('error', () => resolve(false))
+    s.listen(p, LISTEN_HOST, () => {
+      s.close(() => resolve(true))
+    })
+  })
 }
 
 const BOOT = parseServerArgv()
@@ -143,6 +161,8 @@ type DumbgitState = {
   closeWatch?: () => void
   server?: ReturnType<typeof Bun.serve>
   repoInitialized?: boolean
+  /** First successful bind; survives `bun --watch` reloads. */
+  resolvedListenPort?: number
 }
 const G = globalThis as { __dumbgit?: DumbgitState }
 if (!G.__dumbgit) {
@@ -151,6 +171,30 @@ if (!G.__dumbgit) {
   }
 }
 const state = G.__dumbgit
+
+/**
+ * Picks a listen port once per process: `bin/dumbgit` passes `--port` (fixed);
+ * `bun run dev` does not, so we scan 7777–7900 for the first free slot.
+ * Stored on `state` so `--watch` reload keeps the same port.
+ */
+async function pickListenPort(): Promise<number> {
+  if (state.resolvedListenPort !== undefined) return state.resolvedListenPort
+
+  if (BOOT.portExplicit) {
+    state.resolvedListenPort = BOOT.port
+    return BOOT.port
+  }
+
+  for (let p = PORT_PROBE_LO; p <= PORT_PROBE_HI; p++) {
+    if (await portLooksFree(p)) {
+      state.resolvedListenPort = p
+      return p
+    }
+  }
+
+  console.error(`dumbgit: no free TCP port ${PORT_PROBE_LO}-${PORT_PROBE_HI}`)
+  process.exit(1)
+}
 
 if (!state.repoInitialized) {
   try {
@@ -564,7 +608,7 @@ app.get('/events', (c) => {
   })
 })
 
-const listenPort = BOOT.port
+const listenPort = await pickListenPort()
 
 if (state.server) {
   state.server.reload({
@@ -580,6 +624,9 @@ if (state.server) {
   })
   const base = `http://${LISTEN_HOST}:${listenPort}`
   console.log(`dumbgit on ${base}  (repo: ${BOOT.repoAbs})`)
+  if (!BOOT.portExplicit && listenPort !== PORT_PROBE_LO) {
+    console.log(`note: port ${PORT_PROBE_LO} was busy; listening on ${listenPort}`)
+  }
   console.log('ctrl-c to quit, or `dumbgit --stop-all` to stop every dumbgit')
   if (BOOT.openBrowserFlag) {
     setTimeout(() => {
