@@ -67,25 +67,27 @@ function expandUser(p: string): string {
 }
 
 function parseServerArgv(): {
-  port: number
-  portExplicit: boolean
-  openBrowserFlag: boolean
+  /** null = scan PORT_PROBE_LO..HI; number = pin to that port. */
+  port: number | null
+  open: boolean
   repoAbs: string
 } {
-  let port = 7777
-  let portExplicit = false
-  let openBrowserFlag = false
+  let port: number | null = null
+  let open = false
   const pos: string[] = []
   for (let i = 2; i < process.argv.length; i++) {
     const a = process.argv[i]
     if (a === '--open') {
-      openBrowserFlag = true
+      open = true
       continue
     }
     if (a === '--port') {
-      portExplicit = true
       const n = Number(process.argv[++i])
-      if (Number.isFinite(n) && n >= 1 && n <= 65535) port = Math.floor(n)
+      if (!Number.isFinite(n) || n < 1 || n > 65535) {
+        console.error(`dumbgit: bad --port value`)
+        process.exit(2)
+      }
+      port = Math.floor(n)
       continue
     }
     if (!a || a.startsWith('-')) continue
@@ -93,7 +95,7 @@ function parseServerArgv(): {
   }
   const raw = pos[0]
   const repoAbs = raw ? path.resolve(expandUser(raw)) : path.resolve(process.cwd())
-  return { port, portExplicit, openBrowserFlag, repoAbs }
+  return { port, open, repoAbs }
 }
 
 function portLooksFree(p: number): Promise<boolean> {
@@ -151,18 +153,15 @@ async function loadGraph(limit?: number): Promise<GraphFragmentProps> {
 }
 
 /**
- * `bun --hot` re-evaluates this module on every save. We pin one-shot state
- * (the fs.watch handle, the change timestamp, the Bun.serve handle) onto
- * globalThis so reloads update fetch handlers without rebinding the port
- * and without leaking watchers.
+ * Pinned to globalThis so `bun --hot` reloads keep the watcher, the server
+ * handle, and the bound port across module re-evaluation.
  */
 type DumbgitState = {
   lastChange: number
   closeWatch?: () => void
   server?: ReturnType<typeof Bun.serve>
   repoInitialized?: boolean
-  /** First successful bind; survives `bun --watch` reloads. */
-  resolvedListenPort?: number
+  listenPort?: number
 }
 const G = globalThis as { __dumbgit?: DumbgitState }
 if (!G.__dumbgit) {
@@ -172,26 +171,13 @@ if (!G.__dumbgit) {
 }
 const state = G.__dumbgit
 
-/**
- * Picks a listen port once per process: `bin/dumbgit` passes `--port` (fixed);
- * `bun run dev` does not, so we scan 7777–7900 for the first free slot.
- * Stored on `state` so `--watch` reload keeps the same port.
- */
-async function pickListenPort(): Promise<number> {
-  if (state.resolvedListenPort !== undefined) return state.resolvedListenPort
-
-  if (BOOT.portExplicit) {
-    state.resolvedListenPort = BOOT.port
-    return BOOT.port
-  }
-
+/** Cached on state to survive `bun --watch` reloads. */
+async function listenPort(): Promise<number> {
+  if (state.listenPort !== undefined) return state.listenPort
+  if (BOOT.port !== null) return (state.listenPort = BOOT.port)
   for (let p = PORT_PROBE_LO; p <= PORT_PROBE_HI; p++) {
-    if (await portLooksFree(p)) {
-      state.resolvedListenPort = p
-      return p
-    }
+    if (await portLooksFree(p)) return (state.listenPort = p)
   }
-
   console.error(`dumbgit: no free TCP port ${PORT_PROBE_LO}-${PORT_PROBE_HI}`)
   process.exit(1)
 }
@@ -608,27 +594,24 @@ app.get('/events', (c) => {
   })
 })
 
-const listenPort = await pickListenPort()
+const port = await listenPort()
 
 if (state.server) {
   state.server.reload({
     hostname: LISTEN_HOST,
-    port: listenPort,
+    port,
     fetch: app.fetch,
   })
 } else {
   state.server = Bun.serve({
     hostname: LISTEN_HOST,
-    port: listenPort,
+    port,
     fetch: app.fetch,
   })
-  const base = `http://${LISTEN_HOST}:${listenPort}`
+  const base = `http://${LISTEN_HOST}:${port}`
   console.log(`dumbgit on ${base}  (repo: ${BOOT.repoAbs})`)
-  if (!BOOT.portExplicit && listenPort !== PORT_PROBE_LO) {
-    console.log(`note: port ${PORT_PROBE_LO} was busy; listening on ${listenPort}`)
-  }
   console.log('ctrl-c to quit, or `dumbgit --stop-all` to stop every dumbgit')
-  if (BOOT.openBrowserFlag) {
+  if (BOOT.open) {
     setTimeout(() => {
       Bun.spawn(['open', base])
     }, 200)
