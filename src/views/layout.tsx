@@ -301,6 +301,29 @@ body {
   color: var(--accent);
   font-weight: 700;
 }
+.wt-open-btn {
+  font: inherit;
+  font-size: 11px;
+  line-height: 16px;
+  flex: 0 0 38px;
+  align-self: center;
+  padding: 1px 5px;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  opacity: 0;
+}
+.wt-list li:hover .wt-open-btn,
+.wt-open-btn:focus-visible {
+  opacity: 1;
+}
+.wt-open-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: rgba(86, 156, 214, 0.12);
+}
 .graph-body {
   flex: 0 0 auto;
   min-height: 0;

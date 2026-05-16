@@ -134,6 +134,7 @@ export function WorkTreeDiffPanel(props: WorkTreeDiffPanelProps) {
 
   const actionUrl = (op: WorkTreeActionOp) =>
     `/api/worktree/action?op=${op}&kind=${props.kind}&path=${encodeURIComponent(props.displayPath)}`
+  const openUrl = `/api/worktree/open?kind=${props.kind}&path=${encodeURIComponent(props.displayPath)}`
   const primary =
     props.kind === 'staged'
       ? {
@@ -161,6 +162,15 @@ export function WorkTreeDiffPanel(props: WorkTreeDiffPanelProps) {
           <span class="diff-subject-path">{props.displayPath}</span>
         </div>
         <div class="worktree-head-actions">
+          <button
+            type="button"
+            class="worktree-action-btn"
+            title={`Open ${props.displayPath} in Sublime`}
+            hx-post={openUrl}
+            hx-swap="none"
+          >
+            open
+          </button>
           <button
             type="button"
             class="worktree-action-btn"

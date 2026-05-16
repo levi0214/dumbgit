@@ -1,4 +1,4 @@
-import { realpathSync } from 'node:fs'
+import { existsSync, realpathSync } from 'node:fs'
 import path from 'node:path'
 
 export class GitError extends Error {
@@ -751,6 +751,34 @@ export async function workTreeFilePatch(
     }
   }
   return { ok: true, patch: r.stdout.trimEnd() }
+}
+
+export async function workTreeFileAbsolutePath(
+  kind: WorkTreeChangeKind,
+  displayPath: string,
+): Promise<{ ok: true; path: string } | { ok: false; stderr: string }> {
+  const wt = await workTreeSummary()
+  const bucket =
+    kind === 'staged' ? wt.staged : kind === 'unstaged' ? wt.unstaged : wt.untracked
+  if (!bucket.some((e) => e.path === displayPath)) {
+    return {
+      ok: false,
+      stderr: 'path not in current working tree list (try refreshing)',
+    }
+  }
+
+  const raw = gitDiffPath(displayPath)
+  if (!raw) return { ok: false, stderr: 'invalid path' }
+
+  const rel = await strictRepoRelative(raw)
+  if (!rel) return { ok: false, stderr: 'invalid path' }
+
+  const abs = path.resolve(repoRoot, rel)
+  if (!existsSync(abs)) {
+    return { ok: false, stderr: `${displayPath} does not exist in the working tree` }
+  }
+
+  return { ok: true, path: abs }
 }
 
 /** Explicit worktree action from the file detail panel. */

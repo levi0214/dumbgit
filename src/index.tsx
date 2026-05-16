@@ -2,6 +2,7 @@
 import { Fragment } from 'hono/jsx'
 import { Hono } from 'hono'
 import { streamSSE } from 'hono/streaming'
+import { spawnSync } from 'node:child_process'
 import net from 'node:net'
 import os from 'node:os'
 import path from 'node:path'
@@ -25,6 +26,7 @@ import {
   stashFilePatch,
   stashSummary,
   togglePreviewStash,
+  workTreeFileAbsolutePath,
   workTreeFilePatch,
   workTreeSummary,
 } from './git'
@@ -371,6 +373,37 @@ app.post('/api/worktree/action', async (c) => {
     </Fragment>,
     200,
   )
+})
+
+app.post('/api/worktree/open', async (c) => {
+  const kind = c.req.query('kind')
+  const filePath = c.req.query('path') ?? ''
+  if (
+    (kind !== 'staged' && kind !== 'unstaged' && kind !== 'untracked') ||
+    !filePath
+  ) {
+    return c.html(<StatusOob error="missing or invalid worktree file" />, 200)
+  }
+
+  const file = await workTreeFileAbsolutePath(kind, filePath)
+  if (!file.ok) {
+    return c.html(<StatusOob error={file.stderr} />, 200)
+  }
+
+  const r = spawnSync('open', ['-a', 'Sublime Text', file.path], {
+    encoding: 'utf8',
+  })
+  if (r.status !== 0) {
+    const stderr = String(r.stderr ?? '').trim()
+    return c.html(
+      <StatusOob
+        error={stderr || `open in Sublime failed (${r.status ?? 'unknown'})`}
+      />,
+      200,
+    )
+  }
+
+  return c.html(<StatusOob />, 200)
 })
 
 app.post('/api/worktree/stash-toggle', async (c) => {
