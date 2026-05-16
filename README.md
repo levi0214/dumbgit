@@ -23,17 +23,17 @@ Built and used on macOS.
 ## Run
 
 ```bash
-dumbgit              # open the current repo
-dumbgit /path/to/x   # open another repo
-dumbgit list         # running servers (repo and URL per line)
-dumbgit stop         # stop server for cwd repo
-dumbgit stop /path/to/x   # stop server for that repo
-dumbgit stop --all   # stop every dumbgit server
+dumbgit [dir]
+dumbgit list
+dumbgit stop [id|dir]
+dumbgit stop --all
 ```
 
-Each repo gets its own local server process. Starting the same repo again
-reopens the existing server. The launcher picks a free port from `7777` to
-`7900`, opens the browser, and prints the URL.
+`dir` defaults to the current repo. `list` prints `id`, repo, and URL; pass the
+id to `stop` to stop that server.
+
+Each repo gets its own server. Starting the same repo again reopens it. Ports
+come from `7777` to `7900`.
 
 Use `bun run dev` when working on dumbgit itself. It runs the server in the
 foreground with `bun --watch src/index.tsx`; if `7777` is busy, it picks the

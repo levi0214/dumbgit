@@ -22,7 +22,7 @@ const logPath = path.join(os.homedir(), 'Library', 'Logs', 'dumbgit.log')
 function usage(code = 0) {
   const text = `usage: dumbgit [dir]
        dumbgit list
-       dumbgit stop [dir]
+       dumbgit stop [id|dir]
        dumbgit stop --all`
   if (code === 0) console.log(text)
   else console.error(text)
@@ -214,14 +214,36 @@ async function cmdStop(repoAbs) {
   console.log(`dumbgit: stopped ${repoAbs}`)
 }
 
+async function cmdStopId(rawId) {
+  const id = Number(rawId)
+  if (!Number.isSafeInteger(id) || id < 1) {
+    console.error(`dumbgit: invalid instance id: ${rawId}`)
+    process.exit(1)
+  }
+
+  const inst = await scanInstances()
+  const hit = inst[id - 1]
+  if (!hit) {
+    console.error(`dumbgit: no dumbgit instance with id ${id}`)
+    process.exit(1)
+  }
+
+  const stopped = await stopPorts([hit.port])
+  if (!stopped) {
+    console.error(`dumbgit: found ${hit.repo}, but no process was stopped`)
+    process.exit(1)
+  }
+  console.log(`dumbgit: stopped ${hit.repo}`)
+}
+
 async function cmdList() {
   const inst = await scanInstances()
   if (inst.length === 0) {
     console.log('dumbgit: no instances running')
     return
   }
-  for (const i of inst) {
-    console.log(`${i.repo}\t${i.url}`)
+  for (const [index, i] of inst.entries()) {
+    console.log(`${index + 1}\t${i.repo}\t${i.url}`)
   }
 }
 
@@ -309,6 +331,10 @@ if (argv.length >= 1 && argv[0] === 'stop') {
   }
   if (rest.length === 1 && rest[0] === '--all') {
     await cmdStopAll()
+    process.exit(0)
+  }
+  if (rest.length === 1 && /^\d+$/.test(rest[0])) {
+    await cmdStopId(rest[0])
     process.exit(0)
   }
   if (rest.length === 1 && !rest[0].startsWith('-')) {
