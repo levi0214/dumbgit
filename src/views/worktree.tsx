@@ -169,7 +169,6 @@ function Section(props: {
         {props.rows.map(({ entry: e, kind }) => {
           const label = markLabel(e.mark)
           const diffUrl = `/api/worktree/file?kind=${kind}&path=${encodeURIComponent(e.path)}`
-          const openUrl = `/api/worktree/open?kind=${kind}&path=${encodeURIComponent(e.path)}`
           return (
             <li>
               <button
@@ -187,16 +186,6 @@ function Section(props: {
                 <span class={`wt-mark file-${e.mark[0] ?? '_'}`}>{e.mark}</span>
                 <span class="wt-path">{e.path}</span>
                 <WorkTreeNums entry={e} kind={kind} />
-              </button>
-              <button
-                type="button"
-                class="wt-open-btn"
-                title={`Open ${e.path} in Sublime`}
-                aria-label={`Open ${e.path} in Sublime`}
-                hx-post={openUrl}
-                hx-swap="none"
-              >
-                open
               </button>
             </li>
           )

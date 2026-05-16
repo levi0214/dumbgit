@@ -301,29 +301,6 @@ body {
   color: var(--accent);
   font-weight: 700;
 }
-.wt-open-btn {
-  font: inherit;
-  font-size: 11px;
-  line-height: 16px;
-  flex: 0 0 38px;
-  align-self: center;
-  padding: 1px 5px;
-  border: 1px solid transparent;
-  border-radius: 3px;
-  background: transparent;
-  color: var(--muted);
-  cursor: pointer;
-  opacity: 0;
-}
-.wt-list li:hover .wt-open-btn,
-.wt-open-btn:focus-visible {
-  opacity: 1;
-}
-.wt-open-btn:hover {
-  border-color: var(--accent);
-  color: var(--accent);
-  background: rgba(86, 156, 214, 0.12);
-}
 .graph-body {
   flex: 0 0 auto;
   min-height: 0;
@@ -881,6 +858,39 @@ body {
   flex: 1;
   color: var(--fg);
   font-weight: 600;
+}
+.diff-subject-open {
+  font: inherit;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+.diff-subject-open .diff-subject-path {
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-decoration-color: rgba(255, 255, 255, 0.32);
+  text-underline-offset: 3px;
+}
+.diff-subject-open .open-ico {
+  flex-shrink: 0;
+  color: var(--muted);
+}
+.diff-subject-open:hover .diff-subject-path,
+.diff-subject-open:focus-visible .diff-subject-path {
+  color: var(--accent);
+  text-decoration-style: solid;
+  text-decoration-color: var(--accent);
+}
+.diff-subject-open:hover .open-ico,
+.diff-subject-open:focus-visible .open-ico {
+  color: var(--accent);
 }
 .worktree-head-actions {
   display: inline-flex;

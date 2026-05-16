@@ -11,6 +11,10 @@ const TAG_ICO = raw(
   `<svg class="tag-ico" xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>`,
 )
 
+const OPEN_ICO = raw(
+  `<svg class="open-ico" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>`,
+)
+
 export type DiffPanelProps =
   | { state: 'empty'; swapOob?: boolean }
   | {
@@ -159,18 +163,19 @@ export function WorkTreeDiffPanel(props: WorkTreeDiffPanelProps) {
     >
       <div class="diff-head">
         <div class="diff-subject" title={props.displayPath}>
-          <span class="diff-subject-path">{props.displayPath}</span>
-        </div>
-        <div class="worktree-head-actions">
           <button
             type="button"
-            class="worktree-action-btn"
+            class="diff-subject-open"
             title={`Open ${props.displayPath} in Sublime`}
+            aria-label={`Open ${props.displayPath} in Sublime`}
             hx-post={openUrl}
             hx-swap="none"
           >
-            open
+            <span class="diff-subject-path">{props.displayPath}</span>
+            {OPEN_ICO}
           </button>
+        </div>
+        <div class="worktree-head-actions">
           <button
             type="button"
             class="worktree-action-btn"
