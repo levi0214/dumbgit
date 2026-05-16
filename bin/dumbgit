@@ -12,7 +12,6 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const LISTEN_HOST = '127.0.0.1'
-const HEALTH_MARK = 'dumbgit ok'
 const PORT_LO = 7777
 const PORT_HI = 7900
 
@@ -20,12 +19,19 @@ const scriptPath = realpathSync(fileURLToPath(import.meta.url))
 const appRoot = path.resolve(path.dirname(scriptPath), '..')
 const logPath = path.join(os.homedir(), 'Library', 'Logs', 'dumbgit.log')
 
-function usage() {
-  console.log(`usage: dumbgit [dir]
-       dumbgit --stop
+function usage(code = 0) {
+  const text = `usage: dumbgit [dir]
+       dumbgit list
+       dumbgit stop [dir]
+       dumbgit stop --all`
+  if (code === 0) console.log(text)
+  else console.error(text)
+  process.exit(code)
+}
 
-Open the UI for one repo (default: .). --stop shuts down every dumbgit.`)
-  process.exit(0)
+function die(msg) {
+  console.error(`dumbgit: ${msg}`)
+  usage(2)
 }
 
 function expandUser(p) {
@@ -44,7 +50,15 @@ function repoRoot(raw) {
     console.error(`dumbgit: ${msg}`)
     process.exit(1)
   }
-  return r.stdout.trim()
+  return realpathSync(r.stdout.trim())
+}
+
+function sameRepo(a, b) {
+  try {
+    return realpathSync(a) === realpathSync(b)
+  } catch {
+    return false
+  }
 }
 
 function sleep(ms) {
@@ -69,21 +83,50 @@ async function allocatePort() {
   return undefined
 }
 
-async function pingDumbgit(port) {
+async function fetchInstance(port) {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), 450)
   try {
-    const r = await fetch(`http://${LISTEN_HOST}:${port}/healthz`, {
+    const r = await fetch(`http://${LISTEN_HOST}:${port}/healthz.json`, {
       signal: controller.signal,
     })
-    const text = await r.text()
-    if (r.ok && text.trim() === HEALTH_MARK) return 'dumbgit'
-    return 'other'
+    if (!r.ok) return null
+    const j = await r.json()
+    if (!j || j.ok !== true || j.name !== 'dumbgit') return null
+    if (
+      typeof j.repo !== 'string' ||
+      typeof j.pid !== 'number' ||
+      typeof j.port !== 'number'
+    ) {
+      return null
+    }
+    if (j.port !== port) return null
+    let repoAbs
+    try {
+      repoAbs = realpathSync(j.repo)
+    } catch {
+      return null
+    }
+    return {
+      repo: repoAbs,
+      pid: j.pid,
+      port: j.port,
+      url: `http://${LISTEN_HOST}:${port}`,
+    }
   } catch {
-    return 'dead'
+    return null
   } finally {
     clearTimeout(timer)
   }
+}
+
+async function scanInstances() {
+  const out = []
+  for (let p = PORT_LO; p <= PORT_HI; p++) {
+    const inst = await fetchInstance(p)
+    if (inst) out.push(inst)
+  }
+  return out
 }
 
 function listeningPidsOnPort(port) {
@@ -91,6 +134,87 @@ function listeningPidsOnPort(port) {
     encoding: 'utf8',
   })
   return [...new Set(r.stdout.split(/\s+/).filter(Boolean))]
+}
+
+async function stopPorts(ports) {
+  const seen = new Set()
+  let stopped = false
+  for (const port of ports) {
+    const inst = await fetchInstance(port)
+    if (!inst) continue
+    const pids = listeningPidsOnPort(port)
+    for (const pid of pids) {
+      if (seen.has(pid)) continue
+      seen.add(pid)
+      stopped = true
+      try {
+        process.kill(Number(pid), 'SIGTERM')
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+
+  await sleep(200)
+
+  seen.clear()
+  for (const port of ports) {
+    const inst = await fetchInstance(port)
+    if (!inst) continue
+    const pids = listeningPidsOnPort(port)
+    for (const pid of pids) {
+      if (seen.has(pid)) continue
+      seen.add(pid)
+      try {
+        process.kill(Number(pid), 'SIGKILL')
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+
+  return stopped
+}
+
+async function portsMatching(pred) {
+  const ports = []
+  for (let p = PORT_LO; p <= PORT_HI; p++) {
+    const inst = await fetchInstance(p)
+    if (!inst) continue
+    if (pred(inst)) ports.push(p)
+  }
+  return ports
+}
+
+async function cmdStopAll() {
+  const ports = await portsMatching(() => true)
+  if (ports.length === 0) {
+    console.log('dumbgit: no dumbgit listeners running')
+    return
+  }
+  await stopPorts(ports)
+  console.log('dumbgit: stopped all listeners')
+}
+
+async function cmdStop(repoAbs) {
+  const ports = await portsMatching((inst) => sameRepo(inst.repo, repoAbs))
+  if (ports.length === 0) {
+    console.log(`dumbgit: no dumbgit running for ${repoAbs}`)
+    return
+  }
+  await stopPorts(ports)
+  console.log(`dumbgit: stopped ${repoAbs}`)
+}
+
+async function cmdList() {
+  const inst = await scanInstances()
+  if (inst.length === 0) {
+    console.log('dumbgit: no instances running')
+    return
+  }
+  for (const i of inst) {
+    console.log(`${i.repo}\t${i.url}`)
+  }
 }
 
 function startServer(repo, port) {
@@ -112,58 +236,11 @@ function startServer(repo, port) {
 async function waitForHealthy(port, msTotal = 10000) {
   const deadline = Date.now() + msTotal
   while (Date.now() < deadline) {
-    const st = await pingDumbgit(port)
-    if (st === 'dumbgit') return true
-    if (st === 'other') return false
+    const inst = await fetchInstance(port)
+    if (inst) return true
     await sleep(100)
   }
   return false
-}
-
-async function stopAll() {
-  const seen = new Set()
-  let stopped = false
-  for (let p = PORT_LO; p <= PORT_HI; p++) {
-    const st = await pingDumbgit(p)
-    if (st !== 'dumbgit') continue
-    const pids = listeningPidsOnPort(p)
-    for (const pid of pids) {
-      if (seen.has(pid)) continue
-      seen.add(pid)
-      stopped = true
-      try {
-        process.kill(Number(pid), 'SIGTERM')
-      } catch {
-        /* ignore */
-      }
-    }
-  }
-
-  await sleep(200)
-
-  /** Second pass — anything still dumbgit becomes SIGKILL. */
-  seen.clear()
-  for (let p = PORT_LO; p <= PORT_HI; p++) {
-    const st = await pingDumbgit(p)
-    if (st !== 'dumbgit') continue
-    const pids = listeningPidsOnPort(p)
-    for (const pid of pids) {
-      if (seen.has(pid)) continue
-      seen.add(pid)
-      try {
-        process.kill(Number(pid), 'SIGKILL')
-      } catch {
-        /* ignore */
-      }
-    }
-  }
-
-  if (stopped) {
-    console.log('dumbgit: stopped all listeners')
-    return
-  }
-
-  console.log('dumbgit: no dumbgit listeners running')
 }
 
 function openBrowserAt(port) {
@@ -174,39 +251,68 @@ function openBrowserAt(port) {
   if (r.status !== 0) console.log(`dumbgit: open ${url}`)
 }
 
-const argv = process.argv.slice(2)
-const flags = new Set()
-const posArgs = []
-for (const a of argv) {
-  if (a === '--') continue
-  if (a.startsWith('-')) flags.add(a)
-  else posArgs.push(a)
+async function cmdStart(rawDir) {
+  const repo = repoRoot(rawDir)
+  const existing = await scanInstances()
+  const hit = existing.find((i) => sameRepo(i.repo, repo))
+  if (hit) {
+    openBrowserAt(hit.port)
+    console.log(`dumbgit: ${repo}`)
+    console.log(hit.url)
+    return
+  }
+
+  const port = await allocatePort()
+  if (port === undefined) {
+    console.error(`dumbgit: no free TCP port ${PORT_LO}-${PORT_HI}`)
+    process.exit(1)
+  }
+
+  startServer(repo, port)
+  const ok = await waitForHealthy(port)
+  if (!ok) {
+    console.error(`dumbgit: server did not start; see ${logPath}`)
+    process.exit(1)
+  }
+
+  openBrowserAt(port)
+  const url = `http://${LISTEN_HOST}:${port}`
+  console.log(`dumbgit: ${repo}`)
+  console.log(url)
 }
 
-if (flags.has('-h') || flags.has('--help')) usage()
-if (flags.has('--stop-all') || flags.has('--stop')) {
-  if (posArgs.length !== 0) usage()
-  await stopAll()
+const argv = process.argv.slice(2)
+
+if (argv.length === 1 && (argv[0] === '-h' || argv[0] === '--help')) {
+  usage(0)
+}
+
+if (argv.length >= 1 && argv[0] === 'list') {
+  if (argv.length !== 1) die('too many arguments')
+  await cmdList()
   process.exit(0)
 }
-if (posArgs.length > 1) usage()
 
-const repo = repoRoot(posArgs[0] ?? process.cwd())
-
-const port = await allocatePort()
-if (port === undefined) {
-  console.error(`dumbgit: no free TCP port ${PORT_LO}-${PORT_HI}`)
-  process.exit(1)
+if (argv.length >= 1 && argv[0] === 'stop') {
+  const rest = argv.slice(1)
+  if (rest.length === 0) {
+    await cmdStop(repoRoot(process.cwd()))
+    process.exit(0)
+  }
+  if (rest.length === 1 && rest[0] === '--all') {
+    await cmdStopAll()
+    process.exit(0)
+  }
+  if (rest.length === 1 && !rest[0].startsWith('-')) {
+    await cmdStop(repoRoot(rest[0]))
+    process.exit(0)
+  }
+  die('invalid stop usage')
 }
 
-startServer(repo, port)
-const ok = await waitForHealthy(port)
-if (!ok) {
-  console.error(`dumbgit: server did not start; see ${logPath}`)
-  process.exit(1)
+for (const a of argv) {
+  if (a.startsWith('-')) die(`unknown option: ${a}`)
 }
+if (argv.length > 1) die('too many arguments')
 
-openBrowserAt(port)
-const url = `http://${LISTEN_HOST}:${port}`
-console.log(`dumbgit: ${repo}`)
-console.log(url)
+await cmdStart(argv[0] ?? process.cwd())

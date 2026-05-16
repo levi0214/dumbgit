@@ -42,7 +42,7 @@ import { StatusOob } from './views/status'
 import { WorkTreeFragment } from './views/worktree'
 
 const LISTEN_HOST = '127.0.0.1'
-/** Body must contain this line for `bin/dumbgit --stop-all` to identify listeners. */
+/** Plain-text probe body for humans / curl. */
 const HEALTH_BODY = 'dumbgit ok'
 
 /** Same scan range as `bin/dumbgit` allocatePort (implicit port only). */
@@ -208,6 +208,21 @@ await attachWatcher()
 const app = new Hono()
 
 app.get('/healthz', (c) => c.text(`${HEALTH_BODY}\n`))
+
+/** Launcher discovers running servers via this endpoint (JSON). */
+app.get('/healthz.json', (c) => {
+  const port = state.listenPort
+  if (port === undefined) {
+    return c.json({ ok: false, error: 'not_ready' }, 503)
+  }
+  return c.json({
+    ok: true,
+    name: 'dumbgit',
+    repo: getCurrentRepo(),
+    pid: process.pid,
+    port,
+  })
+})
 
 app.get('/', async (c) => {
   const graph = await loadGraph()
@@ -611,7 +626,7 @@ if (state.server) {
   })
   const base = `http://${LISTEN_HOST}:${port}`
   console.log(`dumbgit on ${base}  (repo: ${BOOT.repoAbs})`)
-  console.log('ctrl-c to quit, or `dumbgit --stop-all` to stop every dumbgit')
+  console.log('ctrl-c to quit, or `dumbgit stop --all` to stop every dumbgit')
   if (BOOT.open) {
     setTimeout(() => {
       Bun.spawn(['open', base])
