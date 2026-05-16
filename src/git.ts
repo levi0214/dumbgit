@@ -1,3 +1,4 @@
+import { realpathSync } from 'node:fs'
 import path from 'node:path'
 
 export class GitError extends Error {
@@ -25,11 +26,14 @@ const lastBranchByRepo = new Map<string, string>()
  * the directory is not a git tree.
  */
 export async function initRepo(dir: string): Promise<void> {
-  repoRoot = dir
-  const { code, stderr } = await spawnGit(['rev-parse', '--git-dir'])
+  const { code, stdout, stderr } = await spawnGit(
+    ['rev-parse', '--show-toplevel'],
+    dir,
+  )
   if (code !== 0) {
     throw new GitError(stderr.trim() || 'not a git repository', code)
   }
+  repoRoot = realpathSync(stdout.trim())
 }
 
 export function getCurrentRepo(): string {

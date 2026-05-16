@@ -192,7 +192,11 @@ async function cmdStopAll() {
     console.log('dumbgit: no dumbgit listeners running')
     return
   }
-  await stopPorts(ports)
+  const stopped = await stopPorts(ports)
+  if (!stopped) {
+    console.error('dumbgit: found listeners, but no process was stopped')
+    process.exit(1)
+  }
   console.log('dumbgit: stopped all listeners')
 }
 
@@ -202,7 +206,11 @@ async function cmdStop(repoAbs) {
     console.log(`dumbgit: no dumbgit running for ${repoAbs}`)
     return
   }
-  await stopPorts(ports)
+  const stopped = await stopPorts(ports)
+  if (!stopped) {
+    console.error(`dumbgit: found ${repoAbs}, but no process was stopped`)
+    process.exit(1)
+  }
   console.log(`dumbgit: stopped ${repoAbs}`)
 }
 

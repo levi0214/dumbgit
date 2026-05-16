@@ -215,13 +215,16 @@ app.get('/healthz.json', (c) => {
   if (port === undefined) {
     return c.json({ ok: false, error: 'not_ready' }, 503)
   }
-  return c.json({
-    ok: true,
-    name: 'dumbgit',
-    repo: getCurrentRepo(),
-    pid: process.pid,
-    port,
-  })
+  return c.json(
+    {
+      ok: true,
+      name: 'dumbgit',
+      repo: getCurrentRepo(),
+      pid: process.pid,
+      port,
+    },
+    200,
+  )
 })
 
 app.get('/', async (c) => {
@@ -625,7 +628,7 @@ if (state.server) {
     fetch: app.fetch,
   })
   const base = `http://${LISTEN_HOST}:${port}`
-  console.log(`dumbgit on ${base}  (repo: ${BOOT.repoAbs})`)
+  console.log(`dumbgit on ${base}  (repo: ${getCurrentRepo()})`)
   console.log('ctrl-c to quit, or `dumbgit stop --all` to stop every dumbgit')
   if (BOOT.open) {
     setTimeout(() => {
