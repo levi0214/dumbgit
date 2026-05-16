@@ -394,19 +394,20 @@ body {
   opacity: 0.85;
 }
 /* Reachability-off commits recede as a row, but branch anchors stay readable. */
-.log-row-commit.log-row-dim .branch-prefix {
+.log-row-commit.log-row-dim .branch-prefix,
+.log-row-commit.log-row-dim .ref-pill-branch {
   color: var(--fg);
   background: rgba(255, 255, 255, 0.05);
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14);
   opacity: 0.38;
 }
-.log-row-commit.log-row-dim .branch-prefix:hover {
+.log-row-commit.log-row-dim .branch-prefix:hover,
+.log-row-commit.log-row-dim .ref-pill-branch:hover {
   background: rgba(255, 255, 255, 0.12);
   color: var(--fg);
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.28);
   opacity: 0.9;
 }
-.log-row-commit.log-row-dim .ref-pill-branch,
 .log-row-commit.log-row-dim .ref-pill-head {
   color: var(--fg);
   border-color: rgba(255, 255, 255, 0.14);
@@ -419,7 +420,7 @@ body {
   background: rgba(255, 255, 255, 0.04);
   opacity: 0.5;
 }
-.log-row-commit.log-row-dim .ref-pill:hover {
+.log-row-commit.log-row-dim .ref-pill:not(.ref-pill-branch):hover {
   border-color: rgba(255, 255, 255, 0.3);
   color: var(--fg);
   background: rgba(255, 255, 255, 0.1);
@@ -506,6 +507,16 @@ body {
   background: rgba(86, 156, 214, 0.15);
 }
 .ref-pill-branch {
+  font-size: 12px;
+  line-height: 16px;
+  padding: 0 5px;
+  border: 0;
+  border-radius: 3px;
+  background: rgba(156, 220, 254, 0.12);
+  color: #9cdcfe;
+}
+.ref-pill-branch:hover {
+  background: rgba(156, 220, 254, 0.22);
   color: #9cdcfe;
 }
 /* Remote = outlined / ghost: deprioritized vs local. */
@@ -1305,4 +1316,3 @@ export function Layout(props: { children: unknown; title?: string }) {
     </html>
   )
 }
-
