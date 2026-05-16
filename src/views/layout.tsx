@@ -512,11 +512,13 @@ body {
   padding: 0 5px;
   border: 0;
   border-radius: 3px;
-  background: rgba(156, 220, 254, 0.12);
-  color: #9cdcfe;
+  background: rgba(255, 255, 255, 0.035);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
+  color: rgba(255, 255, 255, 0.86);
 }
 .ref-pill-branch:hover {
   background: rgba(156, 220, 254, 0.22);
+  box-shadow: inset 0 0 0 1px rgba(156, 220, 254, 0.4);
   color: #9cdcfe;
 }
 /* Remote = outlined / ghost: deprioritized vs local. */
@@ -575,8 +577,9 @@ body {
   white-space: nowrap;
   font-size: 12px;
   line-height: 16px;
-  color: #9cdcfe;
-  background: rgba(156, 220, 254, 0.12);
+  color: rgba(255, 255, 255, 0.86);
+  background: rgba(255, 255, 255, 0.035);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
   border-radius: 3px;
   padding: 0 5px;
   cursor: pointer;
@@ -654,10 +657,14 @@ body {
 }
 .branch-prefix:hover {
   background: rgba(156, 220, 254, 0.22);
+  box-shadow: inset 0 0 0 1px rgba(156, 220, 254, 0.4);
+  color: #9cdcfe;
 }
 .log-row-head .branch-prefix {
   color: #ffffff;
   background: rgba(255, 255, 255, 0.14);
+  box-shadow: none;
+  font-weight: 700;
 }
 /* Same grid cell: date by default, hash + copy on hover — no floating chip. */
 .row-end {
