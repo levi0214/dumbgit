@@ -1050,7 +1050,8 @@ body {
   margin: 0;
   padding: 10px 12px;
   overflow: visible;
-  white-space: pre;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
   font-family: inherit;
   font-size: 12px;
   flex: 0 0 auto;
