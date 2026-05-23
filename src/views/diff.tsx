@@ -33,6 +33,12 @@ function diffLineClass(line: string): string {
   return 'diff-ctx'
 }
 
+function diffLineContent(line: string, cls: string): string {
+  if (cls === 'diff-add' || cls === 'diff-del') return line.slice(1)
+  if (cls === 'diff-ctx' && line.startsWith(' ')) return line.slice(1)
+  return line
+}
+
 function FileNums(props: { file: CommitFile }) {
   const { file: f } = props
   if (f.binary) {
@@ -104,9 +110,10 @@ export function DiffPatchBody(props: { text: string; compact?: boolean }) {
             </span>
           )
         }
+        const cls = diffLineClass(line)
         return (
-          <span key={i} class={diffLineClass(line)}>
-            {line}
+          <span key={i} class={cls}>
+            {diffLineContent(line, cls)}
             {'\n'}
           </span>
         )

@@ -1061,11 +1061,15 @@ body {
   display: block;
   color: #89d185;
   background: rgba(106, 153, 85, 0.12);
+  border-left: 2px solid #89d185;
+  padding-left: 6px;
 }
 .diff-del {
   display: block;
   color: #f48771;
   background: rgba(244, 135, 113, 0.1);
+  border-left: 2px solid #f48771;
+  padding-left: 6px;
 }
 .diff-hunk {
   display: block;
