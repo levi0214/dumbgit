@@ -1247,6 +1247,40 @@ document.addEventListener('click', function (e) {
 });
 `
 
+const REPO_SYNC_SCRIPT = `
+function localServerIdentity() {
+  var g = document.getElementById('graph');
+  if (g && g.dataset && g.dataset.repo) {
+    return {
+      repo: g.dataset.repo,
+      pid: g.dataset.serverPid ? Number(g.dataset.serverPid) : undefined,
+    };
+  }
+  return null;
+}
+
+function resyncPage() {
+  location.replace((location.pathname || '/') + '?_=' + Date.now());
+}
+
+async function ensureRepoSync() {
+  var local = localServerIdentity();
+  if (!local || !local.repo || local.pid === undefined) return false;
+  try {
+    var r = await fetch('/healthz.json', { cache: 'no-store' });
+    if (!r.ok) return false;
+    var j = await r.json();
+    if (j.repo !== local.repo || String(j.pid) !== String(local.pid)) {
+      resyncPage();
+      return true;
+    }
+  } catch (_) {}
+  return false;
+}
+
+ensureRepoSync();
+`
+
 const SSE_SCRIPT = `
 (function () {
   var DISCONNECT_MS = 1200;
@@ -1272,6 +1306,10 @@ const SSE_SCRIPT = `
     es.addEventListener('open', function () {
       if (showTimer) { clearTimeout(showTimer); showTimer = null; }
       hideDisconnect();
+      ensureRepoSync();
+    });
+    es.addEventListener('ready', function () {
+      ensureRepoSync();
     });
     es.addEventListener('error', function () {
       if (showTimer) clearTimeout(showTimer);
@@ -1293,9 +1331,10 @@ const SSE_SCRIPT = `
 `
 
 const WT_POLL_SCRIPT = `
-setInterval(function () {
+setInterval(async function () {
   if (document.visibilityState !== 'visible') return;
   if (typeof htmx === 'undefined') return;
+  if (await ensureRepoSync()) return;
   var w = document.getElementById('worktree');
   if (w) {
     htmx.ajax('GET', '/fragment/worktree', { target: '#worktree', swap: 'outerHTML' });
@@ -1355,6 +1394,7 @@ export function Layout(props: { children: unknown; title?: string }) {
         </div>
         {props.children}
         <script>{raw(KEY_SCRIPT)}</script>
+        <script>{raw(REPO_SYNC_SCRIPT)}</script>
         <script>{raw(SSE_SCRIPT)}</script>
         <script>{raw(WT_POLL_SCRIPT)}</script>
       </body>

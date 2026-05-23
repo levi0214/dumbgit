@@ -19,8 +19,10 @@ export type GraphFragmentProps =
       rows: GraphRow[]
       worktree: WorkTreeSummary
       previewStash: PreviewStashUi
-      /** Absolute repo root; tags #worktree so stale polls cannot overwrite cross-origin. */
+      /** Absolute repo root; tags #graph for client/server identity checks. */
       repoPath: string
+      /** Process id at render time; detects server restarts on the same port. */
+      serverPid: number
       /** Current `git log -n` window size (shown commits cap). */
       graphCommitLimit: number
       /** Next limit for “load more” (`min(limit + step, max)`). */
@@ -32,6 +34,7 @@ export type GraphFragmentProps =
       ok: false
       stderr: string
       repoPath: string
+      serverPid: number
       swapOob?: boolean
     }
 
@@ -1013,7 +1016,13 @@ export function GraphFragment(props: GraphFragmentProps) {
   const oob = props.swapOob ? ({ 'hx-swap-oob': 'true' } as const) : {}
   if (!props.ok) {
     return (
-      <div id="graph" class="graph-root graph-error" {...oob}>
+      <div
+        id="graph"
+        class="graph-root graph-error"
+        data-repo={props.repoPath}
+        data-server-pid={String(props.serverPid)}
+        {...oob}
+      >
         <div class="graph-error-head">
           <span class="graph-repo-name" title={props.repoPath}>
             {path.basename(props.repoPath)}
@@ -1034,6 +1043,8 @@ export function GraphFragment(props: GraphFragmentProps) {
     <div
       id="graph"
       class="graph-root"
+      data-repo={props.repoPath}
+      data-server-pid={String(props.serverPid)}
       data-graph-limit={String(props.graphCommitLimit)}
       {...oob}
     >

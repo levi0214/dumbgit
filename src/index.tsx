@@ -135,6 +135,7 @@ async function loadGraph(limit?: number): Promise<GraphFragmentProps> {
       worktree,
       previewStash,
       repoPath: getCurrentRepo(),
+      serverPid: process.pid,
       graphCommitLimit,
       graphNextLimit,
       showLoadMore,
@@ -150,6 +151,7 @@ async function loadGraph(limit?: number): Promise<GraphFragmentProps> {
       ok: false,
       stderr,
       repoPath: getCurrentRepo(),
+      serverPid: process.pid,
     }
   }
 }
@@ -213,6 +215,7 @@ app.get('/healthz', (c) => c.text(`${HEALTH_BODY}\n`))
 
 /** Launcher discovers running servers via this endpoint (JSON). */
 app.get('/healthz.json', (c) => {
+  c.header('Cache-Control', 'no-store')
   const port = state.listenPort
   if (port === undefined) {
     return c.json({ ok: false, error: 'not_ready' }, 503)
@@ -230,6 +233,7 @@ app.get('/healthz.json', (c) => {
 })
 
 app.get('/', async (c) => {
+  c.header('Cache-Control', 'no-store')
   const graph = await loadGraph()
   const tabTitle = `dumbgit: ${path.basename(graph.repoPath)}`
   return c.html(
