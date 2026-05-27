@@ -1,6 +1,7 @@
 import { existsSync, realpathSync } from 'node:fs'
 import path from 'node:path'
 
+// Core repo state and git process helpers.
 export class GitError extends Error {
   override readonly name = 'GitError'
 
@@ -93,6 +94,7 @@ export function stripAnsi(s: string): string {
   return s.replace(/\x1b\[[0-9;:]*m/g, '')
 }
 
+// Graph log rows.
 export type GraphCommitRow = {
   graphAnsi: string
   /** Full 40-char hex, for copy / URLs. */
@@ -210,6 +212,7 @@ export async function logGraphRows(limit = 50): Promise<GraphRow[]> {
   return rows
 }
 
+// Branch, checkout, and push actions.
 export async function checkoutBranch(
   name: string,
 ): Promise<{ ok: true } | { ok: false; stderr: string }> {
@@ -245,6 +248,7 @@ export async function createBranchAt(
   }
 }
 
+// Commit summaries, file lists, and patches.
 export type CommitFile = {
   status: string
   path: string
@@ -427,6 +431,7 @@ export async function gitDir(): Promise<string> {
   return out.trim()
 }
 
+// Worktree types shared by status, file actions, and preview stash.
 export type WorkTreeEntry = {
   mark: string
   path: string
@@ -441,6 +446,7 @@ export type WorkTreeSummary = {
   untracked: WorkTreeEntry[]
 }
 
+// Preview stash.
 /** Message marker for `git stash push -m …` created by dumbgit preview toggle (not user stash). */
 export const DUMBGIT_PREVIEW_STASH_MSG = 'dumbgit-preview-stash'
 
@@ -620,6 +626,7 @@ export async function stashFilePatch(
   return commitFilePatch(stash.ref, displayPath, files)
 }
 
+// Worktree status and file actions.
 function parseNameStatus(stdout: string): WorkTreeEntry[] {
   const entries: WorkTreeEntry[] = []
   for (const line of stdout.split('\n')) {
