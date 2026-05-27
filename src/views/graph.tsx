@@ -105,13 +105,13 @@ function branchPrefixFromDecorations(decorateRaw: string): string | null {
     const plain = stripAnsi(t).trim()
     if (/^tag:/i.test(plain)) continue
     if (/^HEAD$/i.test(plain)) continue
-    if (!plain.includes('/') && plain) return plain
+    if (!isRemoteTrackingRef(plain) && plain) return plain
   }
   for (const t of tokens) {
     const plain = stripAnsi(t).trim()
     if (/^tag:/i.test(plain)) continue
     if (/^HEAD$/i.test(plain)) continue
-    if (plain.includes('/') && plain) return plain
+    if (isRemoteTrackingRef(plain) && plain) return plain
   }
   return null
 }
@@ -150,16 +150,20 @@ function isOriginHeadToken(plain: string): boolean {
   return /^origin\/HEAD(\s*->.*)?$/i.test(plain)
 }
 
+/** Remote-tracking ref from `git log --decorate=short` (`origin/main`), not topic branches (`fix/foo`). */
+function isRemoteTrackingRef(plain: string): boolean {
+  return /^origin\//i.test(plain)
+}
+
 /**
- * Names of "local" branches present on this commit: any non-tag, non-remote
- * (no slash) ref token, plus the prefix branch we render before the subject.
+ * Names of local branches on this commit (including `fix/foo` topic branches).
  */
 function localNamesOnRow(
   tokens: string[],
   branchPrefix: string | null,
 ): Set<string> {
   const set = new Set<string>()
-  if (branchPrefix && !branchPrefix.includes('/')) set.add(branchPrefix)
+  if (branchPrefix && !isRemoteTrackingRef(branchPrefix)) set.add(branchPrefix)
   for (const t of tokens) {
     const p = stripAnsi(t).trim()
     const hm = p.match(/^HEAD\s*->\s*(.+)$/i)
@@ -167,7 +171,7 @@ function localNamesOnRow(
     if (!name) continue
     if (isTagToken(name)) continue
     if (/^HEAD$/i.test(name)) continue
-    if (!name.includes('/')) set.add(name)
+    if (!isRemoteTrackingRef(name)) set.add(name)
   }
   return set
 }
@@ -186,7 +190,7 @@ function hasOriginPeer(tokens: string[], branch: string | null): boolean {
 
 function pillClass(tokenPlain: string): string {
   if (/HEAD\s*->/i.test(tokenPlain)) return 'ref-pill ref-pill-head'
-  if (tokenPlain.includes('/')) return 'ref-pill ref-pill-remote'
+  if (isRemoteTrackingRef(tokenPlain)) return 'ref-pill ref-pill-remote'
   return 'ref-pill ref-pill-branch'
 }
 
@@ -540,7 +544,7 @@ function GraphLaneSpans(props: {
 function pillSortKey(plain: string): number {
   if (/HEAD\s*->/i.test(plain)) return -1
   if (/^HEAD$/i.test(plain)) return 4
-  if (plain.includes('/')) return 1
+  if (isRemoteTrackingRef(plain)) return 1
   return 0
 }
 
@@ -566,7 +570,7 @@ function RefPills(props: {
         if (isRemoteShadowingLocal(plain, locals)) return null
         const ref = refForCheckout(t)
         if (!ref) return null
-        const originPeer = !plain.includes('/') && hasOriginPeer(tokens, plain)
+        const originPeer = !isRemoteTrackingRef(plain) && hasOriginPeer(tokens, plain)
         return (
           <span
             key={idx}
