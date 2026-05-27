@@ -655,6 +655,13 @@ body {
   border-color: rgba(224, 162, 58, 0.6) !important;
   background: rgba(224, 162, 58, 0.18) !important;
 }
+.confirm-busy {
+  display: inline-flex !important;
+  color: var(--muted) !important;
+  background: rgba(255, 255, 255, 0.06) !important;
+  cursor: wait;
+  pointer-events: none;
+}
 .branch-prefix:hover {
   background: rgba(156, 220, 254, 0.22);
   box-shadow: inset 0 0 0 1px rgba(156, 220, 254, 0.4);
@@ -1131,11 +1138,27 @@ function clearConfirmButton(btn) {
   var old = btn.getAttribute('data-confirm-original');
   if (old !== null) btn.textContent = old;
   btn.classList.remove('confirm-armed');
+  btn.classList.remove('confirm-busy');
   btn.removeAttribute('data-confirm-armed');
   btn.removeAttribute('data-confirm-original');
+  btn.removeAttribute('aria-busy');
   var timer = btn.getAttribute('data-confirm-timer');
   if (timer) clearTimeout(Number(timer));
   btn.removeAttribute('data-confirm-timer');
+}
+
+function armConfirmBusy(btn) {
+  var busyLabel = btn.getAttribute('data-confirm-busy-label');
+  if (!busyLabel) return false;
+  var timer = btn.getAttribute('data-confirm-timer');
+  if (timer) clearTimeout(Number(timer));
+  btn.removeAttribute('data-confirm-timer');
+  btn.removeAttribute('data-confirm-armed');
+  btn.classList.remove('confirm-armed');
+  btn.textContent = busyLabel;
+  btn.classList.add('confirm-busy');
+  btn.setAttribute('aria-busy', 'true');
+  return true;
 }
 
 function clearOtherConfirmButtons(btn) {
@@ -1157,7 +1180,7 @@ document.addEventListener('click', function (e) {
   }
   clearOtherConfirmButtons(btn);
   if (btn.getAttribute('data-confirm-armed') === 'true') {
-    clearConfirmButton(btn);
+    if (!armConfirmBusy(btn)) clearConfirmButton(btn);
     return;
   }
   e.preventDefault();
@@ -1188,7 +1211,18 @@ document.addEventListener('click', function (e) {
   fileBtn.setAttribute('aria-current', 'true');
 });
 
+document.body.addEventListener('htmx:beforeRequest', function (e) {
+  var elt = e.detail && e.detail.elt;
+  if (!elt || !elt.matches || !elt.matches('[data-confirm-busy-label]')) return;
+  if (elt.classList.contains('confirm-busy')) return;
+  armConfirmBusy(elt);
+});
+
 document.body.addEventListener('htmx:afterRequest', function (e) {
+  var elt = e.detail && e.detail.elt;
+  if (elt && elt.matches && elt.matches('[data-confirm-busy-label]') && !e.detail.successful) {
+    clearConfirmButton(elt);
+  }
   if (!e.detail.successful) return;
   var xhr = e.detail.xhr;
   if (!xhr) return;

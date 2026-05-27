@@ -628,10 +628,14 @@ app.post('/api/branch/create', async (c) => {
 
 app.post('/api/push', async (c) => {
   const r = await push()
-  if (r.ok) {
-    return c.html(<StatusOob />, 200)
-  }
-  return c.html(<StatusOob error={r.stderr} />, 200)
+  const next = await loadGraph()
+  return c.html(
+    <Fragment>
+      <GraphFragment {...next} />
+      <StatusOob error={r.ok ? undefined : r.stderr} />
+    </Fragment>,
+    200,
+  )
 })
 
 app.get('/events', (c) => {
