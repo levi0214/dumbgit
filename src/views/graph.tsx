@@ -10,6 +10,7 @@ import {
   type PreviewStashUi,
   type WorkTreeSummary,
 } from '../git'
+import { decorationTokens, type DecorationToken } from '../decorations'
 import { WorkTreeFragment } from './worktree'
 
 export type GraphFragmentProps =
@@ -60,72 +61,6 @@ function CopyBtn(props: { dataCopy?: string; title?: string }) {
 const TAG_ICO = raw(
   `<svg class="tag-ico" xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>`,
 )
-/** Split `%d` / parentheses list on commas not inside nested parens. */
-function splitDec(inner: string): string[] {
-  const parts: string[] = []
-  let cur = ''
-  let depth = 0
-  for (let i = 0; i < inner.length; i++) {
-    const ch = inner[i]
-    if (ch === '(') depth++
-    else if (ch === ')') depth--
-    else if (ch === ',' && depth === 0) {
-      const t = cur.trim()
-      if (t) parts.push(t)
-      cur = ''
-      continue
-    }
-    cur += ch
-  }
-  const t = cur.trim()
-  if (t) parts.push(t)
-  return parts
-}
-
-type DecorationToken = {
-  kind: 'head' | 'local' | 'remote' | 'tag' | 'other'
-  name: string
-  head?: boolean
-}
-
-function decorationRefParts(decorateRaw: string): string[] {
-  const plain = stripAnsi(decorateRaw).trim()
-  if (!plain) return []
-  const inner = plain.replace(/^\(/, '').replace(/\)$/, '').trim()
-  if (!inner) return []
-  return splitDec(inner)
-}
-
-function parseRefName(raw: string, head = false): DecorationToken {
-  const name = stripAnsi(raw).trim()
-  const tag = name.match(/^tag:\s*(.+)$/i)
-  if (tag) return parseRefName(tag[1] ?? '', head)
-  const local = name.match(/^refs\/heads\/(.+)$/)
-  if (local) return { kind: 'local', name: local[1] ?? '', head }
-  const remote = name.match(/^refs\/remotes\/(.+)$/)
-  if (remote) return { kind: 'remote', name: remote[1] ?? '', head }
-  const tagFull = name.match(/^refs\/tags\/(.+)$/)
-  if (tagFull) return { kind: 'tag', name: tagFull[1] ?? '', head }
-  if (/^HEAD$/i.test(name)) return { kind: 'head', name: 'HEAD', head }
-  return { kind: 'other', name, head }
-}
-
-function parseDecorationToken(raw: string): DecorationToken {
-  const plain = stripAnsi(raw).trim()
-  const arrow = plain.match(/^(.+?)\s*->\s*(.+)$/)
-  if (!arrow) return parseRefName(plain)
-  const left = arrow[1]?.trim() ?? ''
-  const right = arrow[2]?.trim() ?? ''
-  if (/^HEAD$/i.test(left)) return parseRefName(right, true)
-  return parseRefName(left)
-}
-
-function decorationTokens(decorateRaw: string): DecorationToken[] {
-  return decorationRefParts(decorateRaw)
-    .map(parseDecorationToken)
-    .filter((t) => t.name)
-}
-
 /** Local-ish branch label to show before the subject (avoids duplicating HEAD / same-name pills). */
 function branchPrefixFromTokens(tokens: DecorationToken[]): string | null {
   for (const t of tokens) {

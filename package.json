@@ -7,7 +7,8 @@
   },
   "scripts": {
     "dev": "bun --watch src/index.tsx",
-    "dumbgit": "bun run src/index.tsx --open"
+    "dumbgit": "bun run src/index.tsx --open",
+    "test": "bun test"
   },
   "devDependencies": {
     "bun-types": "latest"
