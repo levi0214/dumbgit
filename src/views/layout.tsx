@@ -487,9 +487,9 @@ body {
   gap: 5px;
   font: inherit;
   font-size: 11px;
-  line-height: 14px;
+  line-height: 16px;
   cursor: pointer;
-  padding: 1px 8px;
+  padding: 0 8px;
   border-radius: 10px;
   border: 1px solid var(--border);
   background: #333;
