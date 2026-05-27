@@ -82,7 +82,13 @@ function splitDec(inner: string): string[] {
   return parts
 }
 
-function decorationRefs(decorateRaw: string): string[] {
+type DecorationToken = {
+  kind: 'head' | 'local' | 'remote' | 'tag' | 'other'
+  name: string
+  head?: boolean
+}
+
+function decorationRefParts(decorateRaw: string): string[] {
   const plain = stripAnsi(decorateRaw).trim()
   if (!plain) return []
   const inner = plain.replace(/^\(/, '').replace(/\)$/, '').trim()
@@ -90,118 +96,132 @@ function decorationRefs(decorateRaw: string): string[] {
   return splitDec(inner)
 }
 
+function parseRefName(raw: string, head = false): DecorationToken {
+  const name = stripAnsi(raw).trim()
+  const tag = name.match(/^tag:\s*(.+)$/i)
+  if (tag) return parseRefName(tag[1] ?? '', head)
+  const local = name.match(/^refs\/heads\/(.+)$/)
+  if (local) return { kind: 'local', name: local[1] ?? '', head }
+  const remote = name.match(/^refs\/remotes\/(.+)$/)
+  if (remote) return { kind: 'remote', name: remote[1] ?? '', head }
+  const tagFull = name.match(/^refs\/tags\/(.+)$/)
+  if (tagFull) return { kind: 'tag', name: tagFull[1] ?? '', head }
+  if (/^HEAD$/i.test(name)) return { kind: 'head', name: 'HEAD', head }
+  return { kind: 'other', name, head }
+}
+
+function parseDecorationToken(raw: string): DecorationToken {
+  const plain = stripAnsi(raw).trim()
+  const arrow = plain.match(/^(.+?)\s*->\s*(.+)$/)
+  if (!arrow) return parseRefName(plain)
+  const left = arrow[1]?.trim() ?? ''
+  const right = arrow[2]?.trim() ?? ''
+  if (/^HEAD$/i.test(left)) return parseRefName(right, true)
+  return parseRefName(left)
+}
+
+function decorationTokens(decorateRaw: string): DecorationToken[] {
+  return decorationRefParts(decorateRaw)
+    .map(parseDecorationToken)
+    .filter((t) => t.name)
+}
+
 /** Local-ish branch label to show before the subject (avoids duplicating HEAD / same-name pills). */
-function branchPrefixFromDecorations(decorateRaw: string): string | null {
-  const tokens = decorationRefs(decorateRaw)
+function branchPrefixFromTokens(tokens: DecorationToken[]): string | null {
   for (const t of tokens) {
-    const plain = stripAnsi(t).trim()
-    const hm = plain.match(/^HEAD\s*->\s*(.+)$/i)
-    if (hm) {
-      const name = hm[1]?.trim()
-      if (name) return name
-    }
+    if (t.head && t.name) return t.name
   }
   for (const t of tokens) {
-    const plain = stripAnsi(t).trim()
-    if (/^tag:/i.test(plain)) continue
-    if (/^HEAD$/i.test(plain)) continue
-    if (!isRemoteTrackingRef(plain) && plain) return plain
+    if (t.kind === 'local') return t.name
   }
   for (const t of tokens) {
-    const plain = stripAnsi(t).trim()
-    if (/^tag:/i.test(plain)) continue
-    if (/^HEAD$/i.test(plain)) continue
-    if (isRemoteTrackingRef(plain) && plain) return plain
+    if (t.kind === 'remote') return t.name
   }
   return null
 }
 
 function refPillRedundantWithBranchPrefix(
-  tokenPlain: string,
+  token: DecorationToken,
   branchPrefix: string | null,
 ): boolean {
   if (!branchPrefix) return false
-  const p = stripAnsi(tokenPlain).trim()
-  const hm = p.match(/^HEAD\s*->\s*(.+)$/i)
-  if (hm && hm[1]?.trim() === branchPrefix) return true
-  return p === branchPrefix
+  return token.name === branchPrefix
 }
 
 /** Argument for `git switch <ref>` (branch, remote ref, tag name, …). */
-function refForCheckout(tokenPlain: string): string | null {
-  const s = tokenPlain.trim()
-  const hm = s.match(/^HEAD\s*->\s*(.+)$/i)
-  if (hm) return hm[1].trim()
-  if (!s) return null
-  if (/^tag:/i.test(s)) return s.replace(/^tag:\s*/i, '').trim() || null
-  return s
+function refForCheckout(token: DecorationToken): string | null {
+  if (token.kind === 'head') return null
+  return token.name || null
 }
 
-function isTagToken(plain: string): boolean {
-  return /^tag:/i.test(plain)
+function isTagToken(token: DecorationToken): boolean {
+  return token.kind === 'tag'
 }
 
-function tagName(plain: string): string {
-  return plain.replace(/^tag:\s*/i, '').trim()
+function isRemoteHeadToken(token: DecorationToken): boolean {
+  return token.kind === 'remote' && remoteBranchName(token) === 'HEAD'
 }
 
-function isOriginHeadToken(plain: string): boolean {
-  // matches "origin/HEAD" (decorate=short) or "origin/HEAD -> origin/main" (decorate=full)
-  return /^origin\/HEAD(\s*->.*)?$/i.test(plain)
+function remoteName(token: DecorationToken): string | null {
+  if (token.kind !== 'remote') return null
+  const slash = token.name.indexOf('/')
+  return slash > 0 ? token.name.slice(0, slash) : null
 }
 
-/** Remote-tracking ref from `git log --decorate=short` (`origin/main`), not topic branches (`fix/foo`). */
-function isRemoteTrackingRef(plain: string): boolean {
-  return /^origin\//i.test(plain)
+function remoteBranchName(token: DecorationToken): string | null {
+  if (token.kind !== 'remote') return null
+  const slash = token.name.indexOf('/')
+  return slash > 0 ? token.name.slice(slash + 1) : null
 }
 
 /**
  * Names of local branches on this commit (including `fix/foo` topic branches).
  */
 function localNamesOnRow(
-  tokens: string[],
+  tokens: DecorationToken[],
   branchPrefix: string | null,
 ): Set<string> {
   const set = new Set<string>()
-  if (branchPrefix && !isRemoteTrackingRef(branchPrefix)) set.add(branchPrefix)
+  if (branchPrefix) {
+    const branchPrefixToken = tokens.find((t) => t.name === branchPrefix)
+    if (!branchPrefixToken || branchPrefixToken.kind === 'local') set.add(branchPrefix)
+  }
   for (const t of tokens) {
-    const p = stripAnsi(t).trim()
-    const hm = p.match(/^HEAD\s*->\s*(.+)$/i)
-    const name = hm ? hm[1].trim() : p
-    if (!name) continue
-    if (isTagToken(name)) continue
-    if (/^HEAD$/i.test(name)) continue
-    if (!isRemoteTrackingRef(name)) set.add(name)
+    if (t.kind === 'local') set.add(t.name)
   }
   return set
 }
 
-/** `origin/<x>` is redundant if `<x>` is already shown as a local branch on the same row. */
-function isRemoteShadowingLocal(plain: string, locals: Set<string>): boolean {
-  const m = plain.match(/^origin\/(.+)$/i)
-  if (!m) return false
-  return locals.has(m[1])
+/** `<remote>/<x>` is redundant if `<x>` is already shown as a local branch on the same row. */
+function isRemoteShadowingLocal(
+  token: DecorationToken,
+  locals: Set<string>,
+): boolean {
+  const branch = remoteBranchName(token)
+  return !!branch && locals.has(branch)
 }
 
-function hasOriginPeer(tokens: string[], branch: string | null): boolean {
-  if (!branch) return false
-  return tokens.some((t) => stripAnsi(t).trim() === `origin/${branch}`)
+function remotePeer(tokens: DecorationToken[], branch: string | null): string | null {
+  if (!branch) return null
+  for (const t of tokens) {
+    if (remoteBranchName(t) === branch) return remoteName(t)
+  }
+  return null
 }
 
-function pillClass(tokenPlain: string): string {
-  if (/HEAD\s*->/i.test(tokenPlain)) return 'ref-pill ref-pill-head'
-  if (isRemoteTrackingRef(tokenPlain)) return 'ref-pill ref-pill-remote'
+function pillClass(token: DecorationToken): string {
+  if (token.head) return 'ref-pill ref-pill-head'
+  if (token.kind === 'remote') return 'ref-pill ref-pill-remote'
   return 'ref-pill ref-pill-branch'
 }
 
 /** Distinct tag names on this commit. */
-function collectTagNames(tokens: string[]): string[] {
+function collectTagNames(tokens: DecorationToken[]): string[] {
   const out: string[] = []
   const seen = new Set<string>()
   for (const t of tokens) {
-    const plain = stripAnsi(t).trim()
-    if (!isTagToken(plain)) continue
-    const n = tagName(plain)
+    if (!isTagToken(t)) continue
+    const n = t.name
     if (n && !seen.has(n)) {
       seen.add(n)
       out.push(n)
@@ -541,10 +561,10 @@ function GraphLaneSpans(props: {
 }
 
 /** Order pills as: HEAD ref first, local branch before remote-tracking. */
-function pillSortKey(plain: string): number {
-  if (/HEAD\s*->/i.test(plain)) return -1
-  if (/^HEAD$/i.test(plain)) return 4
-  if (isRemoteTrackingRef(plain)) return 1
+function pillSortKey(token: DecorationToken): number {
+  if (token.head) return -1
+  if (token.kind === 'head') return 4
+  if (token.kind === 'remote') return 1
   return 0
 }
 
@@ -553,41 +573,39 @@ function RefPills(props: {
   branchPrefix: string | null
   currentBranch: string | null
 }) {
-  const tokens = decorationRefs(props.decorateRaw)
+  const tokens = decorationTokens(props.decorateRaw)
   if (tokens.length === 0) return null
   const locals = localNamesOnRow(tokens, props.branchPrefix)
-  const nonTag = tokens.filter((t) => !isTagToken(stripAnsi(t).trim()))
-  const sorted = [...nonTag].sort(
-    (a, b) => pillSortKey(stripAnsi(a).trim()) - pillSortKey(stripAnsi(b).trim()),
-  )
+  const nonTag = tokens.filter((t) => !isTagToken(t))
+  const sorted = [...nonTag].sort((a, b) => pillSortKey(a) - pillSortKey(b))
   return (
     <span class="graph-pills">
       {sorted.map((t, idx) => {
-        const plain = stripAnsi(t).trim()
-        if (/^HEAD$/i.test(plain)) return null
-        if (isOriginHeadToken(plain)) return null
+        const display = t.name
+        if (t.kind === 'head') return null
+        if (isRemoteHeadToken(t)) return null
         if (refPillRedundantWithBranchPrefix(t, props.branchPrefix)) return null
-        if (isRemoteShadowingLocal(plain, locals)) return null
+        if (isRemoteShadowingLocal(t, locals)) return null
         const ref = refForCheckout(t)
         if (!ref) return null
-        const originPeer = !isRemoteTrackingRef(plain) && hasOriginPeer(tokens, plain)
+        const peer = t.kind === 'local' ? remotePeer(tokens, display) : null
         return (
           <span
             key={idx}
-            class={pillClass(plain)}
-            title={originPeer ? `${plain}, origin/${plain}` : plain}
-            data-copy={plain}
+            class={pillClass(t)}
+            title={peer ? `${display}, ${peer}/${display}` : display}
+            data-copy={display}
           >
-            {plain}
-            {originPeer ? (
+            {display}
+            {peer ? (
               <>
                 <span class="ref-peer-sep">|</span>
-                <span class="ref-peer">origin</span>
+                <span class="ref-peer">{peer}</span>
               </>
             ) : null}
             <CopyBtn title="copy name" />
             {ref === props.currentBranch ? (
-              originPeer ? null : (
+              peer ? null : (
                 <button
                   type="button"
                   class="inline-action-btn ref-action-btn"
@@ -649,9 +667,9 @@ function GraphCommitLine(props: {
   const { graphAnsi, shaFull, shaShort, decorateRaw, subject, date, inHistory } =
     props.row
   const isHead = graphCommitIsHead(decorateRaw)
-  const tokens = decorationRefs(decorateRaw)
-  const branchPrefix = branchPrefixFromDecorations(decorateRaw)
-  const branchPrefixOrigin = hasOriginPeer(tokens, branchPrefix)
+  const tokens = decorationTokens(decorateRaw)
+  const branchPrefix = branchPrefixFromTokens(tokens)
+  const branchPrefixPeer = remotePeer(tokens, branchPrefix)
   const tagNames = collectTagNames(tokens)
   const diffUrl = `/api/commit/${encodeURIComponent(shaFull)}`
   const cls = [
@@ -679,22 +697,22 @@ function GraphCommitLine(props: {
         <span
           class="branch-prefix"
           title={
-            branchPrefixOrigin
-              ? `branch: ${branchPrefix}, origin/${branchPrefix}`
+            branchPrefixPeer
+              ? `branch: ${branchPrefix}, ${branchPrefixPeer}/${branchPrefix}`
               : `branch: ${branchPrefix}`
           }
           data-copy={branchPrefix}
         >
           {branchPrefix}
-          {branchPrefixOrigin ? (
+          {branchPrefixPeer ? (
             <>
               <span class="ref-peer-sep">|</span>
-              <span class="ref-peer">origin</span>
+              <span class="ref-peer">{branchPrefixPeer}</span>
             </>
           ) : null}
           <CopyBtn title="copy name" />
           {branchPrefix === props.currentBranch ? (
-            branchPrefixOrigin ? null : (
+            branchPrefixPeer ? null : (
               <button
                 type="button"
                 class="inline-action-btn branch-prefix-action"
