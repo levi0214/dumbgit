@@ -436,6 +436,10 @@ body {
   position: relative;
   z-index: 0;
 }
+/* Runs of consecutive connector rows can't all collapse onto the same spot. */
+.log-row-other.log-row-other-tall {
+  height: 16px;
+}
 .log-row-commit {
   position: relative;
   z-index: 1;

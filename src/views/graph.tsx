@@ -739,15 +739,28 @@ function GraphOtherLine(props: {
   ansi: string
   betweenInHistory: boolean
   brightCols: Set<number> | null
+  /**
+   * Connector rows normally collapse to zero height. A run of consecutive
+   * connector rows would collapse onto the same spot and overdraw each other,
+   * so rows in a run keep their height and draw full-height lanes instead.
+   */
+  tall: boolean
 }) {
-  const cls = `log-row log-row-other ${props.betweenInHistory ? '' : 'log-row-dim'}`
+  const cls = [
+    'log-row',
+    'log-row-other',
+    props.tall ? 'log-row-other-tall' : '',
+    props.betweenInHistory ? '' : 'log-row-dim',
+  ]
+    .filter(Boolean)
+    .join(' ')
   return (
-    <div class={cls.trim()}>
+    <div class={cls}>
       <span class="graph-prefix-wide">
         <GraphLaneSpans
           ansi={props.ansi}
           brightCols={props.brightCols}
-          compact
+          compact={!props.tall}
         />
       </span>
     </div>
@@ -888,12 +901,16 @@ export function GraphRows(props: {
     <>
       {props.rows.map((r, i) => {
         if (r.kind !== 'commit') {
+          const tall =
+            props.rows[i - 1]?.kind === 'other' ||
+            props.rows[i + 1]?.kind === 'other'
           return (
             <GraphOtherLine
               key={i}
               ansi={r.ansi}
               betweenInHistory={r.betweenInHistory}
               brightCols={props.brightColsByRow[i] ?? null}
+              tall={tall}
             />
           )
         }

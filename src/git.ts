@@ -209,7 +209,53 @@ export async function logGraphRows(limit = 50): Promise<GraphRow[]> {
     return { kind: 'other', ansi: t.ansi, betweenInHistory: prevInHistory }
   })
 
-  return rows
+  return normalizeGraphRows(rows)
+}
+
+/**
+ * `git log --graph` sometimes routes a merge's second parent through a
+ * temporary lane, emitting a `\` connector row that the next connector row
+ * immediately undoes with a `/` (e.g. `| |\` + `| |/` + `|/|`). The UI
+ * collapses connector rows to zero height, so stacked connectors would
+ * render on top of each other as a tangle. Cancel those zigzag pairs and
+ * drop connector rows left with only pass-through `|` lanes, so the common
+ * merge shape reduces to a single collapsible connector row again.
+ *
+ * Connector colors are unused by the renderer (lane color comes from
+ * reachability), so rewriting `ansi` to plain text is safe.
+ */
+export function normalizeGraphRows(rows: GraphRow[]): GraphRow[] {
+  const texts: Array<string[] | null> = rows.map((r) =>
+    r.kind === 'other' ? stripAnsi(r.ansi).replace(/\s+$/, '').split('') : null,
+  )
+
+  for (let i = 0; i < rows.length - 1; i++) {
+    const here = texts[i]
+    const below = texts[i + 1]
+    if (!here || !below) continue
+    const cols = Math.max(here.length, below.length)
+    for (let c = 1; c < cols; c++) {
+      if (here[c] !== '\\' || below[c] !== '/') continue
+      // A right-then-left zigzag is a no-op: the lane stays at column c-1.
+      here[c] = ' '
+      below[c] = ' '
+      if ((here[c - 1] ?? ' ') === ' ') here[c - 1] = '|'
+      if ((below[c - 1] ?? ' ') === ' ') below[c - 1] = '|'
+    }
+  }
+
+  const out: GraphRow[] = []
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i]!
+    if (row.kind !== 'other') {
+      out.push(row)
+      continue
+    }
+    const text = (texts[i] ?? []).join('').replace(/\s+$/, '')
+    if (/^[| ]*$/.test(text)) continue
+    out.push({ ...row, ansi: text })
+  }
+  return out
 }
 
 // Branch, checkout, and push actions.
