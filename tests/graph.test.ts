@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { normalizeGraphRows, type GraphRow } from '../src/git'
+import { graphRowMeta } from '../src/views/graph'
 
 function commit(graphAnsi: string): GraphRow {
   return {
@@ -89,5 +90,33 @@ describe('normalizeGraphRows', () => {
 
     expect(connectorTexts(out)).toEqual(['| |/', '|/|'])
     expect(out).toHaveLength(4)
+  })
+})
+
+describe('graphRowMeta', () => {
+  test('classifies lone connectors as curve and run members as tall', () => {
+    const rows: GraphRow[] = [
+      commit('| * '),
+      connector('|/'),
+      commit('* '),
+      connector('|\\'),
+      connector('| \\'),
+      commit('| | * '),
+    ]
+
+    const meta = graphRowMeta(rows)
+
+    expect(meta.map((m) => m.kind)).toEqual([
+      'commit',
+      'curve',
+      'commit',
+      'tall',
+      'tall',
+      'commit',
+    ])
+    expect(meta[0]!.above).toBeNull()
+    expect(meta[0]!.below).toEqual({ kind: 'curve', text: '|/' })
+    expect(meta[2]!.above).toEqual({ kind: 'curve', text: '|/' })
+    expect(meta[5]!.above).toEqual({ kind: 'tall', text: '| \\' })
   })
 })

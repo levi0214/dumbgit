@@ -35,7 +35,7 @@ import {
   GraphFragment,
   GraphTailFragment,
   graphBrightCols,
-  graphLaneConnections,
+  graphRowMeta,
 } from './views/graph'
 import type { GraphFragmentProps } from './views/graph'
 import { DiffPanel, DiffPatchBody, WorkTreeDiffPanel } from './views/diff'
@@ -289,7 +289,7 @@ app.get('/fragment/graph/tail', async (c) => {
         currentBranch={head.kind === 'branch' ? head.name : null}
         stashes={previewStash.stashes}
         brightColsByRow={graphBrightCols(rows).slice(rowOffset)}
-        laneConnections={graphLaneConnections(rows).slice(rowOffset)}
+        rowMeta={graphRowMeta(rows).slice(rowOffset)}
         offset={rows.length}
         nextLimit={graphNextLimit}
         showLoadMore={showLoadMore}

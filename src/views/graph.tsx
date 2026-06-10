@@ -193,46 +193,111 @@ function isVerticalGraphChar(ch: string): boolean {
   return ch === '|' || ch === '*'
 }
 
-type GraphLaneConnections = {
-  above: Set<number>
-  below: Set<number>
+/**
+ * How a row is rendered:
+ * - 'commit': a commit row (dot + pass-through lanes).
+ * - 'curve':  a lone connector row, collapsed to zero height; its lane
+ *             transitions are drawn as full-height curves from the center of
+ *             the commit row above to the center of the commit row below.
+ * - 'tall':   a connector row inside a run of consecutive connectors; keeps
+ *             its own height so stacked transitions don't overdraw.
+ */
+export type GraphRowKind = 'commit' | 'curve' | 'tall'
+
+export type GraphNeighbor = { kind: GraphRowKind; text: string }
+
+export type GraphRowMeta = {
+  kind: GraphRowKind
+  above: GraphNeighbor | null
+  below: GraphNeighbor | null
 }
 
-const EMPTY_LANE_CONNECTIONS: GraphLaneConnections = {
-  above: new Set(),
-  below: new Set(),
+const LONE_COMMIT_META: GraphRowMeta = {
+  kind: 'commit',
+  above: null,
+  below: null,
 }
 
-function graphConnectsDown(text: string, col: number): boolean {
-  return (
-    isVerticalGraphChar(graphChar(text, col)) ||
-    graphChar(text, col - 1) === '/' ||
-    graphChar(text, col + 1) === '\\'
-  )
-}
-
-function graphConnectsUp(text: string, col: number): boolean {
-  return (
-    isVerticalGraphChar(graphChar(text, col)) ||
-    graphChar(text, col - 1) === '\\' ||
-    graphChar(text, col + 1) === '/'
-  )
-}
-
-export function graphLaneConnections(rows: GraphRow[]): GraphLaneConnections[] {
+export function graphRowMeta(rows: GraphRow[]): GraphRowMeta[] {
   const texts = rows.map(graphText)
-  return texts.map((text, i) => {
-    const above = new Set<number>()
-    const below = new Set<number>()
-    for (let col = 0; col < text.length; col++) {
-      if (graphChar(text, col) !== '*') continue
-      if (i > 0 && graphConnectsDown(texts[i - 1] ?? '', col)) above.add(col)
-      if (i < texts.length - 1 && graphConnectsUp(texts[i + 1] ?? '', col)) {
-        below.add(col)
-      }
-    }
-    return { above, below }
+  const kinds: GraphRowKind[] = rows.map((r, i) => {
+    if (r.kind === 'commit') return 'commit'
+    const inRun =
+      rows[i - 1]?.kind === 'other' || rows[i + 1]?.kind === 'other'
+    return inRun ? 'tall' : 'curve'
   })
+  return rows.map((_, i) => ({
+    kind: kinds[i]!,
+    above: i > 0 ? { kind: kinds[i - 1]!, text: texts[i - 1]! } : null,
+    below:
+      i < rows.length - 1
+        ? { kind: kinds[i + 1]!, text: texts[i + 1]! }
+        : null,
+  }))
+}
+
+/*
+ * Diagonal glyph geometry: `/` at column c runs from its top at column c+1
+ * down to column c-1; `\` at column c runs from its top at column c-1 down
+ * to column c+1.
+ */
+
+/** Does a stroke in `text` touch the row's TOP edge at `col`? */
+function touchesTopVertically(text: string, col: number): boolean {
+  return isVerticalGraphChar(graphChar(text, col))
+}
+
+function touchesTopDiagonally(text: string, col: number): boolean {
+  return (
+    graphChar(text, col - 1) === '/' || graphChar(text, col + 1) === '\\'
+  )
+}
+
+/** Does a stroke in `text` touch the row's BOTTOM edge at `col`? */
+function touchesBottomVertically(text: string, col: number): boolean {
+  return isVerticalGraphChar(graphChar(text, col))
+}
+
+function touchesBottomDiagonally(text: string, col: number): boolean {
+  return (
+    graphChar(text, col + 1) === '/' || graphChar(text, col - 1) === '\\'
+  )
+}
+
+/**
+ * Should a commit row draw a straight stub from its dot toward the row above?
+ * Diagonal arrivals from a 'curve' connector are excluded: the connector
+ * already draws that link all the way to the dot's center.
+ */
+function dotStubAbove(above: GraphNeighbor | null, col: number): boolean {
+  if (!above) return false
+  if (touchesBottomVertically(above.text, col)) return true
+  if (above.kind === 'curve') return false
+  return touchesBottomDiagonally(above.text, col)
+}
+
+function dotStubBelow(below: GraphNeighbor | null, col: number): boolean {
+  if (!below) return false
+  if (touchesTopVertically(below.text, col)) return true
+  if (below.kind === 'curve') return false
+  return touchesTopDiagonally(below.text, col)
+}
+
+/** Lane departs/arrives only via a curve-connector diagonal (no straight continuation). */
+function laneBendsBelow(below: GraphNeighbor | null, col: number): boolean {
+  return (
+    below?.kind === 'curve' &&
+    !touchesTopVertically(below.text, col) &&
+    touchesTopDiagonally(below.text, col)
+  )
+}
+
+function laneBendsAbove(above: GraphNeighbor | null, col: number): boolean {
+  return (
+    above?.kind === 'curve' &&
+    !touchesBottomVertically(above.text, col) &&
+    touchesBottomDiagonally(above.text, col)
+  )
 }
 
 /**
@@ -280,6 +345,14 @@ const GRAPH_ROW_HEIGHT = 16
 const GRAPH_CONNECTOR_HEIGHT = GRAPH_ROW_HEIGHT
 const GRAPH_NODE_RADIUS = 3.2
 const GRAPH_LINE_OVERLAP = 4
+/**
+ * Half the rendered height of a log row: 16px lane SVG + 3px top/bottom
+ * padding (see `.log-row` CSS) = 22px total. Curve connectors span from the
+ * center of the commit row above to the center of the commit row below.
+ */
+const GRAPH_HALF_LOG_ROW = 11
+const GRAPH_DIM_LANE_OPACITY = 0.45
+const GRAPH_DIM_NODE_OPACITY = 0.5
 
 function graphColX(col: number): number {
   return col * GRAPH_COL_WIDTH + GRAPH_COL_WIDTH / 2
@@ -302,35 +375,39 @@ function graphCurvePath(x1: number, y1: number, x2: number, y2: number): string 
 function GraphLaneSpans(props: {
   ansi: string
   brightCols: Set<number> | null
-  connections?: GraphLaneConnections
+  meta?: GraphRowMeta
   isHead?: boolean
   isDetached?: boolean
-  compact?: boolean
 }) {
   const text = stripAnsi(props.ansi)
   const brightCols = props.brightCols
-  const height = props.compact ? GRAPH_CONNECTOR_HEIGHT : GRAPH_ROW_HEIGHT
+  const height = GRAPH_ROW_HEIGHT
   const width = Math.max(GRAPH_COL_WIDTH, text.length * GRAPH_COL_WIDTH)
   const mid = height / 2
-  const edgeTop = props.compact ? mid : -GRAPH_LINE_OVERLAP
-  const edgeBottom = props.compact ? height : height + GRAPH_LINE_OVERLAP
+  const above = props.meta?.above ?? null
+  const below = props.meta?.below ?? null
   const lanesBack = []
   const markersFront = []
   for (let i = 0; i < text.length; i++) {
     const ch = text[i]
     const onSpine = brightCols !== null && brightCols.has(i)
     const color = graphLaneColor(onSpine)
-    const opacity = onSpine ? 1 : 0.34
+    const opacity = onSpine ? 1 : GRAPH_DIM_LANE_OPACITY
     const x = graphColX(i)
     if (ch === ' ') continue
     if (ch === '|') {
+      // When the lane turns at an adjacent curve connector, stop at the row
+      // center: the connector draws the bend from there. A straight
+      // continuation keeps the usual overlap into the neighboring row.
+      const y1 = laneBendsAbove(above, i) ? mid : -GRAPH_LINE_OVERLAP
+      const y2 = laneBendsBelow(below, i) ? mid : height + GRAPH_LINE_OVERLAP
       lanesBack.push(
         <line
           key={i}
           x1={x}
-          y1={edgeTop}
+          y1={y1}
           x2={x}
-          y2={edgeBottom}
+          y2={y2}
           stroke={color}
           stroke-width="1.8"
           stroke-linecap="round"
@@ -341,9 +418,9 @@ function GraphLaneSpans(props: {
     }
     if (ch === '/') {
       const x1 = graphColX(i - 1)
-      const y1 = edgeBottom
+      const y1 = height + GRAPH_LINE_OVERLAP
       const x2 = graphColX(i + 1)
-      const y2 = edgeTop
+      const y2 = -GRAPH_LINE_OVERLAP
       lanesBack.push(
         <path
           key={i}
@@ -360,9 +437,9 @@ function GraphLaneSpans(props: {
     }
     if (ch === '\\') {
       const x1 = graphColX(i - 1)
-      const y1 = edgeTop
+      const y1 = -GRAPH_LINE_OVERLAP
       const x2 = graphColX(i + 1)
-      const y2 = edgeBottom
+      const y2 = height + GRAPH_LINE_OVERLAP
       lanesBack.push(
         <path
           key={i}
@@ -394,8 +471,8 @@ function GraphLaneSpans(props: {
       continue
     }
     if (ch === '*') {
-      const connectsAbove = props.connections?.above.has(i) ?? false
-      const connectsBelow = props.connections?.below.has(i) ?? false
+      const connectsAbove = dotStubAbove(above, i)
+      const connectsBelow = dotStubBelow(below, i)
       if (props.isHead) {
         const hcls = `graph-node graph-node-head${props.isDetached ? ' graph-node-head-detached' : ''}`
         markersFront.push(
@@ -463,7 +540,7 @@ function GraphLaneSpans(props: {
             cy={mid}
             r={GRAPH_NODE_RADIUS}
             fill={color}
-            opacity={onSpine ? 1 : 0.44}
+            opacity={onSpine ? 1 : GRAPH_DIM_NODE_OPACITY}
           />
         </g>,
       )
@@ -491,6 +568,106 @@ function GraphLaneSpans(props: {
     >
       {lanesBack}
       {markersFront}
+    </svg>
+  )
+}
+
+/**
+ * A lone connector row collapses to zero height, so its lane transitions are
+ * drawn as continuous segments spanning from the center of the commit row
+ * above to the center of the commit row below — wide, smooth curves like a
+ * dedicated graph renderer would produce, instead of kinks squeezed into the
+ * row boundary.
+ */
+function ConnectorLaneSpans(props: {
+  ansi: string
+  brightCols: Set<number> | null
+}) {
+  const text = stripAnsi(props.ansi)
+  const width = Math.max(GRAPH_COL_WIDTH, text.length * GRAPH_COL_WIDTH)
+  const height = GRAPH_CONNECTOR_HEIGHT
+  const mid = height / 2
+  // The SVG is centered on the zero-height row; reach into both neighbors.
+  const yTop = mid - GRAPH_HALF_LOG_ROW
+  const yBottom = mid + GRAPH_HALF_LOG_ROW
+  const lanes = []
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i]
+    if (ch === ' ') continue
+    const onSpine = props.brightCols !== null && props.brightCols.has(i)
+    const color = graphLaneColor(onSpine)
+    const opacity = onSpine ? 1 : GRAPH_DIM_LANE_OPACITY
+    const x = graphColX(i)
+    if (ch === '|') {
+      lanes.push(
+        <line
+          key={i}
+          x1={x}
+          y1={yTop}
+          x2={x}
+          y2={yBottom}
+          stroke={color}
+          stroke-width="1.8"
+          stroke-linecap="round"
+          opacity={opacity}
+        />,
+      )
+      continue
+    }
+    if (ch === '/' || ch === '\\') {
+      const xTop = ch === '/' ? graphColX(i + 1) : graphColX(i - 1)
+      const xBottom = ch === '/' ? graphColX(i - 1) : graphColX(i + 1)
+      lanes.push(
+        <path
+          key={i}
+          d={graphCurvePath(xTop, yTop, xBottom, yBottom)}
+          fill="none"
+          stroke={color}
+          stroke-width="1.8"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          opacity={opacity}
+        />,
+      )
+      continue
+    }
+    if (ch === '-' || ch === '_') {
+      lanes.push(
+        <line
+          key={i}
+          x1={x - GRAPH_COL_WIDTH / 2}
+          y1={mid}
+          x2={x + GRAPH_COL_WIDTH / 2}
+          y2={mid}
+          stroke={color}
+          stroke-width="1.8"
+          stroke-linecap="round"
+          opacity={opacity}
+        />,
+      )
+      continue
+    }
+    lanes.push(
+      <text
+        key={i}
+        x={x}
+        y={mid + 4}
+        text-anchor="middle"
+        class="graph-lane-fallback"
+      >
+        {ch}
+      </text>,
+    )
+  }
+  return (
+    <svg
+      class="graph-lanes-svg"
+      viewBox={`0 0 ${width} ${height}`}
+      style={`width:${width}px;height:${height}px`}
+      aria-hidden="true"
+      focusable="false"
+    >
+      {lanes}
     </svg>
   )
 }
@@ -597,7 +774,7 @@ function GraphCommitLine(props: {
   detached: boolean
   currentBranch: string | null
   brightCols: Set<number> | null
-  connections: GraphLaneConnections
+  meta: GraphRowMeta
 }) {
   const { graphAnsi, shaFull, shaShort, decorateRaw, subject, date, inHistory } =
     props.row
@@ -623,7 +800,7 @@ function GraphCommitLine(props: {
         <GraphLaneSpans
           ansi={graphAnsi}
           brightCols={props.brightCols}
-          connections={props.connections}
+          meta={props.meta}
           isHead={isHead}
           isDetached={isHead && props.detached}
         />
@@ -740,16 +917,17 @@ function GraphOtherLine(props: {
   betweenInHistory: boolean
   brightCols: Set<number> | null
   /**
-   * Connector rows normally collapse to zero height. A run of consecutive
-   * connector rows would collapse onto the same spot and overdraw each other,
-   * so rows in a run keep their height and draw full-height lanes instead.
+   * 'curve' connectors collapse to zero height and draw center-to-center
+   * curves into both neighboring commit rows. 'tall' connectors (inside a
+   * run of consecutive connectors) keep their height so stacked transitions
+   * don't overdraw each other.
    */
-  tall: boolean
+  kind: 'curve' | 'tall'
 }) {
   const cls = [
     'log-row',
     'log-row-other',
-    props.tall ? 'log-row-other-tall' : '',
+    props.kind === 'tall' ? 'log-row-other-tall' : '',
     props.betweenInHistory ? '' : 'log-row-dim',
   ]
     .filter(Boolean)
@@ -757,11 +935,14 @@ function GraphOtherLine(props: {
   return (
     <div class={cls}>
       <span class="graph-prefix-wide">
-        <GraphLaneSpans
-          ansi={props.ansi}
-          brightCols={props.brightCols}
-          compact={!props.tall}
-        />
+        {props.kind === 'tall' ? (
+          <GraphLaneSpans ansi={props.ansi} brightCols={props.brightCols} />
+        ) : (
+          <ConnectorLaneSpans
+            ansi={props.ansi}
+            brightCols={props.brightCols}
+          />
+        )}
       </span>
     </div>
   )
@@ -888,7 +1069,7 @@ export function GraphRows(props: {
   currentBranch: string | null
   stashes: PreviewStashEntry[]
   brightColsByRow: Array<Set<number> | null>
-  laneConnections: GraphLaneConnections[]
+  rowMeta: GraphRowMeta[]
 }) {
   const stashesByBase = new Map<string, PreviewStashEntry[]>()
   for (const stash of props.stashes) {
@@ -900,17 +1081,15 @@ export function GraphRows(props: {
   return (
     <>
       {props.rows.map((r, i) => {
+        const meta = props.rowMeta[i] ?? LONE_COMMIT_META
         if (r.kind !== 'commit') {
-          const tall =
-            props.rows[i - 1]?.kind === 'other' ||
-            props.rows[i + 1]?.kind === 'other'
           return (
             <GraphOtherLine
               key={i}
               ansi={r.ansi}
               betweenInHistory={r.betweenInHistory}
               brightCols={props.brightColsByRow[i] ?? null}
-              tall={tall}
+              kind={meta.kind === 'tall' ? 'tall' : 'curve'}
             />
           )
         }
@@ -930,7 +1109,7 @@ export function GraphRows(props: {
               detached={props.detached}
               currentBranch={props.currentBranch}
               brightCols={props.brightColsByRow[i] ?? null}
-              connections={props.laneConnections[i] ?? EMPTY_LANE_CONNECTIONS}
+              meta={meta}
             />
           </>
         )
@@ -966,7 +1145,7 @@ export function GraphTailFragment(props: {
   currentBranch: string | null
   stashes: PreviewStashEntry[]
   brightColsByRow: Array<Set<number> | null>
-  laneConnections: GraphLaneConnections[]
+  rowMeta: GraphRowMeta[]
   offset: number
   nextLimit: number
   showLoadMore: boolean
@@ -979,7 +1158,7 @@ export function GraphTailFragment(props: {
         currentBranch={props.currentBranch}
         stashes={props.stashes}
         brightColsByRow={props.brightColsByRow}
-        laneConnections={props.laneConnections}
+        rowMeta={props.rowMeta}
       />
       <GraphLoadMore
         offset={props.offset}
@@ -1015,7 +1194,7 @@ export function GraphFragment(props: GraphFragmentProps) {
   const detached = head.kind === 'detached'
   const currentBranch = head.kind === 'branch' ? head.name : null
   const brightColsByRow = graphBrightCols(rows)
-  const laneConnections = graphLaneConnections(rows)
+  const rowMeta = graphRowMeta(rows)
 
   return (
     <div
@@ -1065,7 +1244,7 @@ export function GraphFragment(props: GraphFragmentProps) {
               currentBranch={currentBranch}
               stashes={props.previewStash.stashes}
               brightColsByRow={brightColsByRow}
-              laneConnections={laneConnections}
+              rowMeta={rowMeta}
               offset={rows.length}
               nextLimit={props.graphNextLimit}
               showLoadMore={props.showLoadMore}
