@@ -466,7 +466,8 @@ export async function commitFilePatch(
 export async function push(): Promise<
   { ok: true } | { ok: false; stderr: string }
 > {
-  const { code, stdout, stderr } = await spawnGit(['push'])
+  // Auto set upstream on first push of a branch; no-op when upstream exists.
+  const { code, stdout, stderr } = await spawnGit(['-c', 'push.autoSetupRemote=true', 'push'])
   if (code === 0) return { ok: true }
   return { ok: false, stderr: stderr.trim() || stdout.trim() || `git push failed (${code})` }
 }
