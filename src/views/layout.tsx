@@ -8,6 +8,10 @@ const CSS = `
   --muted: #686868;
   --accent: #569cd6;
   --graph-rail-muted: #484848;
+  /* Dim lanes/nodes are SOLID pre-blended colors: lane segments overlap at
+     row boundaries, and translucent strokes would stack into brighter spots. */
+  --graph-rail-dim: #3c3c3c;
+  --graph-node-dim: #4a4a4a;
   --border: #333;
   --error: #f48771;
   --success: #6a9955;

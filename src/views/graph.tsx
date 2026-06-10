@@ -351,15 +351,32 @@ const GRAPH_LINE_OVERLAP = 4
  * center of the commit row above to the center of the commit row below.
  */
 const GRAPH_HALF_LOG_ROW = 11
-const GRAPH_DIM_LANE_OPACITY = 0.45
-const GRAPH_DIM_NODE_OPACITY = 0.5
 
 function graphColX(col: number): number {
   return col * GRAPH_COL_WIDTH + GRAPH_COL_WIDTH / 2
 }
 
 function graphLaneColor(onSpine: boolean): string {
-  return onSpine ? 'var(--accent)' : 'var(--graph-rail-muted)'
+  return onSpine ? 'var(--accent)' : 'var(--graph-rail-dim)'
+}
+
+function graphNodeColor(onSpine: boolean): string {
+  return onSpine ? 'var(--accent)' : 'var(--graph-node-dim)'
+}
+
+/**
+ * Fixed gutter width (in text columns) so every row's pills and message
+ * start at the same x, like dedicated graph UIs. Trailing whitespace is
+ * ignored — git pads merge rows (`| *   `) to make room for the connector
+ * below, which would otherwise indent just those rows.
+ */
+export function graphGutterCols(rows: GraphRow[]): number {
+  let max = 1
+  for (const r of rows) {
+    const len = graphText(r).replace(/\s+$/, '').length
+    if (len > max) max = len
+  }
+  return max
 }
 
 function graphCurvePath(x1: number, y1: number, x2: number, y2: number): string {
@@ -375,14 +392,15 @@ function graphCurvePath(x1: number, y1: number, x2: number, y2: number): string 
 function GraphLaneSpans(props: {
   ansi: string
   brightCols: Set<number> | null
+  gutterCols: number
   meta?: GraphRowMeta
   isHead?: boolean
   isDetached?: boolean
 }) {
-  const text = stripAnsi(props.ansi)
+  const text = stripAnsi(props.ansi).replace(/\s+$/, '')
   const brightCols = props.brightCols
   const height = GRAPH_ROW_HEIGHT
-  const width = Math.max(GRAPH_COL_WIDTH, text.length * GRAPH_COL_WIDTH)
+  const width = Math.max(props.gutterCols, text.length, 1) * GRAPH_COL_WIDTH
   const mid = height / 2
   const above = props.meta?.above ?? null
   const below = props.meta?.below ?? null
@@ -392,7 +410,6 @@ function GraphLaneSpans(props: {
     const ch = text[i]
     const onSpine = brightCols !== null && brightCols.has(i)
     const color = graphLaneColor(onSpine)
-    const opacity = onSpine ? 1 : GRAPH_DIM_LANE_OPACITY
     const x = graphColX(i)
     if (ch === ' ') continue
     if (ch === '|') {
@@ -411,7 +428,6 @@ function GraphLaneSpans(props: {
           stroke={color}
           stroke-width="1.8"
           stroke-linecap="round"
-          opacity={opacity}
         />,
       )
       continue
@@ -430,7 +446,6 @@ function GraphLaneSpans(props: {
           stroke-width="1.8"
           stroke-linecap="round"
           stroke-linejoin="round"
-          opacity={opacity}
         />,
       )
       continue
@@ -449,7 +464,6 @@ function GraphLaneSpans(props: {
           stroke-width="1.8"
           stroke-linecap="round"
           stroke-linejoin="round"
-          opacity={opacity}
         />,
       )
       continue
@@ -465,7 +479,6 @@ function GraphLaneSpans(props: {
           stroke={color}
           stroke-width="1.8"
           stroke-linecap="round"
-          opacity={opacity}
         />,
       )
       continue
@@ -473,6 +486,12 @@ function GraphLaneSpans(props: {
     if (ch === '*') {
       const connectsAbove = dotStubAbove(above, i)
       const connectsBelow = dotStubBelow(below, i)
+      // Branch tip: no link reaches this dot from above (not even a curve
+      // connector). Render as a hollow ring so the lane visibly *starts*
+      // here instead of looking like a broken line in a reused column.
+      const isTip =
+        !connectsAbove &&
+        !(above?.kind === 'curve' && touchesBottomDiagonally(above.text, i))
       if (props.isHead) {
         const hcls = `graph-node graph-node-head${props.isDetached ? ' graph-node-head-detached' : ''}`
         markersFront.push(
@@ -519,7 +538,6 @@ function GraphLaneSpans(props: {
               stroke={color}
               stroke-width="1.8"
               stroke-linecap="round"
-              opacity={opacity}
             />
           ) : null}
           {connectsBelow ? (
@@ -531,17 +549,27 @@ function GraphLaneSpans(props: {
               stroke={color}
               stroke-width="1.8"
               stroke-linecap="round"
-              opacity={opacity}
             />
           ) : null}
-          <circle
-            class="graph-node"
-            cx={x}
-            cy={mid}
-            r={GRAPH_NODE_RADIUS}
-            fill={color}
-            opacity={onSpine ? 1 : GRAPH_DIM_NODE_OPACITY}
-          />
+          {isTip ? (
+            <circle
+              class="graph-node graph-node-tip"
+              cx={x}
+              cy={mid}
+              r={GRAPH_NODE_RADIUS}
+              fill="var(--bg)"
+              stroke={graphNodeColor(onSpine)}
+              stroke-width="1.6"
+            />
+          ) : (
+            <circle
+              class="graph-node"
+              cx={x}
+              cy={mid}
+              r={GRAPH_NODE_RADIUS}
+              fill={graphNodeColor(onSpine)}
+            />
+          )}
         </g>,
       )
       continue
@@ -582,9 +610,10 @@ function GraphLaneSpans(props: {
 function ConnectorLaneSpans(props: {
   ansi: string
   brightCols: Set<number> | null
+  gutterCols: number
 }) {
-  const text = stripAnsi(props.ansi)
-  const width = Math.max(GRAPH_COL_WIDTH, text.length * GRAPH_COL_WIDTH)
+  const text = stripAnsi(props.ansi).replace(/\s+$/, '')
+  const width = Math.max(props.gutterCols, text.length, 1) * GRAPH_COL_WIDTH
   const height = GRAPH_CONNECTOR_HEIGHT
   const mid = height / 2
   // The SVG is centered on the zero-height row; reach into both neighbors.
@@ -596,7 +625,6 @@ function ConnectorLaneSpans(props: {
     if (ch === ' ') continue
     const onSpine = props.brightCols !== null && props.brightCols.has(i)
     const color = graphLaneColor(onSpine)
-    const opacity = onSpine ? 1 : GRAPH_DIM_LANE_OPACITY
     const x = graphColX(i)
     if (ch === '|') {
       lanes.push(
@@ -609,7 +637,6 @@ function ConnectorLaneSpans(props: {
           stroke={color}
           stroke-width="1.8"
           stroke-linecap="round"
-          opacity={opacity}
         />,
       )
       continue
@@ -626,7 +653,6 @@ function ConnectorLaneSpans(props: {
           stroke-width="1.8"
           stroke-linecap="round"
           stroke-linejoin="round"
-          opacity={opacity}
         />,
       )
       continue
@@ -642,7 +668,6 @@ function ConnectorLaneSpans(props: {
           stroke={color}
           stroke-width="1.8"
           stroke-linecap="round"
-          opacity={opacity}
         />,
       )
       continue
@@ -775,6 +800,7 @@ function GraphCommitLine(props: {
   currentBranch: string | null
   brightCols: Set<number> | null
   meta: GraphRowMeta
+  gutterCols: number
 }) {
   const { graphAnsi, shaFull, shaShort, decorateRaw, subject, date, inHistory } =
     props.row
@@ -800,6 +826,7 @@ function GraphCommitLine(props: {
         <GraphLaneSpans
           ansi={graphAnsi}
           brightCols={props.brightCols}
+          gutterCols={props.gutterCols}
           meta={props.meta}
           isHead={isHead}
           isDetached={isHead && props.detached}
@@ -923,6 +950,7 @@ function GraphOtherLine(props: {
    * don't overdraw each other.
    */
   kind: 'curve' | 'tall'
+  gutterCols: number
 }) {
   const cls = [
     'log-row',
@@ -936,11 +964,16 @@ function GraphOtherLine(props: {
     <div class={cls}>
       <span class="graph-prefix-wide">
         {props.kind === 'tall' ? (
-          <GraphLaneSpans ansi={props.ansi} brightCols={props.brightCols} />
+          <GraphLaneSpans
+            ansi={props.ansi}
+            brightCols={props.brightCols}
+            gutterCols={props.gutterCols}
+          />
         ) : (
           <ConnectorLaneSpans
             ansi={props.ansi}
             brightCols={props.brightCols}
+            gutterCols={props.gutterCols}
           />
         )}
       </span>
@@ -948,9 +981,9 @@ function GraphOtherLine(props: {
   )
 }
 
-function StashLaneSpans(props: { graphAnsi: string }) {
-  const text = stripAnsi(props.graphAnsi)
-  const width = Math.max(GRAPH_COL_WIDTH, text.length * GRAPH_COL_WIDTH)
+function StashLaneSpans(props: { graphAnsi: string; gutterCols: number }) {
+  const text = stripAnsi(props.graphAnsi).replace(/\s+$/, '')
+  const width = Math.max(props.gutterCols, text.length, 1) * GRAPH_COL_WIDTH
   const height = GRAPH_ROW_HEIGHT
   const mid = height / 2
   const col = Math.max(0, text.indexOf('*'))
@@ -990,13 +1023,17 @@ function StashLaneSpans(props: { graphAnsi: string }) {
 function GraphStashLine(props: {
   stash: PreviewStashEntry
   baseRow: GraphCommitRow
+  gutterCols: number
 }) {
   const ref = encodeURIComponent(props.stash.ref)
   const summaryUrl = `/api/stash?ref=${ref}`
   return (
     <div class="log-row log-row-commit log-row-stash">
       <span class="graph-prefix">
-        <StashLaneSpans graphAnsi={props.baseRow.graphAnsi} />
+        <StashLaneSpans
+          graphAnsi={props.baseRow.graphAnsi}
+          gutterCols={props.gutterCols}
+        />
       </span>
       <span class="ref-pill ref-pill-stash" title={`stash: ${props.stash.ref}`}>
         {props.stash.ref}
@@ -1070,6 +1107,7 @@ export function GraphRows(props: {
   stashes: PreviewStashEntry[]
   brightColsByRow: Array<Set<number> | null>
   rowMeta: GraphRowMeta[]
+  gutterCols: number
 }) {
   const stashesByBase = new Map<string, PreviewStashEntry[]>()
   for (const stash of props.stashes) {
@@ -1090,6 +1128,7 @@ export function GraphRows(props: {
               betweenInHistory={r.betweenInHistory}
               brightCols={props.brightColsByRow[i] ?? null}
               kind={meta.kind === 'tall' ? 'tall' : 'curve'}
+              gutterCols={props.gutterCols}
             />
           )
         }
@@ -1101,6 +1140,7 @@ export function GraphRows(props: {
                 key={stash.ref}
                 stash={stash}
                 baseRow={r.row}
+                gutterCols={props.gutterCols}
               />
             ))}
             <GraphCommitLine
@@ -1110,6 +1150,7 @@ export function GraphRows(props: {
               currentBranch={props.currentBranch}
               brightCols={props.brightColsByRow[i] ?? null}
               meta={meta}
+              gutterCols={props.gutterCols}
             />
           </>
         )
@@ -1122,6 +1163,8 @@ export function GraphLoadMore(props: {
   offset: number
   nextLimit: number
   show: boolean
+  /** Carried to tail loads so appended rows keep at least this gutter width. */
+  gutterCols: number
 }) {
   if (!props.show) return null
   return (
@@ -1129,7 +1172,7 @@ export function GraphLoadMore(props: {
       type="button"
       class="graph-load-more"
       title={`git log --graph -n ${props.nextLimit}`}
-      hx-get={`/fragment/graph/tail?offset=${encodeURIComponent(String(props.offset))}&limit=${encodeURIComponent(String(props.nextLimit))}`}
+      hx-get={`/fragment/graph/tail?offset=${encodeURIComponent(String(props.offset))}&limit=${encodeURIComponent(String(props.nextLimit))}&gutter=${encodeURIComponent(String(props.gutterCols))}`}
       hx-target="this"
       hx-swap="outerHTML show:none"
       hx-trigger="click, intersect once root:#graph threshold:0.2"
@@ -1146,6 +1189,7 @@ export function GraphTailFragment(props: {
   stashes: PreviewStashEntry[]
   brightColsByRow: Array<Set<number> | null>
   rowMeta: GraphRowMeta[]
+  gutterCols: number
   offset: number
   nextLimit: number
   showLoadMore: boolean
@@ -1159,11 +1203,13 @@ export function GraphTailFragment(props: {
         stashes={props.stashes}
         brightColsByRow={props.brightColsByRow}
         rowMeta={props.rowMeta}
+        gutterCols={props.gutterCols}
       />
       <GraphLoadMore
         offset={props.offset}
         nextLimit={props.nextLimit}
         show={props.showLoadMore}
+        gutterCols={props.gutterCols}
       />
     </>
   )
@@ -1195,6 +1241,7 @@ export function GraphFragment(props: GraphFragmentProps) {
   const currentBranch = head.kind === 'branch' ? head.name : null
   const brightColsByRow = graphBrightCols(rows)
   const rowMeta = graphRowMeta(rows)
+  const gutterCols = graphGutterCols(rows)
 
   return (
     <div
@@ -1245,6 +1292,7 @@ export function GraphFragment(props: GraphFragmentProps) {
               stashes={props.previewStash.stashes}
               brightColsByRow={brightColsByRow}
               rowMeta={rowMeta}
+              gutterCols={gutterCols}
               offset={rows.length}
               nextLimit={props.graphNextLimit}
               showLoadMore={props.showLoadMore}

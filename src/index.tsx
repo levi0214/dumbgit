@@ -35,6 +35,7 @@ import {
   GraphFragment,
   GraphTailFragment,
   graphBrightCols,
+  graphGutterCols,
   graphRowMeta,
 } from './views/graph'
 import type { GraphFragmentProps } from './views/graph'
@@ -268,6 +269,7 @@ app.get('/fragment/graph/tail', async (c) => {
   )
   const parsedLimit = Number.parseInt(c.req.query('limit') ?? '', 10)
   const graphCommitLimit = clampGraphCommitLimit(parsedLimit)
+  const priorGutter = Number.parseInt(c.req.query('gutter') ?? '', 10)
   try {
     const head = await headInfo()
     const rows = await logGraphRows(graphCommitLimit)
@@ -282,6 +284,12 @@ app.get('/fragment/graph/tail', async (c) => {
       commitRows > 0 &&
       graphCommitLimit < GRAPH_COMMIT_MAX
     const rowOffset = Math.min(offset, rows.length)
+    // Appended rows keep at least the gutter already on screen so the
+    // message column stays aligned across "load more" chunks.
+    const gutterCols = Math.max(
+      graphGutterCols(rows),
+      Number.isFinite(priorGutter) ? priorGutter : 0,
+    )
     return c.html(
       <GraphTailFragment
         rows={rows.slice(rowOffset)}
@@ -290,6 +298,7 @@ app.get('/fragment/graph/tail', async (c) => {
         stashes={previewStash.stashes}
         brightColsByRow={graphBrightCols(rows).slice(rowOffset)}
         rowMeta={graphRowMeta(rows).slice(rowOffset)}
+        gutterCols={gutterCols}
         offset={rows.length}
         nextLimit={graphNextLimit}
         showLoadMore={showLoadMore}
