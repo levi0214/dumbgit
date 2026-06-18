@@ -61,6 +61,20 @@ function CopyBtn(props: { dataCopy?: string; title?: string }) {
 const TAG_ICO = raw(
   `<svg class="tag-ico" xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>`,
 )
+const ROW_ACTION_ICO_ATTRS =
+  `class="row-action-ico" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"`
+const NEW_BRANCH_ICO = raw(
+  `<svg ${ROW_ACTION_ICO_ATTRS}><path d="M5 12h14"/><path d="M12 5v14"/></svg>`,
+)
+const CHECKOUT_ICO = raw(
+  `<svg ${ROW_ACTION_ICO_ATTRS}><path d="m16 3 4 4-4 4"/><path d="M20 7H4"/><path d="m8 21-4-4 4-4"/><path d="M4 17h16"/></svg>`,
+)
+const RESTORE_ICO = raw(
+  `<svg ${ROW_ACTION_ICO_ATTRS}><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>`,
+)
+const DROP_ICO = raw(
+  `<svg ${ROW_ACTION_ICO_ATTRS}><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>`,
+)
 /** Local-ish branch label to show before the subject (avoids duplicating HEAD / same-name pills). */
 function branchPrefixFromTokens(tokens: DecorationToken[]): string | null {
   for (const t of tokens) {
@@ -746,7 +760,7 @@ function RefPills(props: {
                 <button
                   type="button"
                   class="inline-action-btn ref-action-btn"
-                  title="git push"
+                  title="Push current branch · git push"
                   data-confirm-label="confirm push"
                   data-confirm-busy-label="pushing…"
                   hx-post="/api/push"
@@ -760,7 +774,7 @@ function RefPills(props: {
               <button
                 type="button"
                 class="inline-action-btn ref-action-btn"
-                title={`git switch ${ref}`}
+                title={`Switch to ${ref} · git switch ${ref}`}
                 hx-post={`/api/checkout/branch?name=${encodeURIComponent(ref)}`}
                 hx-target="#graph"
                 hx-swap="outerHTML"
@@ -855,7 +869,7 @@ function GraphCommitLine(props: {
               <button
                 type="button"
                 class="inline-action-btn branch-prefix-action"
-                title="git push"
+                title="Push current branch · git push"
                 data-confirm-label="confirm push"
                 data-confirm-busy-label="pushing…"
                 hx-post="/api/push"
@@ -869,7 +883,7 @@ function GraphCommitLine(props: {
             <button
               type="button"
               class="inline-action-btn branch-prefix-action"
-              title={`git switch ${branchPrefix}`}
+              title={`Switch to ${branchPrefix} · git switch ${branchPrefix}`}
               hx-post={`/api/checkout/branch?name=${encodeURIComponent(branchPrefix)}`}
               hx-target="#graph"
               hx-swap="outerHTML"
@@ -910,24 +924,26 @@ function GraphCommitLine(props: {
           <button
             type="button"
             class="row-action-btn"
-            title={`git branch … ${shaShort}`}
+            title={`New branch from this commit · git branch … ${shaShort}`}
+            aria-label="new branch"
             hx-post={`/api/branch/create?sha=${encodeURIComponent(shaFull)}`}
             hx-target="#graph"
             hx-swap="outerHTML"
             hx-prompt="branch name"
           >
-            new branch
+            {NEW_BRANCH_ICO}
           </button>
           <button
             type="button"
             class="row-action-btn"
-            title="git switch --detach to this commit"
+            title={`Checkout this commit · git switch --detach ${shaShort}`}
+            aria-label="checkout"
             data-confirm-label="confirm checkout"
             hx-post={`/api/checkout/commit?sha=${encodeURIComponent(shaFull)}`}
             hx-target="#graph"
             hx-swap="outerHTML"
           >
-            checkout
+            {CHECKOUT_ICO}
           </button>
           <code class="hash-peek" title={shaFull}>
             {shaShort}
@@ -1056,23 +1072,25 @@ function GraphStashLine(props: {
           <button
             type="button"
             class="row-action-btn"
-            title={`git stash apply --index ${props.stash.ref}; git stash drop ${props.stash.ref}`}
+            title={`Restore this stash · git stash apply --index ${props.stash.ref}; git stash drop ${props.stash.ref}`}
+            aria-label="restore stash"
             hx-post={`/api/worktree/stash-restore?ref=${ref}`}
             hx-target="#graph"
             hx-swap="outerHTML"
           >
-            restore
+            {RESTORE_ICO}
           </button>
           <button
             type="button"
             class="row-action-btn stash-drop-btn"
-            title={`git stash drop ${props.stash.ref}`}
+            title={`Drop this stash · git stash drop ${props.stash.ref}`}
+            aria-label="drop stash"
             data-confirm-label="drop"
             hx-post={`/api/worktree/stash-drop?ref=${ref}`}
             hx-target="#graph"
             hx-swap="outerHTML"
           >
-            drop
+            {DROP_ICO}
           </button>
         </span>
       </span>

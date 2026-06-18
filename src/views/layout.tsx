@@ -616,15 +616,21 @@ body.main-grid-dragging {
 .row-action-btn {
   all: unset;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   font-size: 11px;
   line-height: 14px;
   color: var(--muted);
   border-radius: 3px;
-  padding: 1px 5px;
+  padding: 2px 4px;
 }
 .row-action-btn:hover {
   background: rgba(255, 255, 255, 0.07);
   color: var(--accent);
+}
+.row-action-ico {
+  display: block;
 }
 .inline-action-btn {
   all: unset;
@@ -1164,7 +1170,7 @@ function syncWorktreeFileSelection() {
 
 function clearConfirmButton(btn) {
   var old = btn.getAttribute('data-confirm-original');
-  if (old !== null) btn.textContent = old;
+  if (old !== null) btn.innerHTML = old;
   btn.classList.remove('confirm-armed');
   btn.classList.remove('confirm-busy');
   btn.removeAttribute('data-confirm-armed');
@@ -1214,7 +1220,7 @@ document.addEventListener('click', function (e) {
   e.preventDefault();
   e.stopImmediatePropagation();
   btn.setAttribute('data-confirm-armed', 'true');
-  btn.setAttribute('data-confirm-original', btn.textContent || '');
+  btn.setAttribute('data-confirm-original', btn.innerHTML);
   btn.textContent = '✓ ' + (btn.getAttribute('data-confirm-label') || 'confirm');
   btn.classList.add('confirm-armed');
   var timer = setTimeout(function () { clearConfirmButton(btn); }, 3000);
