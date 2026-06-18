@@ -243,6 +243,12 @@ app.get('/', async (c) => {
         <div id="status" class="status-slot"></div>
         <div class="main-grid">
           <GraphFragment {...graph} />
+          <div
+            class="main-resizer"
+            role="separator"
+            aria-orientation="vertical"
+            title="Drag to resize · double-click to reset"
+          ></div>
           <DiffPanel state="empty" />
         </div>
       </div>

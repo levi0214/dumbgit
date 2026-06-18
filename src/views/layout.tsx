@@ -110,12 +110,32 @@ body {
 }
 .main-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
-  gap: 12px;
+  grid-template-columns: minmax(0, var(--graph-w, 60%)) 8px minmax(0, 1fr);
   align-items: stretch;
   flex: 1;
   min-height: 0;
   overflow: hidden;
+}
+.main-resizer {
+  position: relative;
+  cursor: col-resize;
+  touch-action: none;
+  user-select: none;
+}
+.main-resizer:hover::after,
+body.main-grid-dragging .main-resizer::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 2px;
+  transform: translateX(-50%);
+  background: var(--accent);
+}
+body.main-grid-dragging {
+  cursor: col-resize;
+  user-select: none;
 }
 .graph-root {
   border: 1px solid var(--border);
@@ -1372,6 +1392,89 @@ const SSE_SCRIPT = `
 })();
 `
 
+const RESIZER_SCRIPT = `
+(function () {
+  var KEY = 'dumbgit:graph-w';
+  var MIN_GRAPH_PX = 320;
+  var MIN_DIFF_PX = 280;
+  var RESIZER_PX = 8;
+  var FALLBACK_MIN_PCT = 15;
+  var FALLBACK_MAX_PCT = 85;
+  function clampFallback(n) {
+    return Math.min(FALLBACK_MAX_PCT, Math.max(FALLBACK_MIN_PCT, n));
+  }
+  function clampPct(n) {
+    if (!Number.isFinite(n)) return null;
+    var grid = document.querySelector('.main-grid');
+    if (!grid) return clampFallback(n);
+    var w = grid.getBoundingClientRect().width;
+    if (w <= 0) return clampFallback(n);
+    var minPct = (MIN_GRAPH_PX / w) * 100;
+    var maxPct = ((w - RESIZER_PX - MIN_DIFF_PX) / w) * 100;
+    if (minPct > maxPct) return clampFallback(n);
+    return Math.min(maxPct, Math.max(minPct, n));
+  }
+  function applyPct(pct) {
+    var grid = document.querySelector('.main-grid');
+    if (!grid) return;
+    grid.style.setProperty('--graph-w', pct + '%');
+  }
+  function loadPct() {
+    var raw = null;
+    try { raw = localStorage.getItem(KEY); } catch (_) {}
+    if (raw == null) return;
+    var n = clampPct(Number(raw));
+    if (n != null) applyPct(n);
+  }
+  function savePct(pct) {
+    try { localStorage.setItem(KEY, String(pct)); } catch (_) {}
+  }
+  function attach() {
+    var resizer = document.querySelector('.main-resizer');
+    var grid = document.querySelector('.main-grid');
+    if (!resizer || !grid) return;
+    var dragging = false;
+    var pointerId = null;
+    resizer.addEventListener('pointerdown', function (e) {
+      dragging = true;
+      pointerId = e.pointerId;
+      try { resizer.setPointerCapture(pointerId); } catch (_) {}
+      document.body.classList.add('main-grid-dragging');
+      e.preventDefault();
+    });
+    resizer.addEventListener('pointermove', function (e) {
+      if (!dragging) return;
+      var rect = grid.getBoundingClientRect();
+      if (rect.width <= 0) return;
+      var pct = clampPct(((e.clientX - rect.left) / rect.width) * 100);
+      if (pct != null) applyPct(pct);
+    });
+    function endDrag() {
+      if (!dragging) return;
+      dragging = false;
+      try { resizer.releasePointerCapture(pointerId); } catch (_) {}
+      document.body.classList.remove('main-grid-dragging');
+      var raw = grid.style.getPropertyValue('--graph-w');
+      var n = parseFloat(raw);
+      if (Number.isFinite(n)) savePct(n);
+    }
+    resizer.addEventListener('pointerup', endDrag);
+    resizer.addEventListener('pointercancel', endDrag);
+    resizer.addEventListener('dblclick', function () {
+      try { localStorage.removeItem(KEY); } catch (_) {}
+      var grid = document.querySelector('.main-grid');
+      if (grid) grid.style.removeProperty('--graph-w');
+    });
+  }
+  loadPct();
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', attach);
+  } else {
+    attach();
+  }
+})();
+`
+
 const WT_POLL_SCRIPT = `
 setInterval(async function () {
   if (document.visibilityState !== 'visible') return;
@@ -1439,6 +1542,7 @@ export function Layout(props: { children: unknown; title?: string }) {
         <script>{raw(REPO_SYNC_SCRIPT)}</script>
         <script>{raw(SSE_SCRIPT)}</script>
         <script>{raw(WT_POLL_SCRIPT)}</script>
+        <script>{raw(RESIZER_SCRIPT)}</script>
       </body>
     </html>
   )
