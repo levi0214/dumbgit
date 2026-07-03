@@ -3,6 +3,7 @@ import { raw } from 'hono/html'
 import type {
   CommitFile,
   CommitSummary,
+  TagInfo,
   WorkTreeActionOp,
   WorkTreeChangeKind,
 } from '../git'
@@ -65,6 +66,19 @@ function shortCommitDate(raw: string): string {
   if (Number.isNaN(d.getTime())) return raw
   const pad = (n: number) => String(n).padStart(2, '0')
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
+function DiffTag(props: { tag: TagInfo }) {
+  const { tag } = props
+  return (
+    <div class="diff-tag">
+      <span class="diff-tag-name" title={tag.name}>
+        {TAG_ICO}
+        {tag.name}
+      </span>
+      {tag.message ? <pre class="diff-tag-message">{tag.message}</pre> : null}
+    </div>
+  )
 }
 
 /** Per-file boilerplate (`diff --git`, blob hashes, `---`/`+++`, no-newline marker) — useless when caller already shows the file path. */
@@ -251,10 +265,7 @@ export function DiffPanel(props: DiffPanelProps) {
         {summary.tags.length > 0 ? (
           <div class="diff-tags">
             {summary.tags.map((tag) => (
-              <span class="diff-tag" title={tag}>
-                {TAG_ICO}
-                <span class="diff-tag-name">{tag}</span>
-              </span>
+              <DiffTag tag={tag} />
             ))}
           </div>
         ) : null}

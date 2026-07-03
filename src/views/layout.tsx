@@ -861,29 +861,35 @@ body.main-grid-dragging {
 .diff-tags {
   margin-top: 6px;
   display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
+  flex-direction: column;
+  gap: 8px;
 }
 .diff-tag {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 3px;
-  max-width: min(100%, 18rem);
-  padding: 1px 6px;
-  border-radius: 3px;
   font-size: 11px;
   color: #d6bce8;
-  background: rgba(200, 155, 217, 0.12);
 }
-.diff-tag .tag-ico {
+.diff-tag-name {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  max-width: 100%;
+  font-weight: 600;
+}
+.diff-tag-name .tag-ico {
   display: block;
   flex-shrink: 0;
 }
-.diff-tag-name {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.diff-tag-message {
+  margin: 4px 0 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: rgba(214, 188, 232, 0.82);
+  font: inherit;
+  font-size: 11px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 .diff-worktree-file .diff-head {
   padding: 7px 12px;

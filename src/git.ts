@@ -305,12 +305,62 @@ export type CommitFile = {
   binary?: boolean
 }
 
+export type TagInfo = {
+  name: string
+  message?: string
+}
+
 export type CommitSummary = {
   subject: string
   author: string
   date: string
-  tags: string[]
+  tags: TagInfo[]
   files: CommitFile[]
+}
+
+const TAG_REF_FIELD = '\x1f'
+
+/** Parse one line from `git for-each-ref --format=…` tag batch output. */
+export function parseTagForEachRefLine(line: string): {
+  name: string
+  objectType: string
+} | null {
+  const trimmed = line.trimEnd()
+  if (!trimmed) return null
+  const [name = '', objectType = ''] = trimmed.split(TAG_REF_FIELD)
+  if (!name) return null
+  return { name, objectType }
+}
+
+async function annotatedTagMessage(name: string): Promise<string | undefined> {
+  const r = await spawnGit(['tag', '-l', name, '--format=%(contents)'])
+  if (r.code !== 0) return undefined
+  const message = r.stdout.trimEnd()
+  return message || undefined
+}
+
+async function tagsAtCommit(sha: string): Promise<TagInfo[]> {
+  const r = await spawnGit([
+    'for-each-ref',
+    `--points-at=${sha}`,
+    'refs/tags',
+    '--format',
+    `%(refname:short)${TAG_REF_FIELD}%(objecttype)`,
+  ])
+  if (r.code !== 0 || !r.stdout.trim()) return []
+
+  const parsed = r.stdout
+    .trimEnd()
+    .split('\n')
+    .map(parseTagForEachRefLine)
+    .filter((t): t is NonNullable<typeof t> => t !== null)
+
+  return Promise.all(
+    parsed.map(async (row) => {
+      if (row.objectType === 'commit') return { name: row.name }
+      return { name: row.name, message: await annotatedTagMessage(row.name) }
+    }),
+  )
 }
 
 type Numstat = { added?: number; deleted?: number; binary: boolean }
@@ -402,16 +452,7 @@ export async function commitSummary(
   if (numstat.code === 0) {
     files = mergeNumstat(files, parseNumstat(numstat.stdout))
   }
-  let tags: string[] = []
-  if (opts.includeTags) {
-    const tagList = await spawnGit(['tag', '--points-at', sha])
-    if (tagList.code === 0) {
-      tags = tagList.stdout
-        .split('\n')
-        .map((s) => s.trim())
-        .filter(Boolean)
-    }
-  }
+  const tags = opts.includeTags ? await tagsAtCommit(sha) : []
 
   return {
     ok: true,
