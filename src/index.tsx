@@ -30,6 +30,7 @@ import {
   workTreeFilePatch,
   workTreeSummary,
 } from './git'
+import { createIdleExit } from './idle-exit'
 import { watchGitRefs } from './watch'
 import {
   GraphFragment,
@@ -57,6 +58,9 @@ const GRAPH_COMMIT_DEFAULT = 50
 const GRAPH_COMMIT_STEP = 50
 const GRAPH_COMMIT_MAX = 500
 
+/** After last `/events` client leaves (or boot with none), exit. */
+const IDLE_EXIT_GRACE_MS_DEFAULT = 60_000
+
 function clampGraphCommitLimit(n: number): number {
   if (!Number.isFinite(n)) return GRAPH_COMMIT_DEFAULT
   const floored = Math.floor(n)
@@ -73,15 +77,32 @@ function parseServerArgv(): {
   /** null = scan PORT_PROBE_LO..HI; number = pin to that port. */
   port: number | null
   open: boolean
+  idleExit: boolean
+  idleGraceMs: number
   repoAbs: string
 } {
   let port: number | null = null
   let open = false
+  let idleExit = true
+  let idleGraceMs = IDLE_EXIT_GRACE_MS_DEFAULT
   const pos: string[] = []
   for (let i = 2; i < process.argv.length; i++) {
     const a = process.argv[i]
     if (a === '--open') {
       open = true
+      continue
+    }
+    if (a === '--no-idle-exit') {
+      idleExit = false
+      continue
+    }
+    if (a === '--idle-grace-ms') {
+      const n = Number(process.argv[++i])
+      if (!Number.isFinite(n) || n < 1) {
+        console.error(`dumbgit: bad --idle-grace-ms value`)
+        process.exit(2)
+      }
+      idleGraceMs = Math.floor(n)
       continue
     }
     if (a === '--port') {
@@ -98,7 +119,7 @@ function parseServerArgv(): {
   }
   const raw = pos[0]
   const repoAbs = raw ? path.resolve(expandUser(raw)) : path.resolve(process.cwd())
-  return { port, open, repoAbs }
+  return { port, open, idleExit, idleGraceMs, repoAbs }
 }
 
 function portLooksFree(p: number): Promise<boolean> {
@@ -254,6 +275,16 @@ async function attachWatcher() {
 }
 
 await attachWatcher()
+
+const idle = BOOT.idleExit
+  ? createIdleExit({
+      graceMs: BOOT.idleGraceMs,
+      onIdle: () => {
+        console.log('dumbgit: idle exit (no SSE clients)')
+        process.exit(0)
+      },
+    })
+  : null
 
 const app = new Hono()
 
@@ -701,6 +732,7 @@ app.post('/api/push', async (c) => {
 app.get('/events', (c) => {
   c.status(200)
   return streamSSE(c, async (stream) => {
+    idle?.clientEnter()
     let lastSent = state.lastChange
     const signal = c.req.raw.signal
     const isDone = () =>
@@ -729,6 +761,7 @@ app.get('/events', (c) => {
       }
     } finally {
       signal.removeEventListener('abort', onAbort)
+      idle?.clientLeave()
     }
   })
 })
@@ -749,7 +782,14 @@ if (state.server) {
   })
   const base = `http://${LISTEN_HOST}:${port}`
   console.log(`dumbgit on ${base}  (repo: ${getCurrentRepo()})`)
-  console.log('ctrl-c to quit, or `dumbgit stop --all` to stop every dumbgit')
+  if (idle) {
+    idle.start()
+    console.log(
+      `exits after ${Math.round(BOOT.idleGraceMs / 1000)}s with no browser`,
+    )
+  } else {
+    console.log('ctrl-c to quit, or `dumbgit stop --all`')
+  }
   if (BOOT.open) {
     setTimeout(() => {
       Bun.spawn(['open', base])

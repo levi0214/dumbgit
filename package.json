@@ -6,7 +6,7 @@
     "dumbgit": "./bin/dumbgit"
   },
   "scripts": {
-    "dev": "bun --watch src/index.tsx",
+    "dev": "bun --watch src/index.tsx --no-idle-exit",
     "dumbgit": "bun run src/index.tsx --open",
     "test": "bun test"
   },

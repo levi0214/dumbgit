@@ -35,9 +35,11 @@ id to `stop` to stop that server.
 Each repo gets its own server. Starting the same repo again reopens it. Ports
 come from `7777` to `7900`.
 
-Use `bun run dev` when working on dumbgit itself. It runs the server in the
-foreground with `bun --watch src/index.tsx`; if `7777` is busy, it picks the
-next free port.
+Servers exit on their own about a minute after the last browser tab disconnects
+(no SSE clients). `list` / `stop` remain for stuck processes.
+
+Use `bun run dev` when working on dumbgit itself. It disables idle exit and
+runs with `bun --watch`; if `7777` is busy, it picks the next free port.
 
 If the path is not inside a Git working tree, dumbgit prints the Git error and
 exits.
@@ -80,6 +82,7 @@ it does not belong here.
 bin/dumbgit     launcher
 src/index.tsx   Hono routes and server boot
 src/git.ts      thin wrappers around the Git CLI
-src/watch.ts    ref watcher
-src/views/      server-rendered HTML fragments
+src/watch.ts     ref watcher
+src/idle-exit.ts exit when no SSE clients remain
+src/views/       server-rendered HTML fragments
 ```
