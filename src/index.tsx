@@ -730,6 +730,9 @@ app.post('/api/push', async (c) => {
 })
 
 app.get('/events', (c) => {
+  // Wait/notify SSE is quiet between ref changes. Bun.serve's default
+  // idleTimeout (10s) would kill the stream and flash the disconnect overlay.
+  state.server?.timeout(c.req.raw, 0)
   c.status(200)
   return streamSSE(c, async (stream) => {
     idle?.clientEnter()
@@ -773,12 +776,15 @@ if (state.server) {
     hostname: LISTEN_HOST,
     port,
     fetch: app.fetch,
+    // Long-lived /events streams; process lifetime is owned by idle-exit.
+    idleTimeout: 0,
   })
 } else {
   state.server = Bun.serve({
     hostname: LISTEN_HOST,
     port,
     fetch: app.fetch,
+    idleTimeout: 0,
   })
   const base = `http://${LISTEN_HOST}:${port}`
   console.log(`dumbgit on ${base}  (repo: ${getCurrentRepo()})`)
