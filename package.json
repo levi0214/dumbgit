@@ -14,9 +14,9 @@
     "bun-types": "latest"
   },
   "peerDependencies": {
-    "typescript": "^5.0.0"
+    "typescript": "^5.9.3"
   },
   "dependencies": {
-    "hono": "^4.12.17"
+    "hono": "^4.12.29"
   }
 }
