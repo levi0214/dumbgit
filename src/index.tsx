@@ -163,6 +163,8 @@ async function loadGraph(limit?: number): Promise<GraphFragmentProps> {
  */
 type DumbgitState = {
   lastChange: number
+  /** SSE waiters woken by `bumpGitChange` (replaces 100ms polling). */
+  changeWaiters: Set<() => void>
   closeWatch?: () => void
   server?: ReturnType<typeof Bun.serve>
   repoInitialized?: boolean
@@ -172,9 +174,52 @@ const G = globalThis as { __dumbgit?: DumbgitState }
 if (!G.__dumbgit) {
   G.__dumbgit = {
     lastChange: Date.now(),
+    changeWaiters: new Set(),
   }
 }
 const state = G.__dumbgit
+if (!state.changeWaiters) state.changeWaiters = new Set()
+
+/** Record a refs change and wake every idle `/events` stream. */
+function bumpGitChange() {
+  state.lastChange = Date.now()
+  for (const wake of state.changeWaiters) wake()
+}
+
+/**
+ * Resolve when `state.lastChange` advances past `after`, or when `isDone`.
+ * No timers while idle — avoids per-tab 10Hz `setTimeout` churn that grew
+ * the JS heap over multi-day runs.
+ */
+function waitForGitChange(
+  after: number,
+  opts: { isDone: () => boolean; signal: AbortSignal },
+): Promise<'change' | 'done'> {
+  if (opts.isDone()) return Promise.resolve('done')
+  if (state.lastChange > after) return Promise.resolve('change')
+
+  return new Promise((resolve) => {
+    let settled = false
+    const finish = (result: 'change' | 'done') => {
+      if (settled) return
+      settled = true
+      state.changeWaiters.delete(wake)
+      opts.signal.removeEventListener('abort', onAbort)
+      resolve(result)
+    }
+    const wake = () =>
+      finish(state.lastChange > after ? 'change' : 'done')
+    const onAbort = () => finish('done')
+    state.changeWaiters.add(wake)
+    opts.signal.addEventListener('abort', onAbort)
+    // Close the notify→register race.
+    if (opts.isDone()) {
+      finish('done')
+      return
+    }
+    if (state.lastChange > after) finish('change')
+  })
+}
 
 /** Cached on state to survive `bun --watch` reloads. */
 async function listenPort(): Promise<number> {
@@ -204,7 +249,7 @@ async function attachWatcher() {
   state.closeWatch = undefined
   const watchedDir = await gitDir()
   state.closeWatch = watchGitRefs(watchedDir, () => {
-    state.lastChange = Date.now()
+    bumpGitChange()
   })
 }
 
@@ -657,14 +702,33 @@ app.get('/events', (c) => {
   c.status(200)
   return streamSSE(c, async (stream) => {
     let lastSent = state.lastChange
-    await stream.writeSSE({ event: 'ready', data: String(lastSent) })
+    const signal = c.req.raw.signal
+    const isDone = () =>
+      stream.aborted || stream.closed || signal.aborted
 
-    while (!stream.aborted && !stream.closed) {
-      if (state.lastChange > lastSent) {
+    // Always abort the Hono stream when the client drops (Hono only wires
+    // this automatically on Bun 0.x/1.0/1.1).
+    const onAbort = () => {
+      if (!stream.aborted) stream.abort()
+    }
+    signal.addEventListener('abort', onAbort)
+    stream.onAbort(() => {
+      signal.removeEventListener('abort', onAbort)
+    })
+
+    try {
+      await stream.writeSSE({ event: 'ready', data: String(lastSent) })
+      while (!isDone()) {
+        const result = await waitForGitChange(lastSent, { isDone, signal })
+        if (result === 'done' || isDone()) break
         lastSent = state.lastChange
-        await stream.writeSSE({ event: 'changed', data: String(lastSent) })
+        await stream.writeSSE({
+          event: 'changed',
+          data: String(lastSent),
+        })
       }
-      await stream.sleep(100)
+    } finally {
+      signal.removeEventListener('abort', onAbort)
     }
   })
 })
