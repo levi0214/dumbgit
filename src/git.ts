@@ -113,14 +113,14 @@ export type GraphRow =
   | { kind: 'commit'; row: GraphCommitRow }
   | { kind: 'other'; ansi: string; betweenInHistory: boolean }
 
-/** Set of short (7-char) hashes reachable from HEAD. Empty on failure. */
-async function reachableShortShas(): Promise<Set<string>> {
+/** Full hashes reachable from HEAD. Empty on failure. */
+async function reachableShas(): Promise<Set<string>> {
   const { code, stdout } = await spawnGit(['rev-list', 'HEAD'])
   if (code !== 0) return new Set()
   const set = new Set<string>()
   for (const line of stdout.split('\n')) {
-    const t = line.trim()
-    if (t.length >= 7) set.add(t.slice(0, 7))
+    const t = line.trim().toLowerCase()
+    if (/^[a-f0-9]{40}$/.test(t)) set.add(t)
   }
   return set
 }
@@ -150,7 +150,9 @@ export async function logGraphRows(limit = 50): Promise<GraphRow[]> {
     throw new GitError(err || 'git log failed', code)
   }
 
-  const reachable = await reachableShortShas()
+  // Match on full %H — never %h. In larger repos Git widens %h past 7 chars,
+  // so a fixed 7-char prefix set would mark every row as out-of-history (dim).
+  const reachable = await reachableShas()
   const text = stdout.replace(/\n+$/, '')
   type Tmp =
     | { kind: 'commit'; row: GraphCommitRow }
@@ -172,6 +174,7 @@ export async function logGraphRows(limit = 50): Promise<GraphRow[]> {
         /^[a-f0-9]{7,40}$/i.test(shaFull) &&
         /^[a-f0-9]{7,40}$/i.test(shaShort)
       ) {
+        const fullKey = shaFull.toLowerCase()
         tmp.push({
           kind: 'commit',
           row: {
@@ -182,7 +185,8 @@ export async function logGraphRows(limit = 50): Promise<GraphRow[]> {
             subject,
             author,
             date,
-            inHistory: reachable.size === 0 ? true : reachable.has(shaShort),
+            inHistory:
+              reachable.size === 0 ? true : reachable.has(fullKey),
           },
         })
         continue

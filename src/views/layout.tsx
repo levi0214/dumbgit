@@ -1357,7 +1357,7 @@ ensureRepoSync();
 
 const SSE_SCRIPT = `
 (function () {
-  var DISCONNECT_MS = 1200;
+  var DISCONNECT_MS = 3000;
   function overlayEl() {
     return document.getElementById('sse-disconnect-overlay');
   }
