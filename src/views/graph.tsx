@@ -190,139 +190,10 @@ function graphCommitIsHead(decorateRaw: string): boolean {
   )
 }
 
-function graphText(row: GraphRow): string {
-  return stripAnsi(row.kind === 'commit' ? row.row.graphAnsi : row.ansi)
-}
-
-function graphChar(text: string, col: number): string {
-  return col >= 0 && col < text.length ? (text[col] ?? ' ') : ' '
-}
-
-function isVerticalGraphChar(ch: string): boolean {
-  return ch === '|' || ch === '*'
-}
-
-/**
- * How a row is rendered:
- * - 'commit': a commit row (dot + pass-through lanes).
- * - 'curve':  a lone connector row, collapsed to zero height; its lane
- *             transitions are drawn as full-height curves from the center of
- *             the commit row above to the center of the commit row below.
- * - 'tall':   a connector row inside a run of consecutive connectors; keeps
- *             its own height so stacked transitions don't overdraw.
- */
-export type GraphRowKind = 'commit' | 'curve' | 'tall'
-
-export type GraphNeighbor = { kind: GraphRowKind; text: string }
-
-export type GraphRowMeta = {
-  kind: GraphRowKind
-  above: GraphNeighbor | null
-  below: GraphNeighbor | null
-}
-
-const LONE_COMMIT_META: GraphRowMeta = {
-  kind: 'commit',
-  above: null,
-  below: null,
-}
-
-export function graphRowMeta(rows: GraphRow[]): GraphRowMeta[] {
-  const texts = rows.map(graphText)
-  const kinds: GraphRowKind[] = rows.map((r, i) => {
-    if (r.kind === 'commit') return 'commit'
-    const inRun =
-      rows[i - 1]?.kind === 'other' || rows[i + 1]?.kind === 'other'
-    return inRun ? 'tall' : 'curve'
-  })
-  return rows.map((_, i) => ({
-    kind: kinds[i]!,
-    above:
-      i > 0
-        ? { kind: kinds[i - 1]!, text: texts[i - 1]! }
-        : null,
-    below:
-      i < rows.length - 1
-        ? { kind: kinds[i + 1]!, text: texts[i + 1]! }
-        : null,
-  }))
-}
-
-/*
- * Diagonal glyph geometry: `/` at column c runs from its top at column c+1
- * down to column c-1; `\` at column c runs from its top at column c-1 down
- * to column c+1.
- */
-
-/** Does a stroke in `text` touch the row's TOP edge at `col`? */
-function touchesTopVertically(text: string, col: number): boolean {
-  return isVerticalGraphChar(graphChar(text, col))
-}
-
-function touchesTopDiagonally(text: string, col: number): boolean {
-  return (
-    graphChar(text, col - 1) === '/' || graphChar(text, col + 1) === '\\'
-  )
-}
-
-/** Does a stroke in `text` touch the row's BOTTOM edge at `col`? */
-function touchesBottomVertically(text: string, col: number): boolean {
-  return isVerticalGraphChar(graphChar(text, col))
-}
-
-function touchesBottomDiagonally(text: string, col: number): boolean {
-  return (
-    graphChar(text, col + 1) === '/' || graphChar(text, col - 1) === '\\'
-  )
-}
-
-/**
- * Should a commit row draw a straight stub from its dot toward the row above?
- * Diagonal arrivals from a 'curve' connector are excluded: the connector
- * already draws that link all the way to the dot's center.
- */
-function dotStubAbove(above: GraphNeighbor | null, col: number): boolean {
-  if (!above) return false
-  if (touchesBottomVertically(above.text, col)) return true
-  if (above.kind === 'curve') return false
-  return touchesBottomDiagonally(above.text, col)
-}
-
-function dotStubBelow(below: GraphNeighbor | null, col: number): boolean {
-  if (!below) return false
-  if (touchesTopVertically(below.text, col)) return true
-  if (below.kind === 'curve') return false
-  return touchesTopDiagonally(below.text, col)
-}
-
-/** Lane departs/arrives only via a curve-connector diagonal (no straight continuation). */
-function laneBendsBelow(below: GraphNeighbor | null, col: number): boolean {
-  return (
-    below?.kind === 'curve' &&
-    !touchesTopVertically(below.text, col) &&
-    touchesTopDiagonally(below.text, col)
-  )
-}
-
-function laneBendsAbove(above: GraphNeighbor | null, col: number): boolean {
-  return (
-    above?.kind === 'curve' &&
-    !touchesBottomVertically(above.text, col) &&
-    touchesBottomDiagonally(above.text, col)
-  )
-}
-
 const GRAPH_COL_WIDTH = 8
 const GRAPH_ROW_HEIGHT = 16
-const GRAPH_CONNECTOR_HEIGHT = GRAPH_ROW_HEIGHT
 const GRAPH_NODE_RADIUS = 3.2
 const GRAPH_LINE_OVERLAP = 4
-/**
- * Half the rendered height of a log row: 16px lane SVG + 3px top/bottom
- * padding (see `.log-row` CSS) = 22px total. Curve connectors span from the
- * center of the commit row above to the center of the commit row below.
- */
-const GRAPH_HALF_LOG_ROW = 11
 
 function graphColX(col: number): number {
   return col * GRAPH_COL_WIDTH + GRAPH_COL_WIDTH / 2
@@ -344,170 +215,95 @@ export const GRAPH_LANE_PALETTE = [
   '#70b7ff',
 ] as const
 
-export function graphLanePaletteIndex(col: number): number {
-  const n = GRAPH_LANE_PALETTE.length
-  const lane = Math.floor(col / 2)
-  return ((lane % n) + n) % n
+export type GraphLaneLayoutRow = {
+  /** The physical lane containing this commit node. */
+  lane: number
+  /** Lanes whose pending target is this commit. Empty means a branch tip. */
+  incoming: number[]
+  /** Lanes assigned to this commit's parents, in parent order. */
+  outgoing: number[]
+  /** Unrelated lanes that pass straight through this row. */
+  passThrough: number[]
 }
 
-function graphLaneSwatch(col: number) {
-  return GRAPH_LANE_PALETTE[graphLanePaletteIndex(col)]!
+export type GraphLaneLayout = {
+  rows: GraphLaneLayoutRow[]
+  laneCount: number
 }
 
-export type GraphLaneColorIndexes = Array<Array<number | null>>
-
-type LaneSegment = {
-  glyphCol: number
-  topCol: number
-  bottomCol: number
-  vertical: boolean
+function firstFreeLane(lanes: Array<string | null>, after = -1): number {
+  for (let i = after + 1; i < lanes.length; i++) {
+    if (lanes[i] === null) return i
+  }
+  lanes.push(null)
+  return lanes.length - 1
 }
 
 /**
- * Assign color to logical lanes, not screen columns. A lane keeps its color
- * while moving left/right; only an additional parent created by a split gets
- * a new color. This makes every uninterrupted path visually continuous.
- */
-export function graphLaneColorIndexes(rows: GraphRow[]): GraphLaneColorIndexes {
-  const result: GraphLaneColorIndexes = []
-  let active: Array<number | null> = []
-  let nextColor = 0
-  const allocate = () => {
-    const color = nextColor % GRAPH_LANE_PALETTE.length
-    nextColor++
-    return color
-  }
-
-  for (const row of rows) {
-    const text = graphText(row).replace(/\s+$/, '')
-    const colors: Array<number | null> = Array(text.length).fill(null)
-
-    if (row.kind === 'commit') {
-      let starColor: number | null = null
-      for (let col = 0; col < text.length; col++) {
-        const ch = text[col]
-        if (ch !== '|' && ch !== '*') continue
-        const color = active[col] ?? allocate()
-        colors[col] = color
-        active[col] = color
-        if (ch === '*') starColor = color
-      }
-      if (starColor !== null) {
-        for (let col = 0; col < text.length; col++) {
-          if (text[col] === '-' || text[col] === '_') colors[col] = starColor
-        }
-      }
-      result.push(colors)
-      continue
-    }
-
-    const segments: LaneSegment[] = []
-    for (let col = 0; col < text.length; col++) {
-      const ch = text[col]
-      if (ch === '|') {
-        segments.push({
-          glyphCol: col,
-          topCol: col,
-          bottomCol: col,
-          vertical: true,
-        })
-      } else if (ch === '/') {
-        segments.push({
-          glyphCol: col,
-          topCol: col + 1,
-          bottomCol: col - 1,
-          vertical: false,
-        })
-      } else if (ch === '\\') {
-        segments.push({
-          glyphCol: col,
-          topCol: col - 1,
-          bottomCol: col + 1,
-          vertical: false,
-        })
-      }
-    }
-
-    const byTop = new Map<number, LaneSegment[]>()
-    for (const segment of segments) {
-      const group = byTop.get(segment.topCol) ?? []
-      group.push(segment)
-      byTop.set(segment.topCol, group)
-    }
-
-    const nextActive: Array<number | null> = []
-    const groups = [...byTop.entries()].sort((a, b) => a[0] - b[0])
-    for (const [topCol, group] of groups) {
-      const sourceColor = active[topCol] ?? allocate()
-      group.sort((a, b) => {
-        if (a.vertical !== b.vertical) return a.vertical ? -1 : 1
-        return Math.abs(a.bottomCol - topCol) - Math.abs(b.bottomCol - topCol)
-      })
-      for (let i = 0; i < group.length; i++) {
-        const segment = group[i]!
-        const color = i === 0 ? sourceColor : allocate()
-        colors[segment.glyphCol] = color
-        if (nextActive[segment.bottomCol] === undefined) {
-          nextActive[segment.bottomCol] = color
-        }
-      }
-    }
-
-    for (let col = 0; col < text.length; col++) {
-      if (text[col] !== '-' && text[col] !== '_') continue
-      colors[col] =
-        colors[col - 1] ?? colors[col + 1] ?? active[col - 1] ?? active[col + 1]
-    }
-
-    active = nextActive
-    result.push(colors)
-  }
-
-  return result
-}
-
-function graphLaneColor(col: number): string {
-  return graphLaneSwatch(col)
-}
-
-/**
- * Column that owns a stroke's hue. Diagonals (`/`, `\`) sit in a gutter
- * between lanes; coloring by the glyph column makes a side branch flash a
- * third color on its curves. Git grows new lanes to the right, so both
- * diagonals take the rightward endpoint (same column as the side-lane `|`/`*`).
+ * A deliberately literal lane allocator.
  *
- * `/` at c: top c+1 → bottom c-1
- * `\` at c: top c-1 → bottom c+1
+ * Every pending parent path owns one physical lane. Duplicate paths to the
+ * same future commit are not coalesced early; they remain separate until that
+ * commit row, where all matching lanes terminate at the real node.
  */
-export function graphStrokeColorCol(ch: string, glyphCol: number): number {
-  if (ch === '/' || ch === '\\') return glyphCol + 1
-  return glyphCol
+export function graphLaneLayout(rows: GraphRow[]): GraphLaneLayout {
+  const lanes: Array<string | null> = []
+  const layoutRows: GraphLaneLayoutRow[] = []
+  let laneCount = 1
+
+  for (const item of rows) {
+    const sha = item.row.shaFull.toLowerCase()
+    const incoming: number[] = []
+    for (let lane = 0; lane < lanes.length; lane++) {
+      if (lanes[lane]?.toLowerCase() === sha) incoming.push(lane)
+    }
+
+    let lane: number
+    if (incoming.length > 0) {
+      lane = incoming[0]!
+    } else {
+      lane = firstFreeLane(lanes)
+      lanes[lane] = sha
+    }
+
+    const passThrough: number[] = []
+    for (let i = 0; i < lanes.length; i++) {
+      if (lanes[i] !== null && !incoming.includes(i) && i !== lane) {
+        passThrough.push(i)
+      }
+    }
+
+    for (const matchedLane of incoming) lanes[matchedLane] = null
+
+    const outgoing: number[] = []
+    const parents = item.row.parents.map((parent) => parent.toLowerCase())
+    if (parents[0]) {
+      lanes[lane] = parents[0]
+      outgoing.push(lane)
+    } else {
+      lanes[lane] = null
+    }
+
+    for (const parent of parents.slice(1)) {
+      const parentLane = firstFreeLane(lanes, lane)
+      lanes[parentLane] = parent
+      outgoing.push(parentLane)
+    }
+
+    laneCount = Math.max(laneCount, lanes.length, lane + 1)
+    layoutRows.push({ lane, incoming, outgoing, passThrough })
+  }
+
+  return { rows: layoutRows, laneCount }
 }
 
-/** Column of the `*` on a commit row; used for pill tinting. */
-export function commitLaneCol(graphAnsi: string): number {
-  const col = stripAnsi(graphAnsi).indexOf('*')
-  return col === -1 ? 0 : col
+export function graphLaneGutterCols(laneCount: number): number {
+  return Math.max(1, laneCount * 2 - 1)
 }
 
 /** Inline CSS vars so branch pills share the commit's lane color. */
 function laneTintStyle(color: string): string {
   return `--lane:${color}`
-}
-
-/**
- * Fixed gutter width (in text columns) so every row's pills and message
- * start at the same x, like dedicated graph UIs. Trailing whitespace is
- * ignored — git pads merge rows (`| *   `) to make room for the connector
- * below, which would otherwise indent just those rows.
- */
-export function graphGutterCols(rows: GraphRow[]): number {
-  let max = 1
-  for (const r of rows) {
-    const len = graphText(r).replace(/\s+$/, '').length
-    if (len > max) max = len
-  }
-  return max
 }
 
 function graphCurvePath(x1: number, y1: number, x2: number, y2: number): string {
@@ -516,304 +312,134 @@ function graphCurvePath(x1: number, y1: number, x2: number, y2: number): string 
   return `M ${x1} ${y1} C ${x1} ${y1 + bend * dir}, ${x2} ${y2 - bend * dir}, ${x2} ${y2}`
 }
 
-/**
- * Render the `git --graph` prefix as a tiny SVG. Git still owns layout; this
- * only replaces ASCII glyphs with rounded line segments and commit dots.
- */
-function GraphLaneSpans(props: {
-  ansi: string
-  colorIndexes: Array<number | null>
-  gutterCols: number
-  meta?: GraphRowMeta
-  isHead?: boolean
-  isDetached?: boolean
-}) {
-  const text = stripAnsi(props.ansi).replace(/\s+$/, '')
-  const height = GRAPH_ROW_HEIGHT
-  const width = Math.max(props.gutterCols, text.length, 1) * GRAPH_COL_WIDTH
-  const mid = height / 2
-  const above = props.meta?.above ?? null
-  const below = props.meta?.below ?? null
-  const lanesBack = []
-  const markersFront = []
-  for (let i = 0; i < text.length; i++) {
-    const ch = text[i]
-    const color =
-      GRAPH_LANE_PALETTE[props.colorIndexes[i] ?? -1] ??
-      graphLaneColor(graphStrokeColorCol(ch ?? '', i))
-    const x = graphColX(i)
-    if (ch === ' ') continue
-    if (ch === '|') {
-      // When the lane turns at an adjacent curve connector, stop at the row
-      // center: the connector draws the bend from there. A straight
-      // continuation keeps the usual overlap into the neighboring row.
-      const y1 = laneBendsAbove(above, i) ? mid : -GRAPH_LINE_OVERLAP
-      const y2 = laneBendsBelow(below, i) ? mid : height + GRAPH_LINE_OVERLAP
-      lanesBack.push(
-        <line
-          key={i}
-          x1={x}
-          y1={y1}
-          x2={x}
-          y2={y2}
-          stroke={color}
-          stroke-width="1.8"
-          stroke-linecap="round"
-        />,
-      )
-      continue
-    }
-    if (ch === '/') {
-      const x1 = graphColX(i - 1)
-      const y1 = height + GRAPH_LINE_OVERLAP
-      const x2 = graphColX(i + 1)
-      const y2 = -GRAPH_LINE_OVERLAP
-      lanesBack.push(
-        <path
-          key={i}
-          d={graphCurvePath(x1, y1, x2, y2)}
-          fill="none"
-          stroke={color}
-          stroke-width="1.8"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        />,
-      )
-      continue
-    }
-    if (ch === '\\') {
-      const x1 = graphColX(i - 1)
-      const y1 = -GRAPH_LINE_OVERLAP
-      const x2 = graphColX(i + 1)
-      const y2 = height + GRAPH_LINE_OVERLAP
-      lanesBack.push(
-        <path
-          key={i}
-          d={graphCurvePath(x1, y1, x2, y2)}
-          fill="none"
-          stroke={color}
-          stroke-width="1.8"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        />,
-      )
-      continue
-    }
-    if (ch === '-' || ch === '_') {
-      lanesBack.push(
-        <line
-          key={i}
-          x1={x - GRAPH_COL_WIDTH / 2}
-          y1={mid}
-          x2={x + GRAPH_COL_WIDTH / 2}
-          y2={mid}
-          stroke={color}
-          stroke-width="1.8"
-          stroke-linecap="round"
-        />,
-      )
-      continue
-    }
-    if (ch === '*') {
-      const connectsAbove = dotStubAbove(above, i)
-      const connectsBelow = dotStubBelow(below, i)
-      // Branch tip: no link reaches this dot from above (not even a curve
-      // connector). Render as a hollow ring so the lane visibly *starts*
-      // here instead of looking like a broken line in a reused column.
-      const isTip =
-        !connectsAbove &&
-        !(above?.kind === 'curve' && touchesBottomDiagonally(above.text, i))
-      if (props.isHead) {
-        const headColor = props.isDetached ? '#e0a23a' : color
-        const hcls = `graph-node graph-node-head${props.isDetached ? ' graph-node-head-detached' : ''}`
-        markersFront.push(
-          <g
-            key={i}
-            class={hcls}
-            title={props.isDetached ? 'detached HEAD' : 'HEAD'}
-          >
-            {connectsBelow ? (
-              <line
-                x1={x}
-                y1={mid + GRAPH_NODE_RADIUS}
-                x2={x}
-                y2={height + GRAPH_LINE_OVERLAP}
-                stroke={headColor}
-                stroke-width="1.8"
-                stroke-linecap="round"
-              />
-            ) : null}
-            <circle
-              class="graph-node-head-ring"
-              cx={x}
-              cy={mid}
-              r="4.6"
-              fill="var(--bg)"
-              stroke={headColor}
-              stroke-width="1.9"
-            />
-          </g>,
-        )
-        continue
-      }
-      markersFront.push(
-        <g key={i}>
-          {connectsAbove ? (
-            <line
-              x1={x}
-              y1={-GRAPH_LINE_OVERLAP}
-              x2={x}
-              y2={mid - GRAPH_NODE_RADIUS}
-              stroke={color}
-              stroke-width="1.8"
-              stroke-linecap="round"
-            />
-          ) : null}
-          {connectsBelow ? (
-            <line
-              x1={x}
-              y1={mid + GRAPH_NODE_RADIUS}
-              x2={x}
-              y2={height + GRAPH_LINE_OVERLAP}
-              stroke={color}
-              stroke-width="1.8"
-              stroke-linecap="round"
-            />
-          ) : null}
-          {isTip ? (
-            <circle
-              class="graph-node graph-node-tip"
-              cx={x}
-              cy={mid}
-              r={GRAPH_NODE_RADIUS}
-              fill="var(--bg)"
-              stroke={color}
-              stroke-width="1.6"
-            />
-          ) : (
-            <circle
-              class="graph-node"
-              cx={x}
-              cy={mid}
-              r={GRAPH_NODE_RADIUS}
-              fill={color}
-            />
-          )}
-        </g>,
-      )
-      continue
-    }
-    markersFront.push(
-      <text
-        key={i}
-        x={x}
-        y={mid + 4}
-        text-anchor="middle"
-        class="graph-lane-fallback"
-      >
-        {ch}
-      </text>,
-    )
-  }
-  return (
-    <svg
-      class="graph-lanes-svg"
-      viewBox={`0 0 ${width} ${height}`}
-      style={`width:${width}px;height:${height}px`}
-      aria-hidden="true"
-      focusable="false"
-    >
-      {lanesBack}
-      {markersFront}
-    </svg>
-  )
+function physicalLaneX(lane: number): number {
+  return graphColX(lane * 2)
 }
 
-/**
- * A lone connector row collapses to zero height, so its lane transitions are
- * drawn as continuous segments spanning from the center of the commit row
- * above to the center of the commit row below — wide, smooth curves like a
- * dedicated graph renderer would produce, instead of kinks squeezed into the
- * row boundary.
- */
-function ConnectorLaneSpans(props: {
-  ansi: string
-  colorIndexes: Array<number | null>
+function physicalLaneColor(lane: number): string {
+  return GRAPH_LANE_PALETTE[lane % GRAPH_LANE_PALETTE.length]!
+}
+
+/** One SVG row: paths may meet only at the commit dot in its center. */
+function SimpleLaneSpans(props: {
+  layout: GraphLaneLayoutRow
   gutterCols: number
+  isHead: boolean
+  isDetached: boolean
 }) {
-  const text = stripAnsi(props.ansi).replace(/\s+$/, '')
-  const width = Math.max(props.gutterCols, text.length, 1) * GRAPH_COL_WIDTH
-  const height = GRAPH_CONNECTOR_HEIGHT
+  const height = GRAPH_ROW_HEIGHT
   const mid = height / 2
-  // The SVG is centered on the zero-height row; reach into both neighbors.
-  const yTop = mid - GRAPH_HALF_LOG_ROW
-  const yBottom = mid + GRAPH_HALF_LOG_ROW
-  const lanes = []
-  for (let i = 0; i < text.length; i++) {
-    const ch = text[i]
-    if (ch === ' ') continue
-    const color =
-      GRAPH_LANE_PALETTE[props.colorIndexes[i] ?? -1] ??
-      graphLaneColor(graphStrokeColorCol(ch ?? '', i))
-    const x = graphColX(i)
-    if (ch === '|') {
-      lanes.push(
+  const width = props.gutterCols * GRAPH_COL_WIDTH
+  const nodeX = physicalLaneX(props.layout.lane)
+  const nodeColor = physicalLaneColor(props.layout.lane)
+  const strokes = []
+
+  for (const lane of props.layout.passThrough) {
+    const x = physicalLaneX(lane)
+    strokes.push(
+      <line
+        key={`pass-${lane}`}
+        x1={x}
+        y1={-GRAPH_LINE_OVERLAP}
+        x2={x}
+        y2={height + GRAPH_LINE_OVERLAP}
+        stroke={physicalLaneColor(lane)}
+        stroke-width="1.8"
+        stroke-linecap="round"
+      />,
+    )
+  }
+
+  for (const lane of props.layout.incoming) {
+    const x = physicalLaneX(lane)
+    const color = physicalLaneColor(lane)
+    strokes.push(
+      lane === props.layout.lane ? (
         <line
-          key={i}
+          key={`in-${lane}`}
           x1={x}
-          y1={yTop}
-          x2={x}
-          y2={yBottom}
+          y1={-GRAPH_LINE_OVERLAP}
+          x2={nodeX}
+          y2={mid}
           stroke={color}
           stroke-width="1.8"
           stroke-linecap="round"
-        />,
-      )
-      continue
-    }
-    if (ch === '/' || ch === '\\') {
-      const xTop = ch === '/' ? graphColX(i + 1) : graphColX(i - 1)
-      const xBottom = ch === '/' ? graphColX(i - 1) : graphColX(i + 1)
-      lanes.push(
+        />
+      ) : (
         <path
-          key={i}
-          d={graphCurvePath(xTop, yTop, xBottom, yBottom)}
+          key={`in-${lane}`}
+          d={graphCurvePath(x, -GRAPH_LINE_OVERLAP, nodeX, mid)}
           fill="none"
           stroke={color}
           stroke-width="1.8"
           stroke-linecap="round"
           stroke-linejoin="round"
-        />,
-      )
-      continue
-    }
-    if (ch === '-' || ch === '_') {
-      lanes.push(
+        />
+      ),
+    )
+  }
+
+  for (const lane of props.layout.outgoing) {
+    const x = physicalLaneX(lane)
+    const color = physicalLaneColor(lane)
+    strokes.push(
+      lane === props.layout.lane ? (
         <line
-          key={i}
-          x1={x - GRAPH_COL_WIDTH / 2}
+          key={`out-${lane}`}
+          x1={nodeX}
           y1={mid}
-          x2={x + GRAPH_COL_WIDTH / 2}
-          y2={mid}
+          x2={x}
+          y2={height + GRAPH_LINE_OVERLAP}
           stroke={color}
           stroke-width="1.8"
           stroke-linecap="round"
-        />,
-      )
-      continue
-    }
-    lanes.push(
-      <text
-        key={i}
-        x={x}
-        y={mid + 4}
-        text-anchor="middle"
-        class="graph-lane-fallback"
-      >
-        {ch}
-      </text>,
+        />
+      ) : (
+        <path
+          key={`out-${lane}`}
+          d={graphCurvePath(nodeX, mid, x, height + GRAPH_LINE_OVERLAP)}
+          fill="none"
+          stroke={color}
+          stroke-width="1.8"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        />
+      ),
     )
   }
+
+  const isTip = props.layout.incoming.length === 0
+  const headColor = props.isDetached ? '#e0a23a' : nodeColor
+  const node = props.isHead ? (
+    <circle
+      class="graph-node graph-node-head graph-node-head-ring"
+      cx={nodeX}
+      cy={mid}
+      r="4.6"
+      fill="var(--bg)"
+      stroke={headColor}
+      stroke-width="1.9"
+    />
+  ) : isTip ? (
+    <circle
+      class="graph-node graph-node-tip"
+      cx={nodeX}
+      cy={mid}
+      r={GRAPH_NODE_RADIUS}
+      fill="var(--bg)"
+      stroke={nodeColor}
+      stroke-width="1.6"
+    />
+  ) : (
+    <circle
+      class="graph-node"
+      cx={nodeX}
+      cy={mid}
+      r={GRAPH_NODE_RADIUS}
+      fill={nodeColor}
+    />
+  )
+
   return (
     <svg
       class="graph-lanes-svg"
@@ -822,7 +448,8 @@ function ConnectorLaneSpans(props: {
       aria-hidden="true"
       focusable="false"
     >
-      {lanes}
+      {strokes}
+      {node}
     </svg>
   )
 }
@@ -932,12 +559,10 @@ function GraphCommitLine(props: {
   row: GraphCommitRow
   detached: boolean
   currentBranch: string | null
-  laneColorIndexes: Array<number | null>
-  meta: GraphRowMeta
+  laneLayout: GraphLaneLayoutRow
   gutterCols: number
 }) {
   const {
-    graphAnsi,
     shaFull,
     shaShort,
     decorateRaw,
@@ -950,10 +575,7 @@ function GraphCommitLine(props: {
   const branchPrefix = branchPrefixFromTokens(tokens)
   const branchPrefixPeer = remotePeer(tokens, branchPrefix)
   const tagNames = collectTagNames(tokens)
-  const laneCol = commitLaneCol(graphAnsi)
-  const laneColor =
-    GRAPH_LANE_PALETTE[props.laneColorIndexes[laneCol] ?? -1] ??
-    graphLaneSwatch(laneCol)
+  const laneColor = physicalLaneColor(props.laneLayout.lane)
   const tint = laneTintStyle(laneColor)
   const ageTitle = [author, date].filter(Boolean).join(' · ')
   const diffUrl = `/api/commit/${encodeURIComponent(shaFull)}`
@@ -969,11 +591,9 @@ function GraphCommitLine(props: {
   return (
     <div class={cls} data-sha={shaFull}>
       <span class="graph-prefix">
-        <GraphLaneSpans
-          ansi={graphAnsi}
-          colorIndexes={props.laneColorIndexes}
+        <SimpleLaneSpans
+          layout={props.laneLayout}
           gutterCols={props.gutterCols}
-          meta={props.meta}
           isHead={isHead}
           isDetached={isHead && props.detached}
         />
@@ -1090,53 +710,11 @@ function GraphCommitLine(props: {
   )
 }
 
-function GraphOtherLine(props: {
-  ansi: string
-  laneColorIndexes: Array<number | null>
-  /**
-   * 'curve' connectors collapse to zero height and draw center-to-center
-   * curves into both neighboring commit rows. 'tall' connectors (inside a
-   * run of consecutive connectors) keep their height so stacked transitions
-   * don't overdraw each other.
-   */
-  kind: 'curve' | 'tall'
-  gutterCols: number
-}) {
-  const cls = [
-    'log-row',
-    'log-row-other',
-    props.kind === 'tall' ? 'log-row-other-tall' : '',
-  ]
-    .filter(Boolean)
-    .join(' ')
-  return (
-    <div class={cls}>
-      <span class="graph-prefix-wide">
-        {props.kind === 'tall' ? (
-          <GraphLaneSpans
-            ansi={props.ansi}
-            colorIndexes={props.laneColorIndexes}
-            gutterCols={props.gutterCols}
-          />
-        ) : (
-          <ConnectorLaneSpans
-            ansi={props.ansi}
-            colorIndexes={props.laneColorIndexes}
-            gutterCols={props.gutterCols}
-          />
-        )}
-      </span>
-    </div>
-  )
-}
-
-function StashLaneSpans(props: { graphAnsi: string; gutterCols: number }) {
-  const text = stripAnsi(props.graphAnsi).replace(/\s+$/, '')
-  const width = Math.max(props.gutterCols, text.length, 1) * GRAPH_COL_WIDTH
+function StashLaneSpans(props: { lane: number; gutterCols: number }) {
+  const width = props.gutterCols * GRAPH_COL_WIDTH
   const height = GRAPH_ROW_HEIGHT
   const mid = height / 2
-  const col = Math.max(0, text.indexOf('*'))
-  const x = graphColX(col)
+  const x = physicalLaneX(props.lane)
   const r = 3.4
   return (
     <svg
@@ -1171,7 +749,7 @@ function StashLaneSpans(props: { graphAnsi: string; gutterCols: number }) {
 
 function GraphStashLine(props: {
   stash: PreviewStashEntry
-  baseRow: GraphCommitRow
+  lane: number
   gutterCols: number
 }) {
   const ref = encodeURIComponent(props.stash.ref)
@@ -1180,7 +758,7 @@ function GraphStashLine(props: {
     <div class="log-row log-row-commit log-row-stash">
       <span class="graph-prefix">
         <StashLaneSpans
-          graphAnsi={props.baseRow.graphAnsi}
+          lane={props.lane}
           gutterCols={props.gutterCols}
         />
       </span>
@@ -1256,8 +834,7 @@ export function GraphRows(props: {
   detached: boolean
   currentBranch: string | null
   stashes: PreviewStashEntry[]
-  laneColorIndexesByRow: GraphLaneColorIndexes
-  rowMeta: GraphRowMeta[]
+  laneLayoutByRow: GraphLaneLayoutRow[]
   gutterCols: number
 }) {
   const stashesByBase = new Map<string, PreviewStashEntry[]>()
@@ -1270,18 +847,8 @@ export function GraphRows(props: {
   return (
     <>
       {props.rows.map((r, i) => {
-        const meta = props.rowMeta[i] ?? LONE_COMMIT_META
-        if (r.kind !== 'commit') {
-          return (
-            <GraphOtherLine
-              key={i}
-              ansi={r.ansi}
-              laneColorIndexes={props.laneColorIndexesByRow[i] ?? []}
-              kind={meta.kind === 'tall' ? 'tall' : 'curve'}
-              gutterCols={props.gutterCols}
-            />
-          )
-        }
+        const laneLayout = props.laneLayoutByRow[i]
+        if (!laneLayout) return null
         const stashes = stashesByBase.get(r.row.shaFull) ?? []
         return (
           <>
@@ -1289,7 +856,7 @@ export function GraphRows(props: {
               <GraphStashLine
                 key={stash.ref}
                 stash={stash}
-                baseRow={r.row}
+                lane={laneLayout.lane}
                 gutterCols={props.gutterCols}
               />
             ))}
@@ -1298,8 +865,7 @@ export function GraphRows(props: {
               row={r.row}
               detached={props.detached}
               currentBranch={props.currentBranch}
-              laneColorIndexes={props.laneColorIndexesByRow[i] ?? []}
-              meta={meta}
+              laneLayout={laneLayout}
               gutterCols={props.gutterCols}
             />
           </>
@@ -1321,7 +887,7 @@ export function GraphLoadMore(props: {
     <button
       type="button"
       class="graph-load-more"
-      title={`git log --graph --date-order -n ${props.nextLimit}`}
+      title={`git log --date-order -n ${props.nextLimit}`}
       hx-get={`/fragment/graph/tail?offset=${encodeURIComponent(String(props.offset))}&limit=${encodeURIComponent(String(props.nextLimit))}&gutter=${encodeURIComponent(String(props.gutterCols))}`}
       hx-target="this"
       hx-swap="outerHTML show:none"
@@ -1337,8 +903,7 @@ export function GraphTailFragment(props: {
   detached: boolean
   currentBranch: string | null
   stashes: PreviewStashEntry[]
-  laneColorIndexesByRow: GraphLaneColorIndexes
-  rowMeta: GraphRowMeta[]
+  laneLayoutByRow: GraphLaneLayoutRow[]
   gutterCols: number
   offset: number
   nextLimit: number
@@ -1351,8 +916,7 @@ export function GraphTailFragment(props: {
         detached={props.detached}
         currentBranch={props.currentBranch}
         stashes={props.stashes}
-        laneColorIndexesByRow={props.laneColorIndexesByRow}
-        rowMeta={props.rowMeta}
+        laneLayoutByRow={props.laneLayoutByRow}
         gutterCols={props.gutterCols}
       />
       <GraphLoadMore
@@ -1389,9 +953,8 @@ export function GraphFragment(props: GraphFragmentProps) {
   const { head, rows, worktree } = props
   const detached = head.kind === 'detached'
   const currentBranch = head.kind === 'branch' ? head.name : null
-  const laneColorIndexesByRow = graphLaneColorIndexes(rows)
-  const rowMeta = graphRowMeta(rows)
-  const gutterCols = graphGutterCols(rows)
+  const laneLayout = graphLaneLayout(rows)
+  const gutterCols = graphLaneGutterCols(laneLayout.laneCount)
 
   return (
     <div
@@ -1440,8 +1003,7 @@ export function GraphFragment(props: GraphFragmentProps) {
               detached={detached}
               currentBranch={currentBranch}
               stashes={props.previewStash.stashes}
-              laneColorIndexesByRow={laneColorIndexesByRow}
-              rowMeta={rowMeta}
+              laneLayoutByRow={laneLayout.rows}
               gutterCols={gutterCols}
               offset={rows.length}
               nextLimit={props.graphNextLimit}

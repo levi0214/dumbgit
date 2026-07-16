@@ -96,7 +96,8 @@ export function stripAnsi(s: string): string {
 
 // Graph log rows.
 export type GraphCommitRow = {
-  graphAnsi: string
+  /** Full parent hashes in Git's stored order (first parent first). */
+  parents: string[]
   /** Full 40-char hex, for copy / URLs. */
   shaFull: string
   /** Abbreviated hash from git `%h` (matches log elsewhere). */
@@ -109,9 +110,7 @@ export type GraphCommitRow = {
   inHistory: boolean
 }
 
-export type GraphRow =
-  | { kind: 'commit'; row: GraphCommitRow }
-  | { kind: 'other'; ansi: string; betweenInHistory: boolean }
+export type GraphRow = { kind: 'commit'; row: GraphCommitRow }
 
 /** Full hashes reachable from HEAD. Empty on failure. */
 async function reachableShas(): Promise<Set<string>> {
@@ -125,15 +124,14 @@ async function reachableShas(): Promise<Set<string>> {
   return set
 }
 
-/** Graph lines from `git log --graph --date-order`. Lane colors come from `graphAnsi`; hashes are plain fields. */
+/** Commits in date order. The view derives graph lanes from hashes + parents. */
 export async function logGraphRows(limit = 50): Promise<GraphRow[]> {
   const { code, stdout, stderr } = await spawnGit([
     'log',
-    '--graph',
     '--date-order',
     '--exclude=refs/stash',
     '--all',
-    '--pretty=format:\x1f%H\x1f%h\x1f%d\x1f%s\x1f%an\x1f%aI\x1f',
+    '--pretty=format:\x1f%H\x1f%h\x1f%P\x1f%d\x1f%s\x1f%an\x1f%aI\x1f',
     '--decorate=full',
     '--color=always',
     '-n',
@@ -155,31 +153,28 @@ export async function logGraphRows(limit = 50): Promise<GraphRow[]> {
   // so a fixed 7-char prefix set would mark every row as out-of-history (dim).
   const reachable = await reachableShas()
   const text = stdout.replace(/\n+$/, '')
-  type Tmp =
-    | { kind: 'commit'; row: GraphCommitRow }
-    | { kind: 'other'; ansi: string }
-  const tmp: Tmp[] = []
+  const rows: GraphRow[] = []
 
   for (const line of text.split('\n')) {
     if (!line.trim()) continue
     const parts = line.split('\x1f')
-    if (parts.length >= 7) {
-      const graphAnsi = parts[0] ?? ''
+    if (parts.length >= 8) {
       const shaFull = (parts[1] ?? '').trim()
       const shaShort = (parts[2] ?? '').trim()
-      const decorateRaw = parts[3] ?? ''
-      const subject = parts[4] ?? ''
-      const author = parts[5] ?? ''
-      const date = parts[6] ?? ''
+      const parents = (parts[3] ?? '').trim().split(/\s+/).filter(Boolean)
+      const decorateRaw = parts[4] ?? ''
+      const subject = parts[5] ?? ''
+      const author = parts[6] ?? ''
+      const date = parts[7] ?? ''
       if (
         /^[a-f0-9]{7,40}$/i.test(shaFull) &&
         /^[a-f0-9]{7,40}$/i.test(shaShort)
       ) {
         const fullKey = shaFull.toLowerCase()
-        tmp.push({
+        rows.push({
           kind: 'commit',
           row: {
-            graphAnsi,
+            parents,
             shaFull,
             shaShort,
             decorateRaw,
@@ -190,77 +185,11 @@ export async function logGraphRows(limit = 50): Promise<GraphRow[]> {
               reachable.size === 0 ? true : reachable.has(fullKey),
           },
         })
-        continue
       }
     }
-    tmp.push({ kind: 'other', ansi: line })
   }
 
-  /**
-   * A connector row inherits the in-history flag from the commit row IMMEDIATELY
-   * ABOVE it (i.e. its source). `git log --graph` reads top-to-bottom newest →
-   * oldest, so the lanes flowing down through a connector belong to the row above.
-   */
-  const rows: GraphRow[] = tmp.map((t, i) => {
-    if (t.kind === 'commit') return t
-    let prevInHistory = true
-    for (let j = i - 1; j >= 0; j--) {
-      const x = tmp[j]
-      if (x.kind === 'commit') {
-        prevInHistory = x.row.inHistory
-        break
-      }
-    }
-    return { kind: 'other', ansi: t.ansi, betweenInHistory: prevInHistory }
-  })
-
-  return normalizeGraphRows(rows)
-}
-
-/**
- * `git log --graph` sometimes routes a merge's second parent through a
- * temporary lane, emitting a `\` connector row that the next connector row
- * immediately undoes with a `/` (e.g. `| |\` + `| |/` + `|/|`). The UI
- * collapses connector rows to zero height, so stacked connectors would
- * render on top of each other as a tangle. Cancel those zigzag pairs and
- * drop connector rows left with only pass-through `|` lanes, so the common
- * merge shape reduces to a single collapsible connector row again.
- *
- * The view assigns color from normalized topology, so connector ANSI can be
- * rewritten as plain geometry here.
- */
-export function normalizeGraphRows(rows: GraphRow[]): GraphRow[] {
-  const texts: Array<string[] | null> = rows.map((r) =>
-    r.kind === 'other' ? stripAnsi(r.ansi).replace(/\s+$/, '').split('') : null,
-  )
-
-  for (let i = 0; i < rows.length - 1; i++) {
-    const here = texts[i]
-    const below = texts[i + 1]
-    if (!here || !below) continue
-    const cols = Math.max(here.length, below.length)
-    for (let c = 1; c < cols; c++) {
-      if (here[c] !== '\\' || below[c] !== '/') continue
-      // A right-then-left zigzag is a no-op: the lane stays at column c-1.
-      here[c] = ' '
-      below[c] = ' '
-      if ((here[c - 1] ?? ' ') === ' ') here[c - 1] = '|'
-      if ((below[c - 1] ?? ' ') === ' ') below[c - 1] = '|'
-    }
-  }
-
-  const out: GraphRow[] = []
-  for (let i = 0; i < rows.length; i++) {
-    const row = rows[i]!
-    if (row.kind !== 'other') {
-      out.push(row)
-      continue
-    }
-    const text = (texts[i] ?? []).join('').replace(/\s+$/, '')
-    if (/^[| ]*$/.test(text)) continue
-    out.push({ ...row, ansi: text })
-  }
-  return out
+  return rows
 }
 
 // Branch, checkout, and push actions.

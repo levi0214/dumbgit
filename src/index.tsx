@@ -35,9 +35,8 @@ import { watchGitRefs } from './watch'
 import {
   GraphFragment,
   GraphTailFragment,
-  graphGutterCols,
-  graphLaneColorIndexes,
-  graphRowMeta,
+  graphLaneGutterCols,
+  graphLaneLayout,
 } from './views/graph'
 import type { GraphFragmentProps } from './views/graph'
 import { DiffPanel, DiffPatchBody, WorkTreeDiffPanel } from './views/diff'
@@ -141,7 +140,7 @@ async function loadGraph(limit?: number): Promise<GraphFragmentProps> {
     const rows = await logGraphRows(graphCommitLimit)
     const worktree = await workTreeSummary()
     const previewStash = await previewStashUiState()
-    const commitRows = rows.filter((r) => r.kind === 'commit').length
+    const commitRows = rows.length
     const graphNextLimit = Math.min(
       graphCommitLimit + GRAPH_COMMIT_STEP,
       GRAPH_COMMIT_MAX,
@@ -356,7 +355,7 @@ app.get('/fragment/graph/tail', async (c) => {
     const head = await headInfo()
     const rows = await logGraphRows(graphCommitLimit)
     const previewStash = await previewStashUiState()
-    const commitRows = rows.filter((r) => r.kind === 'commit').length
+    const commitRows = rows.length
     const graphNextLimit = Math.min(
       graphCommitLimit + GRAPH_COMMIT_STEP,
       GRAPH_COMMIT_MAX,
@@ -368,8 +367,9 @@ app.get('/fragment/graph/tail', async (c) => {
     const rowOffset = Math.min(offset, rows.length)
     // Appended rows keep at least the gutter already on screen so the
     // message column stays aligned across "load more" chunks.
+    const laneLayout = graphLaneLayout(rows)
     const gutterCols = Math.max(
-      graphGutterCols(rows),
+      graphLaneGutterCols(laneLayout.laneCount),
       Number.isFinite(priorGutter) ? priorGutter : 0,
     )
     return c.html(
@@ -378,8 +378,7 @@ app.get('/fragment/graph/tail', async (c) => {
         detached={head.kind === 'detached'}
         currentBranch={head.kind === 'branch' ? head.name : null}
         stashes={previewStash.stashes}
-        laneColorIndexesByRow={graphLaneColorIndexes(rows).slice(rowOffset)}
-        rowMeta={graphRowMeta(rows).slice(rowOffset)}
+        laneLayoutByRow={laneLayout.rows.slice(rowOffset)}
         gutterCols={gutterCols}
         offset={rows.length}
         nextLimit={graphNextLimit}
