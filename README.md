@@ -27,16 +27,19 @@ dumbgit [dir]
 dumbgit list
 dumbgit stop [id|dir]
 dumbgit stop --all
+dumbgit restart
 ```
 
 `dir` defaults to the current repo. `list` prints `id`, repo, and URL; pass the
-id to `stop` to stop that server.
+id to `stop` to stop that server. `restart` stops every running instance and
+starts each again on the same port (picks up source changes after `bun link`).
 
 Each repo gets its own server. Starting the same repo again reopens it. Ports
 come from `7777` to `7900`.
 
 Servers exit on their own about a minute after the last browser tab disconnects
-(no SSE clients). `list` / `stop` remain for stuck processes.
+(no SSE clients). `list` / `stop` / `restart` remain for stuck or stale
+processes.
 
 Use `bun run dev` when working on dumbgit itself. It disables idle exit and
 runs with `bun --watch`; if `7777` is busy, it picks the next free port.

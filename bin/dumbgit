@@ -23,7 +23,8 @@ function usage(code = 0) {
   const text = `usage: dumbgit [dir]
        dumbgit list
        dumbgit stop [id|dir]
-       dumbgit stop --all`
+       dumbgit stop --all
+       dumbgit restart`
   if (code === 0) console.log(text)
   else console.error(text)
   process.exit(code)
@@ -247,6 +248,50 @@ async function cmdList() {
   }
 }
 
+/** Wait until nothing is listening on `port` (post-stop). */
+async function waitPortFree(port, msTotal = 5000) {
+  const deadline = Date.now() + msTotal
+  while (Date.now() < deadline) {
+    if (await portLooksFree(port)) return true
+    await sleep(50)
+  }
+  return false
+}
+
+/**
+ * Stop every running instance and start each again on the same port.
+ * Reloads server code after `bun link` / source edits without reshuffling ports.
+ */
+async function cmdRestart() {
+  const inst = await scanInstances()
+  if (inst.length === 0) {
+    console.log('dumbgit: no instances running')
+    return
+  }
+
+  const targets = inst.map((i) => ({ repo: i.repo, port: i.port, url: i.url }))
+  const stopped = await stopPorts(targets.map((t) => t.port))
+  if (!stopped) {
+    console.error('dumbgit: found listeners, but no process was stopped')
+    process.exit(1)
+  }
+
+  for (const t of targets) {
+    if (!(await waitPortFree(t.port))) {
+      console.error(`dumbgit: port ${t.port} still busy after stop (${t.repo})`)
+      process.exit(1)
+    }
+    startServer(t.repo, t.port)
+    const ok = await waitForHealthy(t.port)
+    if (!ok) {
+      console.error(`dumbgit: failed to restart ${t.repo}; see ${logPath}`)
+      process.exit(1)
+    }
+    console.log(`${t.repo}\t${t.url}`)
+  }
+  console.log(`dumbgit: restarted ${targets.length}`)
+}
+
 function startServer(repo, port) {
   mkdirSync(path.dirname(logPath), { recursive: true })
   const log = openSync(logPath, 'a')
@@ -320,6 +365,12 @@ if (argv.length === 1 && (argv[0] === '-h' || argv[0] === '--help')) {
 if (argv.length >= 1 && argv[0] === 'list') {
   if (argv.length !== 1) die('too many arguments')
   await cmdList()
+  process.exit(0)
+}
+
+if (argv.length >= 1 && argv[0] === 'restart') {
+  if (argv.length !== 1) die('too many arguments')
+  await cmdRestart()
   process.exit(0)
 }
 
