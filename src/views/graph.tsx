@@ -213,7 +213,7 @@ function isVerticalGraphChar(ch: string): boolean {
  */
 export type GraphRowKind = 'commit' | 'curve' | 'tall'
 
-export type GraphNeighbor = { kind: GraphRowKind; text: string; ansi: string }
+export type GraphNeighbor = { kind: GraphRowKind; text: string }
 
 export type GraphRowMeta = {
   kind: GraphRowKind
@@ -229,7 +229,6 @@ const LONE_COMMIT_META: GraphRowMeta = {
 
 export function graphRowMeta(rows: GraphRow[]): GraphRowMeta[] {
   const texts = rows.map(graphText)
-  const ansis = rows.map((r) => (r.kind === 'commit' ? r.row.graphAnsi : r.ansi))
   const kinds: GraphRowKind[] = rows.map((r, i) => {
     if (r.kind === 'commit') return 'commit'
     const inRun =
@@ -240,11 +239,11 @@ export function graphRowMeta(rows: GraphRow[]): GraphRowMeta[] {
     kind: kinds[i]!,
     above:
       i > 0
-        ? { kind: kinds[i - 1]!, text: texts[i - 1]!, ansi: ansis[i - 1]! }
+        ? { kind: kinds[i - 1]!, text: texts[i - 1]! }
         : null,
     below:
       i < rows.length - 1
-        ? { kind: kinds[i + 1]!, text: texts[i + 1]!, ansi: ansis[i + 1]! }
+        ? { kind: kinds[i + 1]!, text: texts[i + 1]! }
         : null,
   }))
 }
@@ -331,8 +330,8 @@ function graphColX(col: number): number {
 
 /**
  * High-chroma lane colors: hue identifies topology, never reachability.
- * Commit lanes occupy every other ASCII graph column (`0, 2, 4, ...`), so
- * palette lookup converts glyph columns to logical lane indices first.
+ * Column-based lookup is only a fallback; the topology pass below carries a
+ * logical lane's color while that lane moves between screen columns.
  */
 export const GRAPH_LANE_PALETTE = [
   '#169fe6',
@@ -355,106 +354,120 @@ function graphLaneSwatch(col: number) {
   return GRAPH_LANE_PALETTE[graphLanePaletteIndex(col)]!
 }
 
-const ANSI_LANE_INDEX: Record<number, number> = {
-  31: 1,
-  32: 2,
-  33: 3,
-  34: 7,
-  35: 4,
-  36: 5,
-  37: 6,
-  91: 1,
-  92: 2,
-  93: 3,
-  94: 7,
-  95: 4,
-  96: 5,
-  97: 6,
+export type GraphLaneColorIndexes = Array<Array<number | null>>
+
+type LaneSegment = {
+  glyphCol: number
+  topCol: number
+  bottomCol: number
+  vertical: boolean
 }
 
-/** Palette slot active at a visible graph glyph, derived from Git's SGR output. */
-export function graphAnsiPaletteIndexAt(
-  ansi: string,
-  glyphCol: number,
-): number | null {
-  let active: number | null = null
-  let col = 0
-  for (let i = 0; i < ansi.length; ) {
-    if (ansi[i] === '\x1b' && ansi[i + 1] === '[') {
-      const end = ansi.indexOf('m', i + 2)
-      if (end === -1) break
-      const codes = ansi.slice(i + 2, end).split(';')
-      for (const rawCode of codes) {
-        const code = rawCode === '' ? 0 : Number(rawCode)
-        if (code === 0 || code === 39) active = null
-        else if (ANSI_LANE_INDEX[code] !== undefined) {
-          active = ANSI_LANE_INDEX[code]!
+/**
+ * Assign color to logical lanes, not screen columns. A lane keeps its color
+ * while moving left/right; only an additional parent created by a split gets
+ * a new color. This makes every uninterrupted path visually continuous.
+ */
+export function graphLaneColorIndexes(rows: GraphRow[]): GraphLaneColorIndexes {
+  const result: GraphLaneColorIndexes = []
+  let active: Array<number | null> = []
+  let nextColor = 0
+  const allocate = () => {
+    const color = nextColor % GRAPH_LANE_PALETTE.length
+    nextColor++
+    return color
+  }
+
+  for (const row of rows) {
+    const text = graphText(row).replace(/\s+$/, '')
+    const colors: Array<number | null> = Array(text.length).fill(null)
+
+    if (row.kind === 'commit') {
+      let starColor: number | null = null
+      for (let col = 0; col < text.length; col++) {
+        const ch = text[col]
+        if (ch !== '|' && ch !== '*') continue
+        const color = active[col] ?? allocate()
+        colors[col] = color
+        active[col] = color
+        if (ch === '*') starColor = color
+      }
+      if (starColor !== null) {
+        for (let col = 0; col < text.length; col++) {
+          if (text[col] === '-' || text[col] === '_') colors[col] = starColor
         }
       }
-      i = end + 1
+      result.push(colors)
       continue
     }
-    if (col === glyphCol) return active
-    col++
-    i++
-  }
-  return null
-}
 
-function graphAnsiLaneColor(ansi: string, glyphCol: number): string | null {
-  const index = graphAnsiPaletteIndexAt(ansi, glyphCol)
-  return index === null ? null : GRAPH_LANE_PALETTE[index]!
+    const segments: LaneSegment[] = []
+    for (let col = 0; col < text.length; col++) {
+      const ch = text[col]
+      if (ch === '|') {
+        segments.push({
+          glyphCol: col,
+          topCol: col,
+          bottomCol: col,
+          vertical: true,
+        })
+      } else if (ch === '/') {
+        segments.push({
+          glyphCol: col,
+          topCol: col + 1,
+          bottomCol: col - 1,
+          vertical: false,
+        })
+      } else if (ch === '\\') {
+        segments.push({
+          glyphCol: col,
+          topCol: col - 1,
+          bottomCol: col + 1,
+          vertical: false,
+        })
+      }
+    }
+
+    const byTop = new Map<number, LaneSegment[]>()
+    for (const segment of segments) {
+      const group = byTop.get(segment.topCol) ?? []
+      group.push(segment)
+      byTop.set(segment.topCol, group)
+    }
+
+    const nextActive: Array<number | null> = []
+    const groups = [...byTop.entries()].sort((a, b) => a[0] - b[0])
+    for (const [topCol, group] of groups) {
+      const sourceColor = active[topCol] ?? allocate()
+      group.sort((a, b) => {
+        if (a.vertical !== b.vertical) return a.vertical ? -1 : 1
+        return Math.abs(a.bottomCol - topCol) - Math.abs(b.bottomCol - topCol)
+      })
+      for (let i = 0; i < group.length; i++) {
+        const segment = group[i]!
+        const color = i === 0 ? sourceColor : allocate()
+        colors[segment.glyphCol] = color
+        if (nextActive[segment.bottomCol] === undefined) {
+          nextActive[segment.bottomCol] = color
+        }
+      }
+    }
+
+    for (let col = 0; col < text.length; col++) {
+      if (text[col] !== '-' && text[col] !== '_') continue
+      colors[col] =
+        colors[col - 1] ?? colors[col + 1] ?? active[col - 1] ?? active[col + 1]
+    }
+
+    active = nextActive
+    result.push(colors)
+  }
+
+  return result
 }
 
 function graphLaneColor(col: number): string {
   return graphLaneSwatch(col)
-}
-
-function graphNodeColor(col: number): string {
-  return graphLaneSwatch(col)
-}
-
-function neighborColorAtTop(
-  neighbor: GraphNeighbor | null,
-  col: number,
-): string | null {
-  if (!neighbor) return null
-  const candidates = [col]
-  if (graphChar(neighbor.text, col - 1) === '/') candidates.push(col - 1)
-  if (graphChar(neighbor.text, col + 1) === '\\') candidates.push(col + 1)
-  for (const glyphCol of candidates) {
-    const color = graphAnsiLaneColor(neighbor.ansi, glyphCol)
-    if (color) return color
-  }
-  return null
-}
-
-function neighborColorAtBottom(
-  neighbor: GraphNeighbor | null,
-  col: number,
-): string | null {
-  if (!neighbor) return null
-  const candidates = [col]
-  if (graphChar(neighbor.text, col + 1) === '/') candidates.push(col + 1)
-  if (graphChar(neighbor.text, col - 1) === '\\') candidates.push(col - 1)
-  for (const glyphCol of candidates) {
-    const color = graphAnsiLaneColor(neighbor.ansi, glyphCol)
-    if (color) return color
-  }
-  return null
-}
-
-function graphNodeLaneColor(
-  ansi: string,
-  col: number,
-  meta: GraphRowMeta,
-): string {
-  return (
-    graphAnsiLaneColor(ansi, col) ??
-    neighborColorAtTop(meta.below, col) ??
-    neighborColorAtBottom(meta.above, col) ??
-    graphNodeColor(col)
-  )
 }
 
 /**
@@ -509,6 +522,7 @@ function graphCurvePath(x1: number, y1: number, x2: number, y2: number): string 
  */
 function GraphLaneSpans(props: {
   ansi: string
+  colorIndexes: Array<number | null>
   gutterCols: number
   meta?: GraphRowMeta
   isHead?: boolean
@@ -525,7 +539,7 @@ function GraphLaneSpans(props: {
   for (let i = 0; i < text.length; i++) {
     const ch = text[i]
     const color =
-      graphAnsiLaneColor(props.ansi, i) ??
+      GRAPH_LANE_PALETTE[props.colorIndexes[i] ?? -1] ??
       graphLaneColor(graphStrokeColorCol(ch ?? '', i))
     const x = graphColX(i)
     if (ch === ' ') continue
@@ -610,9 +624,7 @@ function GraphLaneSpans(props: {
         !connectsAbove &&
         !(above?.kind === 'curve' && touchesBottomDiagonally(above.text, i))
       if (props.isHead) {
-        const headColor = props.isDetached
-          ? '#e0a23a'
-          : graphNodeLaneColor(props.ansi, i, props.meta ?? LONE_COMMIT_META)
+        const headColor = props.isDetached ? '#e0a23a' : color
         const hcls = `graph-node graph-node-head${props.isDetached ? ' graph-node-head-detached' : ''}`
         markersFront.push(
           <g
@@ -675,11 +687,7 @@ function GraphLaneSpans(props: {
               cy={mid}
               r={GRAPH_NODE_RADIUS}
               fill="var(--bg)"
-              stroke={graphNodeLaneColor(
-                props.ansi,
-                i,
-                props.meta ?? LONE_COMMIT_META,
-              )}
+              stroke={color}
               stroke-width="1.6"
             />
           ) : (
@@ -688,11 +696,7 @@ function GraphLaneSpans(props: {
               cx={x}
               cy={mid}
               r={GRAPH_NODE_RADIUS}
-              fill={graphNodeLaneColor(
-                props.ansi,
-                i,
-                props.meta ?? LONE_COMMIT_META,
-              )}
+              fill={color}
             />
           )}
         </g>,
@@ -734,6 +738,7 @@ function GraphLaneSpans(props: {
  */
 function ConnectorLaneSpans(props: {
   ansi: string
+  colorIndexes: Array<number | null>
   gutterCols: number
 }) {
   const text = stripAnsi(props.ansi).replace(/\s+$/, '')
@@ -748,7 +753,7 @@ function ConnectorLaneSpans(props: {
     const ch = text[i]
     if (ch === ' ') continue
     const color =
-      graphAnsiLaneColor(props.ansi, i) ??
+      GRAPH_LANE_PALETTE[props.colorIndexes[i] ?? -1] ??
       graphLaneColor(graphStrokeColorCol(ch ?? '', i))
     const x = graphColX(i)
     if (ch === '|') {
@@ -927,6 +932,7 @@ function GraphCommitLine(props: {
   row: GraphCommitRow
   detached: boolean
   currentBranch: string | null
+  laneColorIndexes: Array<number | null>
   meta: GraphRowMeta
   gutterCols: number
 }) {
@@ -945,7 +951,9 @@ function GraphCommitLine(props: {
   const branchPrefixPeer = remotePeer(tokens, branchPrefix)
   const tagNames = collectTagNames(tokens)
   const laneCol = commitLaneCol(graphAnsi)
-  const laneColor = graphNodeLaneColor(graphAnsi, laneCol, props.meta)
+  const laneColor =
+    GRAPH_LANE_PALETTE[props.laneColorIndexes[laneCol] ?? -1] ??
+    graphLaneSwatch(laneCol)
   const tint = laneTintStyle(laneColor)
   const ageTitle = [author, date].filter(Boolean).join(' · ')
   const diffUrl = `/api/commit/${encodeURIComponent(shaFull)}`
@@ -963,6 +971,7 @@ function GraphCommitLine(props: {
       <span class="graph-prefix">
         <GraphLaneSpans
           ansi={graphAnsi}
+          colorIndexes={props.laneColorIndexes}
           gutterCols={props.gutterCols}
           meta={props.meta}
           isHead={isHead}
@@ -1083,6 +1092,7 @@ function GraphCommitLine(props: {
 
 function GraphOtherLine(props: {
   ansi: string
+  laneColorIndexes: Array<number | null>
   /**
    * 'curve' connectors collapse to zero height and draw center-to-center
    * curves into both neighboring commit rows. 'tall' connectors (inside a
@@ -1105,11 +1115,13 @@ function GraphOtherLine(props: {
         {props.kind === 'tall' ? (
           <GraphLaneSpans
             ansi={props.ansi}
+            colorIndexes={props.laneColorIndexes}
             gutterCols={props.gutterCols}
           />
         ) : (
           <ConnectorLaneSpans
             ansi={props.ansi}
+            colorIndexes={props.laneColorIndexes}
             gutterCols={props.gutterCols}
           />
         )}
@@ -1244,6 +1256,7 @@ export function GraphRows(props: {
   detached: boolean
   currentBranch: string | null
   stashes: PreviewStashEntry[]
+  laneColorIndexesByRow: GraphLaneColorIndexes
   rowMeta: GraphRowMeta[]
   gutterCols: number
 }) {
@@ -1263,6 +1276,7 @@ export function GraphRows(props: {
             <GraphOtherLine
               key={i}
               ansi={r.ansi}
+              laneColorIndexes={props.laneColorIndexesByRow[i] ?? []}
               kind={meta.kind === 'tall' ? 'tall' : 'curve'}
               gutterCols={props.gutterCols}
             />
@@ -1284,6 +1298,7 @@ export function GraphRows(props: {
               row={r.row}
               detached={props.detached}
               currentBranch={props.currentBranch}
+              laneColorIndexes={props.laneColorIndexesByRow[i] ?? []}
               meta={meta}
               gutterCols={props.gutterCols}
             />
@@ -1322,6 +1337,7 @@ export function GraphTailFragment(props: {
   detached: boolean
   currentBranch: string | null
   stashes: PreviewStashEntry[]
+  laneColorIndexesByRow: GraphLaneColorIndexes
   rowMeta: GraphRowMeta[]
   gutterCols: number
   offset: number
@@ -1335,6 +1351,7 @@ export function GraphTailFragment(props: {
         detached={props.detached}
         currentBranch={props.currentBranch}
         stashes={props.stashes}
+        laneColorIndexesByRow={props.laneColorIndexesByRow}
         rowMeta={props.rowMeta}
         gutterCols={props.gutterCols}
       />
@@ -1372,6 +1389,7 @@ export function GraphFragment(props: GraphFragmentProps) {
   const { head, rows, worktree } = props
   const detached = head.kind === 'detached'
   const currentBranch = head.kind === 'branch' ? head.name : null
+  const laneColorIndexesByRow = graphLaneColorIndexes(rows)
   const rowMeta = graphRowMeta(rows)
   const gutterCols = graphGutterCols(rows)
 
@@ -1422,6 +1440,7 @@ export function GraphFragment(props: GraphFragmentProps) {
               detached={detached}
               currentBranch={currentBranch}
               stashes={props.previewStash.stashes}
+              laneColorIndexesByRow={laneColorIndexesByRow}
               rowMeta={rowMeta}
               gutterCols={gutterCols}
               offset={rows.length}

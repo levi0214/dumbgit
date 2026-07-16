@@ -3,7 +3,7 @@ import { normalizeGraphRows, type GraphRow } from '../src/git'
 import {
   commitLaneCol,
   GRAPH_LANE_PALETTE,
-  graphAnsiPaletteIndexAt,
+  graphLaneColorIndexes,
   graphLanePaletteIndex,
   graphRowMeta,
   graphStrokeColorCol,
@@ -122,9 +122,9 @@ describe('graphRowMeta', () => {
       'commit',
     ])
     expect(meta[0]!.above).toBeNull()
-    expect(meta[0]!.below).toEqual({ kind: 'curve', text: '|/', ansi: '|/' })
-    expect(meta[2]!.above).toEqual({ kind: 'curve', text: '|/', ansi: '|/' })
-    expect(meta[5]!.above).toEqual({ kind: 'tall', text: '| \\', ansi: '| \\' })
+    expect(meta[0]!.below).toEqual({ kind: 'curve', text: '|/' })
+    expect(meta[2]!.above).toEqual({ kind: 'curve', text: '|/' })
+    expect(meta[5]!.above).toEqual({ kind: 'tall', text: '| \\' })
   })
 })
 
@@ -152,10 +152,33 @@ describe('lane colors', () => {
     expect(graphStrokeColorCol('*', 2)).toBe(2)
   })
 
-  test('reads Git ANSI colors at visible graph columns', () => {
-    const ansi = '\x1b[31m|\x1b[m \x1b[32m|\x1b[m *'
-    expect(graphAnsiPaletteIndexAt(ansi, 0)).toBe(1)
-    expect(graphAnsiPaletteIndexAt(ansi, 2)).toBe(2)
-    expect(graphAnsiPaletteIndexAt(ansi, 4)).toBeNull()
+  test('keeps the primary lane color and gives a split its own color', () => {
+    const rows: GraphRow[] = [
+      commit('*'),
+      connector('|\\'),
+      commit('* |'),
+    ]
+
+    const colors = graphLaneColorIndexes(rows)
+
+    expect(colors[0]![0]).toBe(0)
+    expect(colors[1]![0]).toBe(0)
+    expect(colors[1]![1]).toBe(1)
+    expect(colors[2]![0]).toBe(0)
+    expect(colors[2]![2]).toBe(1)
+  })
+
+  test('carries a lane color when the lane moves to another column', () => {
+    const rows: GraphRow[] = [
+      commit('| *'),
+      connector(' /'),
+      commit('*'),
+    ]
+
+    const colors = graphLaneColorIndexes(rows)
+
+    expect(colors[0]![2]).toBe(1)
+    expect(colors[1]![1]).toBe(1)
+    expect(colors[2]![0]).toBe(1)
   })
 })

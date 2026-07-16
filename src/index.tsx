@@ -36,6 +36,7 @@ import {
   GraphFragment,
   GraphTailFragment,
   graphGutterCols,
+  graphLaneColorIndexes,
   graphRowMeta,
 } from './views/graph'
 import type { GraphFragmentProps } from './views/graph'
@@ -377,6 +378,7 @@ app.get('/fragment/graph/tail', async (c) => {
         detached={head.kind === 'detached'}
         currentBranch={head.kind === 'branch' ? head.name : null}
         stashes={previewStash.stashes}
+        laneColorIndexesByRow={graphLaneColorIndexes(rows).slice(rowOffset)}
         rowMeta={graphRowMeta(rows).slice(rowOffset)}
         gutterCols={gutterCols}
         offset={rows.length}

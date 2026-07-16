@@ -226,8 +226,8 @@ export async function logGraphRows(limit = 50): Promise<GraphRow[]> {
  * drop connector rows left with only pass-through `|` lanes, so the common
  * merge shape reduces to a single collapsible connector row again.
  *
- * Connector colors are unused by the renderer (lane color comes from
- * reachability), so rewriting `ansi` to plain text is safe.
+ * The view assigns color from normalized topology, so connector ANSI can be
+ * rewritten as plain geometry here.
  */
 export function normalizeGraphRows(rows: GraphRow[]): GraphRow[] {
   const texts: Array<string[] | null> = rows.map((r) =>
