@@ -35,7 +35,6 @@ import { watchGitRefs } from './watch'
 import {
   GraphFragment,
   GraphTailFragment,
-  graphBrightCols,
   graphGutterCols,
   graphRowMeta,
 } from './views/graph'
@@ -378,7 +377,6 @@ app.get('/fragment/graph/tail', async (c) => {
         detached={head.kind === 'detached'}
         currentBranch={head.kind === 'branch' ? head.name : null}
         stashes={previewStash.stashes}
-        brightColsByRow={graphBrightCols(rows).slice(rowOffset)}
         rowMeta={graphRowMeta(rows).slice(rowOffset)}
         gutterCols={gutterCols}
         offset={rows.length}

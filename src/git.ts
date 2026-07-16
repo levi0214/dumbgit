@@ -125,11 +125,12 @@ async function reachableShas(): Promise<Set<string>> {
   return set
 }
 
-/** Graph lines from `git log --graph`. Lane colors come from `graphAnsi`; hashes are plain fields. */
+/** Graph lines from `git log --graph --date-order`. Lane colors come from `graphAnsi`; hashes are plain fields. */
 export async function logGraphRows(limit = 50): Promise<GraphRow[]> {
   const { code, stdout, stderr } = await spawnGit([
     'log',
     '--graph',
+    '--date-order',
     '--exclude=refs/stash',
     '--all',
     '--pretty=format:\x1f%H\x1f%h\x1f%d\x1f%s\x1f%an\x1f%aI\x1f',

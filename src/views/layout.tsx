@@ -5,13 +5,9 @@ const CSS = `
 :root {
   --bg: #1e1e1e;
   --fg: #e8e8e8;
-  --muted: #686868;
+  --muted: #858585;
   --accent: #569cd6;
-  --graph-rail-muted: #484848;
-  /* Dim lanes/nodes are SOLID pre-blended colors: lane segments overlap at
-     row boundaries, and translucent strokes would stack into brighter spots. */
-  --graph-rail-dim: #3c3c3c;
-  --graph-node-dim: #4a4a4a;
+  --graph-rail-muted: #5a5a5a;
   --border: #333;
   --error: #f48771;
   --success: #6a9955;
@@ -356,9 +352,9 @@ body.main-grid-dragging {
   margin: 0;
   padding: 8px 0;
   overflow: visible;
-  font-family: inherit;
-  font-size: 12px;
-  line-height: 1.32;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 13px;
+  line-height: 1.3;
   color: var(--fg);
 }
 .log-row {
@@ -373,10 +369,11 @@ body.main-grid-dragging {
 .log-row:hover {
   background: rgba(255, 255, 255, 0.04);
 }
-/* HEAD row: no row color — the ● dot + bold weight already signal "you are here".
-   A neutral left strip just anchors the eye without overloading any color's meaning. */
 .log-row-head {
-  border-left-color: rgba(255, 255, 255, 0.18);
+  border-left-color: transparent;
+}
+.log-row-head .msg-btn {
+  color: #fff;
   font-weight: 600;
 }
 .log-row-detached {
@@ -386,69 +383,13 @@ body.main-grid-dragging {
 .log-row-detached .branch-prefix {
   background: rgba(224, 162, 58, 0.25) !important;
   color: #ffd58a !important;
-}
-/* HEAD marker: glow lives on the hollow ring only so the disk stays an opaque knockout. */
-.graph-node-head {
-  color: #3ddc6c;
-  opacity: 1;
-}
-.graph-node-head .graph-node-head-ring {
-  filter: drop-shadow(0 0 3px rgba(61, 220, 108, 0.65));
-}
-.graph-node-head-detached {
-  color: #e0a23a;
-}
-.graph-node-head-detached .graph-node-head-ring {
-  filter: drop-shadow(0 0 3px rgba(224, 162, 58, 0.65));
+  box-shadow: none !important;
 }
 /* Viewing row: blue is the only "row color" in the log — it means "active focus",
    and visually pairs with the diff panel chrome on the right. */
 .log-row-commit.log-row-viewing {
   box-shadow: inset 3px 0 0 0 var(--accent);
   background: rgba(86, 156, 214, 0.14);
-}
-.log-row-dim .msg-btn,
-.log-row-dim .msg-age,
-.log-row-dim .row-tail {
-  opacity: 0.38;
-}
-.log-row-dim:hover .msg-btn,
-.log-row-dim:hover .msg-age,
-.log-row-dim:hover .row-tail {
-  opacity: 0.85;
-}
-/* Reachability-off commits recede as a row, but branch anchors stay readable. */
-.log-row-commit.log-row-dim .branch-prefix,
-.log-row-commit.log-row-dim .ref-pill-branch {
-  color: var(--fg);
-  background: rgba(255, 255, 255, 0.05);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14);
-  opacity: 0.38;
-}
-.log-row-commit.log-row-dim .branch-prefix:hover,
-.log-row-commit.log-row-dim .ref-pill-branch:hover {
-  background: rgba(255, 255, 255, 0.12);
-  color: var(--fg);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.28);
-  opacity: 0.9;
-}
-.log-row-commit.log-row-dim .ref-pill-head {
-  color: var(--fg);
-  border-color: rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.05);
-  opacity: 0.38;
-}
-.log-row-commit.log-row-dim .ref-pill-remote {
-  color: #b8b8b8;
-  border-color: rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.04);
-  opacity: 0.5;
-}
-.log-row-commit.log-row-dim .ref-pill:not(.ref-pill-branch):hover {
-  border-color: rgba(255, 255, 255, 0.3);
-  color: var(--fg);
-  background: rgba(255, 255, 255, 0.1);
-  opacity: 0.9;
 }
 .log-row-other {
   height: 0;
@@ -514,11 +455,11 @@ body.main-grid-dragging {
   align-items: center;
   gap: 5px;
   font: inherit;
-  font-size: 11px;
-  line-height: 16px;
+  font-size: 12px;
+  line-height: 18px;
   cursor: pointer;
-  padding: 0 8px;
-  border-radius: 10px;
+  padding: 0 6px;
+  border-radius: 4px;
   border: 1px solid var(--border);
   background: #333;
   color: var(--fg);
@@ -536,8 +477,8 @@ body.main-grid-dragging {
 }
 .ref-pill-branch {
   font-size: 12px;
-  line-height: 16px;
-  padding: 0 5px;
+  line-height: 18px;
+  padding: 0 6px;
   border: 0;
   border-radius: 3px;
   background: rgba(255, 255, 255, 0.035);
@@ -561,6 +502,38 @@ body.main-grid-dragging {
   border-color: var(--accent);
   color: var(--accent);
 }
+/* Hue identifies the lane; high-contrast text remains independently readable. */
+.branch-prefix.lane-tint,
+.ref-pill-branch.lane-tint,
+.ref-pill-head.lane-tint {
+  color: var(--fg);
+  background: rgba(255, 255, 255, 0.045);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--lane) 50%, #555);
+}
+.branch-prefix.lane-tint:hover,
+.ref-pill-branch.lane-tint:hover {
+  color: #fff;
+  background: color-mix(in srgb, var(--lane) 16%, #333);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--lane) 72%, #555);
+}
+.ref-pill-remote.lane-tint {
+  color: #c8c8c8;
+  border-color: rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.025);
+}
+.ref-pill-remote.lane-tint:hover {
+  color: #fff;
+  border-color: color-mix(in srgb, var(--lane) 70%, #666);
+  opacity: 1;
+}
+.ref-branch-ico {
+  flex: 0 0 auto;
+  color: var(--lane);
+}
+.ref-pill-head.lane-tint {
+  color: #fff;
+  background: color-mix(in srgb, var(--lane) 13%, #333);
+}
 .ref-peer-sep {
   color: var(--muted);
   opacity: 0.8;
@@ -576,15 +549,15 @@ body.main-grid-dragging {
   color: var(--fg);
   background: rgba(255, 255, 255, 0.05);
   border-color: rgba(255, 255, 255, 0.14);
-  opacity: 0.5;
+  opacity: 0.72;
 }
 .log-row-stash .stash-msg {
   cursor: default;
   color: var(--fg);
-  opacity: 0.38;
+  opacity: 0.62;
 }
 .log-row-stash .msg-age {
-  opacity: 0.5;
+  opacity: 0.72;
 }
 .log-row-stash:hover .ref-pill-stash,
 .log-row-stash:hover .stash-msg,
@@ -604,7 +577,7 @@ body.main-grid-dragging {
   overflow: visible;
   white-space: nowrap;
   font-size: 12px;
-  line-height: 16px;
+  line-height: 18px;
   color: rgba(255, 255, 255, 0.86);
   background: rgba(255, 255, 255, 0.035);
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
@@ -702,24 +675,24 @@ body.main-grid-dragging {
   color: #9cdcfe;
 }
 .log-row-head .branch-prefix {
-  color: #ffffff;
-  background: rgba(255, 255, 255, 0.14);
-  box-shadow: none;
   font-weight: 700;
 }
-/* Same grid cell: date by default, hash + copy on hover — no floating chip. */
-.row-end {
-  display: inline-grid;
-  flex-shrink: 0;
-  align-items: center;
-  justify-items: end;
+.log-row-head .branch-prefix.lane-tint {
+  color: #fff;
+  background: color-mix(in srgb, var(--lane) 15%, #333);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--lane) 72%, #555);
 }
-.msg-age,
-.row-tail {
-  grid-area: 1 / 1;
+/* Secondary row actions overlay the right edge on hover without reflowing text. */
+.row-end {
+  position: relative;
+  align-self: stretch;
+  flex: 0 0 0;
+  width: 0;
+  align-items: center;
 }
 .msg-age {
   color: var(--muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
   font-size: 11px;
   line-height: 16px;
 }
@@ -733,21 +706,28 @@ body.main-grid-dragging {
 .row-tags-marker .tag-ico {
   display: block;
 }
-.log-row:hover .msg-age {
-  visibility: hidden;
-}
-/* Out of layout until hover — visibility:hidden still reserved space and crushed the message. */
 .row-tail {
   display: none;
+  position: absolute;
+  z-index: 2;
+  top: 50%;
+  right: 0;
+  transform: translateY(-50%);
   align-items: center;
-  gap: 4px;
-  height: 16px;
+  gap: 5px;
+  height: 20px;
+  padding-left: 28px;
+  white-space: nowrap;
+  background: linear-gradient(90deg, transparent, #2e2e2f 28px);
 }
 .log-row:hover .row-tail {
   display: inline-flex;
 }
+.log-row-viewing:hover .row-tail {
+  background: linear-gradient(90deg, transparent, #2d414f 28px);
+}
 .hash-peek {
-  font-family: inherit;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
   font-size: 11px;
   color: var(--muted);
   user-select: all;

@@ -61,6 +61,9 @@ function CopyBtn(props: { dataCopy?: string; title?: string }) {
 const TAG_ICO = raw(
   `<svg class="tag-ico" xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>`,
 )
+const REF_BRANCH_ICO = raw(
+  `<svg class="ref-branch-ico" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="5" r="2"/><circle cx="6" cy="19" r="2"/><circle cx="18" cy="5" r="2"/><path d="M6 7v10M8 17c6 0 8-3 8-10"/></svg>`,
+)
 const ROW_ACTION_ICO_ATTRS =
   `class="row-action-ico" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"`
 const NEW_BRANCH_ICO = raw(
@@ -195,14 +198,6 @@ function graphChar(text: string, col: number): string {
   return col >= 0 && col < text.length ? (text[col] ?? ' ') : ' '
 }
 
-function isGraphChar(ch: string): boolean {
-  return ch !== '' && ch !== ' '
-}
-
-function addIfGraph(set: Set<number>, text: string, col: number): void {
-  if (isGraphChar(graphChar(text, col))) set.add(col)
-}
-
 function isVerticalGraphChar(ch: string): boolean {
   return ch === '|' || ch === '*'
 }
@@ -218,7 +213,7 @@ function isVerticalGraphChar(ch: string): boolean {
  */
 export type GraphRowKind = 'commit' | 'curve' | 'tall'
 
-export type GraphNeighbor = { kind: GraphRowKind; text: string }
+export type GraphNeighbor = { kind: GraphRowKind; text: string; ansi: string }
 
 export type GraphRowMeta = {
   kind: GraphRowKind
@@ -234,6 +229,7 @@ const LONE_COMMIT_META: GraphRowMeta = {
 
 export function graphRowMeta(rows: GraphRow[]): GraphRowMeta[] {
   const texts = rows.map(graphText)
+  const ansis = rows.map((r) => (r.kind === 'commit' ? r.row.graphAnsi : r.ansi))
   const kinds: GraphRowKind[] = rows.map((r, i) => {
     if (r.kind === 'commit') return 'commit'
     const inRun =
@@ -242,10 +238,13 @@ export function graphRowMeta(rows: GraphRow[]): GraphRowMeta[] {
   })
   return rows.map((_, i) => ({
     kind: kinds[i]!,
-    above: i > 0 ? { kind: kinds[i - 1]!, text: texts[i - 1]! } : null,
+    above:
+      i > 0
+        ? { kind: kinds[i - 1]!, text: texts[i - 1]!, ansi: ansis[i - 1]! }
+        : null,
     below:
       i < rows.length - 1
-        ? { kind: kinds[i + 1]!, text: texts[i + 1]! }
+        ? { kind: kinds[i + 1]!, text: texts[i + 1]!, ansi: ansis[i + 1]! }
         : null,
   }))
 }
@@ -314,47 +313,7 @@ function laneBendsAbove(above: GraphNeighbor | null, col: number): boolean {
   )
 }
 
-/**
- * Bright graph cells flow from reachable commits toward their parents.
- * We never flow upward, so an unmerged side branch that shares an old base
- * stays dim while the current main lane beside it remains bright.
- */
-export function graphBrightCols(rows: GraphRow[]): Array<Set<number> | null> {
-  const texts = rows.map(graphText)
-  const out = rows.map(() => new Set<number>())
-
-  for (let i = 0; i < rows.length; i++) {
-    const row = rows[i]
-    if (row.kind === 'commit' && row.row.inHistory) {
-      const col = stripAnsi(row.row.graphAnsi).indexOf('*')
-      if (col !== -1) out[i]!.add(col)
-    }
-  }
-
-  for (let y = 0; y < rows.length - 1; y++) {
-    const here = texts[y] ?? ''
-    const next = texts[y + 1] ?? ''
-    for (const x of out[y]!) {
-      const ch = graphChar(here, x)
-      if (ch === '/') {
-        addIfGraph(out[y + 1]!, next, x - 1)
-        continue
-      }
-      if (ch === '\\') {
-        addIfGraph(out[y + 1]!, next, x + 1)
-        continue
-      }
-
-      addIfGraph(out[y + 1]!, next, x)
-      if (graphChar(next, x - 1) === '/') out[y + 1]!.add(x - 1)
-      if (graphChar(next, x + 1) === '\\') out[y + 1]!.add(x + 1)
-    }
-  }
-
-  return out.map((cols) => (cols.size === 0 ? null : cols))
-}
-
-const GRAPH_COL_WIDTH = 10
+const GRAPH_COL_WIDTH = 8
 const GRAPH_ROW_HEIGHT = 16
 const GRAPH_CONNECTOR_HEIGHT = GRAPH_ROW_HEIGHT
 const GRAPH_NODE_RADIUS = 3.2
@@ -370,12 +329,157 @@ function graphColX(col: number): number {
   return col * GRAPH_COL_WIDTH + GRAPH_COL_WIDTH / 2
 }
 
-function graphLaneColor(onSpine: boolean): string {
-  return onSpine ? 'var(--accent)' : 'var(--graph-rail-dim)'
+/**
+ * High-chroma lane colors: hue identifies topology, never reachability.
+ * Commit lanes occupy every other ASCII graph column (`0, 2, 4, ...`), so
+ * palette lookup converts glyph columns to logical lane indices first.
+ */
+export const GRAPH_LANE_PALETTE = [
+  '#169fe6',
+  '#e653a8',
+  '#39d353',
+  '#f0a51a',
+  '#a78bfa',
+  '#22c7b8',
+  '#f4d35e',
+  '#70b7ff',
+] as const
+
+export function graphLanePaletteIndex(col: number): number {
+  const n = GRAPH_LANE_PALETTE.length
+  const lane = Math.floor(col / 2)
+  return ((lane % n) + n) % n
 }
 
-function graphNodeColor(onSpine: boolean): string {
-  return onSpine ? 'var(--accent)' : 'var(--graph-node-dim)'
+function graphLaneSwatch(col: number) {
+  return GRAPH_LANE_PALETTE[graphLanePaletteIndex(col)]!
+}
+
+const ANSI_LANE_INDEX: Record<number, number> = {
+  31: 1,
+  32: 2,
+  33: 3,
+  34: 7,
+  35: 4,
+  36: 5,
+  37: 6,
+  91: 1,
+  92: 2,
+  93: 3,
+  94: 7,
+  95: 4,
+  96: 5,
+  97: 6,
+}
+
+/** Palette slot active at a visible graph glyph, derived from Git's SGR output. */
+export function graphAnsiPaletteIndexAt(
+  ansi: string,
+  glyphCol: number,
+): number | null {
+  let active: number | null = null
+  let col = 0
+  for (let i = 0; i < ansi.length; ) {
+    if (ansi[i] === '\x1b' && ansi[i + 1] === '[') {
+      const end = ansi.indexOf('m', i + 2)
+      if (end === -1) break
+      const codes = ansi.slice(i + 2, end).split(';')
+      for (const rawCode of codes) {
+        const code = rawCode === '' ? 0 : Number(rawCode)
+        if (code === 0 || code === 39) active = null
+        else if (ANSI_LANE_INDEX[code] !== undefined) {
+          active = ANSI_LANE_INDEX[code]!
+        }
+      }
+      i = end + 1
+      continue
+    }
+    if (col === glyphCol) return active
+    col++
+    i++
+  }
+  return null
+}
+
+function graphAnsiLaneColor(ansi: string, glyphCol: number): string | null {
+  const index = graphAnsiPaletteIndexAt(ansi, glyphCol)
+  return index === null ? null : GRAPH_LANE_PALETTE[index]!
+}
+
+function graphLaneColor(col: number): string {
+  return graphLaneSwatch(col)
+}
+
+function graphNodeColor(col: number): string {
+  return graphLaneSwatch(col)
+}
+
+function neighborColorAtTop(
+  neighbor: GraphNeighbor | null,
+  col: number,
+): string | null {
+  if (!neighbor) return null
+  const candidates = [col]
+  if (graphChar(neighbor.text, col - 1) === '/') candidates.push(col - 1)
+  if (graphChar(neighbor.text, col + 1) === '\\') candidates.push(col + 1)
+  for (const glyphCol of candidates) {
+    const color = graphAnsiLaneColor(neighbor.ansi, glyphCol)
+    if (color) return color
+  }
+  return null
+}
+
+function neighborColorAtBottom(
+  neighbor: GraphNeighbor | null,
+  col: number,
+): string | null {
+  if (!neighbor) return null
+  const candidates = [col]
+  if (graphChar(neighbor.text, col + 1) === '/') candidates.push(col + 1)
+  if (graphChar(neighbor.text, col - 1) === '\\') candidates.push(col - 1)
+  for (const glyphCol of candidates) {
+    const color = graphAnsiLaneColor(neighbor.ansi, glyphCol)
+    if (color) return color
+  }
+  return null
+}
+
+function graphNodeLaneColor(
+  ansi: string,
+  col: number,
+  meta: GraphRowMeta,
+): string {
+  return (
+    graphAnsiLaneColor(ansi, col) ??
+    neighborColorAtTop(meta.below, col) ??
+    neighborColorAtBottom(meta.above, col) ??
+    graphNodeColor(col)
+  )
+}
+
+/**
+ * Column that owns a stroke's hue. Diagonals (`/`, `\`) sit in a gutter
+ * between lanes; coloring by the glyph column makes a side branch flash a
+ * third color on its curves. Git grows new lanes to the right, so both
+ * diagonals take the rightward endpoint (same column as the side-lane `|`/`*`).
+ *
+ * `/` at c: top c+1 → bottom c-1
+ * `\` at c: top c-1 → bottom c+1
+ */
+export function graphStrokeColorCol(ch: string, glyphCol: number): number {
+  if (ch === '/' || ch === '\\') return glyphCol + 1
+  return glyphCol
+}
+
+/** Column of the `*` on a commit row; used for pill tinting. */
+export function commitLaneCol(graphAnsi: string): number {
+  const col = stripAnsi(graphAnsi).indexOf('*')
+  return col === -1 ? 0 : col
+}
+
+/** Inline CSS vars so branch pills share the commit's lane color. */
+function laneTintStyle(color: string): string {
+  return `--lane:${color}`
 }
 
 /**
@@ -405,14 +509,12 @@ function graphCurvePath(x1: number, y1: number, x2: number, y2: number): string 
  */
 function GraphLaneSpans(props: {
   ansi: string
-  brightCols: Set<number> | null
   gutterCols: number
   meta?: GraphRowMeta
   isHead?: boolean
   isDetached?: boolean
 }) {
   const text = stripAnsi(props.ansi).replace(/\s+$/, '')
-  const brightCols = props.brightCols
   const height = GRAPH_ROW_HEIGHT
   const width = Math.max(props.gutterCols, text.length, 1) * GRAPH_COL_WIDTH
   const mid = height / 2
@@ -422,8 +524,9 @@ function GraphLaneSpans(props: {
   const markersFront = []
   for (let i = 0; i < text.length; i++) {
     const ch = text[i]
-    const onSpine = brightCols !== null && brightCols.has(i)
-    const color = graphLaneColor(onSpine)
+    const color =
+      graphAnsiLaneColor(props.ansi, i) ??
+      graphLaneColor(graphStrokeColorCol(ch ?? '', i))
     const x = graphColX(i)
     if (ch === ' ') continue
     if (ch === '|') {
@@ -507,6 +610,9 @@ function GraphLaneSpans(props: {
         !connectsAbove &&
         !(above?.kind === 'curve' && touchesBottomDiagonally(above.text, i))
       if (props.isHead) {
+        const headColor = props.isDetached
+          ? '#e0a23a'
+          : graphNodeLaneColor(props.ansi, i, props.meta ?? LONE_COMMIT_META)
         const hcls = `graph-node graph-node-head${props.isDetached ? ' graph-node-head-detached' : ''}`
         markersFront.push(
           <g
@@ -520,23 +626,20 @@ function GraphLaneSpans(props: {
                 y1={mid + GRAPH_NODE_RADIUS}
                 x2={x}
                 y2={height + GRAPH_LINE_OVERLAP}
-                stroke="currentColor"
+                stroke={headColor}
                 stroke-width="1.8"
                 stroke-linecap="round"
-                opacity="0.3"
               />
             ) : null}
             <circle
               class="graph-node-head-ring"
               cx={x}
               cy={mid}
-              r="5.2"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.4"
-              opacity="0.3"
+              r="4.6"
+              fill="var(--bg)"
+              stroke={headColor}
+              stroke-width="1.9"
             />
-            <circle cx={x} cy={mid} r={GRAPH_NODE_RADIUS} fill="currentColor" />
           </g>,
         )
         continue
@@ -572,7 +675,11 @@ function GraphLaneSpans(props: {
               cy={mid}
               r={GRAPH_NODE_RADIUS}
               fill="var(--bg)"
-              stroke={graphNodeColor(onSpine)}
+              stroke={graphNodeLaneColor(
+                props.ansi,
+                i,
+                props.meta ?? LONE_COMMIT_META,
+              )}
               stroke-width="1.6"
             />
           ) : (
@@ -581,7 +688,11 @@ function GraphLaneSpans(props: {
               cx={x}
               cy={mid}
               r={GRAPH_NODE_RADIUS}
-              fill={graphNodeColor(onSpine)}
+              fill={graphNodeLaneColor(
+                props.ansi,
+                i,
+                props.meta ?? LONE_COMMIT_META,
+              )}
             />
           )}
         </g>,
@@ -623,7 +734,6 @@ function GraphLaneSpans(props: {
  */
 function ConnectorLaneSpans(props: {
   ansi: string
-  brightCols: Set<number> | null
   gutterCols: number
 }) {
   const text = stripAnsi(props.ansi).replace(/\s+$/, '')
@@ -637,8 +747,9 @@ function ConnectorLaneSpans(props: {
   for (let i = 0; i < text.length; i++) {
     const ch = text[i]
     if (ch === ' ') continue
-    const onSpine = props.brightCols !== null && props.brightCols.has(i)
-    const color = graphLaneColor(onSpine)
+    const color =
+      graphAnsiLaneColor(props.ansi, i) ??
+      graphLaneColor(graphStrokeColorCol(ch ?? '', i))
     const x = graphColX(i)
     if (ch === '|') {
       lanes.push(
@@ -723,12 +834,14 @@ function RefPills(props: {
   decorateRaw: string
   branchPrefix: string | null
   currentBranch: string | null
+  laneColor: string
 }) {
   const tokens = decorationTokens(props.decorateRaw)
   if (tokens.length === 0) return null
   const locals = localNamesOnRow(tokens, props.branchPrefix)
   const nonTag = tokens.filter((t) => !isTagToken(t))
   const sorted = [...nonTag].sort((a, b) => pillSortKey(a) - pillSortKey(b))
+  const tint = laneTintStyle(props.laneColor)
   return (
     <span class="graph-pills">
       {sorted.map((t, idx) => {
@@ -743,10 +856,12 @@ function RefPills(props: {
         return (
           <span
             key={idx}
-            class={pillClass(t)}
+            class={`${pillClass(t)} lane-tint`}
+            style={tint}
             title={peer ? `${display}, ${peer}/${display}` : display}
             data-copy={display}
           >
+            {REF_BRANCH_ICO}
             {display}
             {peer ? (
               <>
@@ -812,24 +927,33 @@ function GraphCommitLine(props: {
   row: GraphCommitRow
   detached: boolean
   currentBranch: string | null
-  brightCols: Set<number> | null
   meta: GraphRowMeta
   gutterCols: number
 }) {
-  const { graphAnsi, shaFull, shaShort, decorateRaw, subject, date, inHistory } =
-    props.row
+  const {
+    graphAnsi,
+    shaFull,
+    shaShort,
+    decorateRaw,
+    subject,
+    author,
+    date,
+  } = props.row
   const isHead = graphCommitIsHead(decorateRaw)
   const tokens = decorationTokens(decorateRaw)
   const branchPrefix = branchPrefixFromTokens(tokens)
   const branchPrefixPeer = remotePeer(tokens, branchPrefix)
   const tagNames = collectTagNames(tokens)
+  const laneCol = commitLaneCol(graphAnsi)
+  const laneColor = graphNodeLaneColor(graphAnsi, laneCol, props.meta)
+  const tint = laneTintStyle(laneColor)
+  const ageTitle = [author, date].filter(Boolean).join(' · ')
   const diffUrl = `/api/commit/${encodeURIComponent(shaFull)}`
   const cls = [
     'log-row',
     'log-row-commit',
     isHead ? 'log-row-head' : '',
     isHead && props.detached ? 'log-row-detached' : '',
-    inHistory ? '' : 'log-row-dim',
   ]
     .filter(Boolean)
     .join(' ')
@@ -839,7 +963,6 @@ function GraphCommitLine(props: {
       <span class="graph-prefix">
         <GraphLaneSpans
           ansi={graphAnsi}
-          brightCols={props.brightCols}
           gutterCols={props.gutterCols}
           meta={props.meta}
           isHead={isHead}
@@ -848,7 +971,8 @@ function GraphCommitLine(props: {
       </span>
       {branchPrefix ? (
         <span
-          class="branch-prefix"
+          class="branch-prefix lane-tint"
+          style={tint}
           title={
             branchPrefixPeer
               ? `branch: ${branchPrefix}, ${branchPrefixPeer}/${branchPrefix}`
@@ -856,6 +980,7 @@ function GraphCommitLine(props: {
           }
           data-copy={branchPrefix}
         >
+          {REF_BRANCH_ICO}
           {branchPrefix}
           {branchPrefixPeer ? (
             <>
@@ -897,11 +1022,12 @@ function GraphCommitLine(props: {
         decorateRaw={decorateRaw}
         branchPrefix={branchPrefix}
         currentBranch={props.currentBranch}
+        laneColor={laneColor}
       />
       <button
         type="button"
         class="msg-btn"
-        title={subject}
+        title={[subject, ageTitle].filter(Boolean).join('\n')}
         hx-get={diffUrl}
         hx-target="#diff"
         hx-swap="outerHTML"
@@ -917,10 +1043,10 @@ function GraphCommitLine(props: {
         ) : null}
       </button>
       <span class="row-end">
-        <span class="msg-age" title={date}>
-          {relTimeAgo(date)}
-        </span>
         <span class="row-tail">
+          <span class="msg-age" title={ageTitle}>
+            {relTimeAgo(date)}
+          </span>
           <button
             type="button"
             class="row-action-btn"
@@ -957,8 +1083,6 @@ function GraphCommitLine(props: {
 
 function GraphOtherLine(props: {
   ansi: string
-  betweenInHistory: boolean
-  brightCols: Set<number> | null
   /**
    * 'curve' connectors collapse to zero height and draw center-to-center
    * curves into both neighboring commit rows. 'tall' connectors (inside a
@@ -972,7 +1096,6 @@ function GraphOtherLine(props: {
     'log-row',
     'log-row-other',
     props.kind === 'tall' ? 'log-row-other-tall' : '',
-    props.betweenInHistory ? '' : 'log-row-dim',
   ]
     .filter(Boolean)
     .join(' ')
@@ -982,13 +1105,11 @@ function GraphOtherLine(props: {
         {props.kind === 'tall' ? (
           <GraphLaneSpans
             ansi={props.ansi}
-            brightCols={props.brightCols}
             gutterCols={props.gutterCols}
           />
         ) : (
           <ConnectorLaneSpans
             ansi={props.ansi}
-            brightCols={props.brightCols}
             gutterCols={props.gutterCols}
           />
         )}
@@ -1065,10 +1186,10 @@ function GraphStashLine(props: {
         {props.stash.subject}
       </button>
       <span class="row-end">
-        <span class="msg-age" title={props.stash.subject}>
-          {props.stash.age}
-        </span>
         <span class="row-tail">
+          <span class="msg-age" title={props.stash.subject}>
+            {props.stash.age}
+          </span>
           <button
             type="button"
             class="row-action-btn"
@@ -1123,7 +1244,6 @@ export function GraphRows(props: {
   detached: boolean
   currentBranch: string | null
   stashes: PreviewStashEntry[]
-  brightColsByRow: Array<Set<number> | null>
   rowMeta: GraphRowMeta[]
   gutterCols: number
 }) {
@@ -1143,8 +1263,6 @@ export function GraphRows(props: {
             <GraphOtherLine
               key={i}
               ansi={r.ansi}
-              betweenInHistory={r.betweenInHistory}
-              brightCols={props.brightColsByRow[i] ?? null}
               kind={meta.kind === 'tall' ? 'tall' : 'curve'}
               gutterCols={props.gutterCols}
             />
@@ -1166,7 +1284,6 @@ export function GraphRows(props: {
               row={r.row}
               detached={props.detached}
               currentBranch={props.currentBranch}
-              brightCols={props.brightColsByRow[i] ?? null}
               meta={meta}
               gutterCols={props.gutterCols}
             />
@@ -1189,7 +1306,7 @@ export function GraphLoadMore(props: {
     <button
       type="button"
       class="graph-load-more"
-      title={`git log --graph -n ${props.nextLimit}`}
+      title={`git log --graph --date-order -n ${props.nextLimit}`}
       hx-get={`/fragment/graph/tail?offset=${encodeURIComponent(String(props.offset))}&limit=${encodeURIComponent(String(props.nextLimit))}&gutter=${encodeURIComponent(String(props.gutterCols))}`}
       hx-target="this"
       hx-swap="outerHTML show:none"
@@ -1205,7 +1322,6 @@ export function GraphTailFragment(props: {
   detached: boolean
   currentBranch: string | null
   stashes: PreviewStashEntry[]
-  brightColsByRow: Array<Set<number> | null>
   rowMeta: GraphRowMeta[]
   gutterCols: number
   offset: number
@@ -1219,7 +1335,6 @@ export function GraphTailFragment(props: {
         detached={props.detached}
         currentBranch={props.currentBranch}
         stashes={props.stashes}
-        brightColsByRow={props.brightColsByRow}
         rowMeta={props.rowMeta}
         gutterCols={props.gutterCols}
       />
@@ -1257,7 +1372,6 @@ export function GraphFragment(props: GraphFragmentProps) {
   const { head, rows, worktree } = props
   const detached = head.kind === 'detached'
   const currentBranch = head.kind === 'branch' ? head.name : null
-  const brightColsByRow = graphBrightCols(rows)
   const rowMeta = graphRowMeta(rows)
   const gutterCols = graphGutterCols(rows)
 
@@ -1308,7 +1422,6 @@ export function GraphFragment(props: GraphFragmentProps) {
               detached={detached}
               currentBranch={currentBranch}
               stashes={props.previewStash.stashes}
-              brightColsByRow={brightColsByRow}
               rowMeta={rowMeta}
               gutterCols={gutterCols}
               offset={rows.length}

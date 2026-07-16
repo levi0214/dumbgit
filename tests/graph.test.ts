@@ -1,6 +1,13 @@
 import { describe, expect, test } from 'bun:test'
 import { normalizeGraphRows, type GraphRow } from '../src/git'
-import { graphRowMeta } from '../src/views/graph'
+import {
+  commitLaneCol,
+  GRAPH_LANE_PALETTE,
+  graphAnsiPaletteIndexAt,
+  graphLanePaletteIndex,
+  graphRowMeta,
+  graphStrokeColorCol,
+} from '../src/views/graph'
 
 function commit(graphAnsi: string): GraphRow {
   return {
@@ -115,8 +122,40 @@ describe('graphRowMeta', () => {
       'commit',
     ])
     expect(meta[0]!.above).toBeNull()
-    expect(meta[0]!.below).toEqual({ kind: 'curve', text: '|/' })
-    expect(meta[2]!.above).toEqual({ kind: 'curve', text: '|/' })
-    expect(meta[5]!.above).toEqual({ kind: 'tall', text: '| \\' })
+    expect(meta[0]!.below).toEqual({ kind: 'curve', text: '|/', ansi: '|/' })
+    expect(meta[2]!.above).toEqual({ kind: 'curve', text: '|/', ansi: '|/' })
+    expect(meta[5]!.above).toEqual({ kind: 'tall', text: '| \\', ansi: '| \\' })
+  })
+})
+
+describe('lane colors', () => {
+  test('maps ASCII graph columns onto logical lanes', () => {
+    expect(graphLanePaletteIndex(0)).toBe(0)
+    expect(graphLanePaletteIndex(2)).toBe(1)
+    expect(graphLanePaletteIndex(4)).toBe(2)
+    expect(graphLanePaletteIndex(GRAPH_LANE_PALETTE.length * 2)).toBe(0)
+    expect(graphLanePaletteIndex(-1)).toBe(GRAPH_LANE_PALETTE.length - 1)
+  })
+
+  test('commitLaneCol reads the star column', () => {
+    expect(commitLaneCol('* ')).toBe(0)
+    expect(commitLaneCol('| * ')).toBe(2)
+    expect(commitLaneCol('| | *')).toBe(4)
+    expect(commitLaneCol('| | ')).toBe(0)
+  })
+
+  test('diagonals take the rightward endpoint column for hue', () => {
+    // Side-lane commits sit at col 2 (`| *`); `/` and `\` glyphs at col 1.
+    expect(graphStrokeColorCol('/', 1)).toBe(2)
+    expect(graphStrokeColorCol('\\', 1)).toBe(2)
+    expect(graphStrokeColorCol('|', 2)).toBe(2)
+    expect(graphStrokeColorCol('*', 2)).toBe(2)
+  })
+
+  test('reads Git ANSI colors at visible graph columns', () => {
+    const ansi = '\x1b[31m|\x1b[m \x1b[32m|\x1b[m *'
+    expect(graphAnsiPaletteIndexAt(ansi, 0)).toBe(1)
+    expect(graphAnsiPaletteIndexAt(ansi, 2)).toBe(2)
+    expect(graphAnsiPaletteIndexAt(ansi, 4)).toBeNull()
   })
 })
