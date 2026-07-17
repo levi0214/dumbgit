@@ -548,7 +548,6 @@ function relTimeAgo(iso: string): string {
   const hr = Math.floor(min / 60)
   if (hr < 24) return `${hr}h ago`
   const day = Math.floor(hr / 24)
-  if (day === 1) return 'yesterday'
   if (day < 14) return `${day}d ago`
   if (day < 60) return `${Math.floor(day / 7)}w ago`
   if (day < 365) return `${Math.floor(day / 30)}mo ago`
@@ -672,10 +671,10 @@ function GraphCommitLine(props: {
         ) : null}
       </button>
       <span class="row-end">
+        <span class="msg-age" title={ageTitle}>
+          {relTimeAgo(date)}
+        </span>
         <span class="row-tail">
-          <span class="msg-age" title={ageTitle}>
-            {relTimeAgo(date)}
-          </span>
           <button
             type="button"
             class="row-action-btn"
@@ -776,10 +775,10 @@ function GraphStashLine(props: {
         {props.stash.subject}
       </button>
       <span class="row-end">
+        <span class="msg-age" title={props.stash.subject}>
+          {props.stash.age}
+        </span>
         <span class="row-tail">
-          <span class="msg-age" title={props.stash.subject}>
-            {props.stash.age}
-          </span>
           <button
             type="button"
             class="row-action-btn"

@@ -686,8 +686,8 @@ body.main-grid-dragging {
 .row-end {
   position: relative;
   align-self: stretch;
-  flex: 0 0 0;
-  width: 0;
+  display: inline-flex;
+  flex: 0 0 auto;
   align-items: center;
 }
 .msg-age {
@@ -722,6 +722,9 @@ body.main-grid-dragging {
 }
 .log-row:hover .row-tail {
   display: inline-flex;
+}
+.log-row:hover .row-end > .msg-age {
+  visibility: hidden;
 }
 .log-row-viewing:hover .row-tail {
   background: linear-gradient(90deg, transparent, #2d414f 28px);
