@@ -412,6 +412,7 @@ function WorkspaceInspectorContext(props: {
 }) {
   return (
     <div class="workspace-inspector-context">
+      <span class="workspace-inspector-label">Diff</span>
       <strong>{props.name}</strong>
       <span>{props.detail}</span>
       <button
