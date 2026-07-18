@@ -173,6 +173,8 @@ describe('workspace states', () => {
     expect(inspector).toContain('workspace-inspector-close')
     expect(inspector).toContain('workspace-inspector-label')
     expect(inspector).toContain('>Diff</span>')
+    expect(inspector).toContain('<span>Close</span>')
+    expect(inspector).toContain('<kbd>Esc</kbd>')
   })
 
   test('gives the workspace inspector a file-detail split view', () => {

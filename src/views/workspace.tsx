@@ -443,10 +443,11 @@ function WorkspaceInspectorContext(props: {
       <button
         type="button"
         class="workspace-inspector-close"
-        title="Close inspector"
+        title="Close inspector (Esc)"
         aria-label="Close inspector"
       >
-        ×
+        <span>Close</span>
+        <kbd>Esc</kbd>
       </button>
     </div>
   )
