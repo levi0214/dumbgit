@@ -1261,16 +1261,29 @@ body.main-grid-dragging {
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.025);
 }
 .workspace-repo-stopped {
-  border-color: #2d2d2d;
-  background: #202020;
+  border-color: #282828;
+  background: #191919;
+  box-shadow: none;
 }
 .workspace-repo-stopped .workspace-repo-identity,
 .workspace-repo-stopped .workspace-timeline,
 .workspace-repo-stopped .workspace-worktree-summary {
-  opacity: 0.48;
+  filter: grayscale(1) saturate(0);
+  opacity: 0.36;
 }
 .workspace-repo-stopped .workspace-card-head {
-  background: #242424;
+  border-bottom-color: #292929;
+  background: #1f1f1f;
+}
+.workspace-repo-stopped .workspace-worktree-summary {
+  border-bottom-color: #292929;
+}
+.workspace-repo-stopped.workspace-repo-error pre,
+.workspace-repo-stopped.workspace-repo-error
+  .workspace-card-head
+  > div:first-child {
+  filter: grayscale(1) saturate(0);
+  opacity: 0.42;
 }
 .workspace-card-head {
   min-height: 53px;
