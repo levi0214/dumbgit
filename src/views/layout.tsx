@@ -1013,6 +1013,10 @@ body.main-grid-dragging {
 }
 .diff-files-head {
   padding: 6px 12px 2px;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
   font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -1021,6 +1025,36 @@ body.main-grid-dragging {
 .diff-files-count {
   font-weight: normal;
   opacity: 0.85;
+}
+.commit-line-counts {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 7px;
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+  text-transform: none;
+  white-space: nowrap;
+}
+.commit-stats-breakdown {
+  padding: 2px 12px 5px;
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 10px;
+}
+.commit-stats-kind {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.commit-stats-label {
+  color: #a5a5a5;
+}
+.commit-stats-separator {
+  color: rgba(255, 255, 255, 0.2);
 }
 .diff-files-empty {
   padding: 8px 12px 12px;
