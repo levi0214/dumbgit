@@ -149,6 +149,7 @@ describe('workspace states', () => {
     )
 
     expect(html).toContain('aria-expanded="true"')
+    expect(html).toContain('data-workspace-limit="10"')
     expect(html).toContain('Show 5 commits in all repositories')
     expect(html).toContain('hx-get="/fragment/workspace?limit=5"')
     expect(html).toContain('hx-push-url="/workspace?limit=5"')

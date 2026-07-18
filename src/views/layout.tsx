@@ -1508,6 +1508,36 @@ body.workspace-reordering {
   align-items: center;
   justify-content: center;
 }
+.workspace-page:has(.workspace-inspector:not([hidden]))
+  .workspace-repo-card {
+  overflow: clip;
+}
+.workspace-page:has(.workspace-inspector:not([hidden]))
+  .workspace-depth-toggle {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  height: 21px;
+  flex-basis: 21px;
+  border-top: 1px solid rgba(255, 255, 255, 0.075);
+  background: #252526;
+  box-shadow: 0 -5px 10px rgba(0, 0, 0, 0.18);
+}
+.workspace-page:has(.workspace-inspector:not([hidden]))
+  .workspace-depth-chevron {
+  opacity: 0.56;
+}
+.workspace-page:has(.workspace-inspector:not([hidden]))
+  .workspace-repo-stopped
+  .workspace-depth-toggle {
+  border-top-color: rgba(255, 255, 255, 0.035);
+  background: #191919;
+}
+.workspace-page:has(.workspace-inspector:not([hidden]))
+  .workspace-repo-stopped
+  .workspace-depth-chevron {
+  opacity: 0.3;
+}
 .workspace-depth-toggle:focus-visible {
   position: relative;
   z-index: 1;
@@ -1539,6 +1569,17 @@ body.workspace-reordering {
     .workspace-depth-toggle:hover
     .workspace-depth-chevron {
     opacity: 0.62;
+  }
+  .workspace-page:has(.workspace-inspector:not([hidden]))
+    .workspace-depth-toggle:hover
+    .workspace-depth-chevron {
+    opacity: 0.82;
+  }
+  .workspace-page:has(.workspace-inspector:not([hidden]))
+    .workspace-repo-stopped
+    .workspace-depth-toggle:hover
+    .workspace-depth-chevron {
+    opacity: 0.58;
   }
 }
 .workspace-repo-error {
