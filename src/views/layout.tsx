@@ -1324,53 +1324,56 @@ a.workspace-repo-name:hover {
   background: rgba(86, 156, 214, 0.08);
 }
 .workspace-timeline {
-  padding: 5px 0 6px;
+  padding: 2px 0 5px;
 }
-.workspace-timeline-row {
+.workspace-worktree-summary {
   width: 100%;
-  height: 30px;
+  min-height: 33px;
   min-width: 0;
   margin: 0;
-  padding: 0 9px 0 8px;
+  padding: 6px 10px 6px 12px;
   border: 0;
+  border-bottom: 1px solid var(--border);
   border-left: 2px solid transparent;
   border-radius: 0;
-  background: transparent;
-  color: inherit;
+  background: #252526;
+  color: var(--muted);
   font: inherit;
   text-align: left;
   cursor: pointer;
   display: flex;
   align-items: center;
+  gap: 8px;
 }
-.workspace-timeline-row:hover {
-  background: rgba(255, 255, 255, 0.045);
+.workspace-worktree-summary:hover {
+  background: rgba(255, 255, 255, 0.035);
+  color: var(--fg);
 }
-.workspace-timeline-row:focus-visible {
+.workspace-worktree-summary:focus-visible {
   position: relative;
   z-index: 1;
   outline: 1px solid var(--accent);
   outline-offset: -2px;
 }
-.workspace-timeline-row.workspace-row-selected {
+.workspace-worktree-summary.workspace-row-selected {
   border-left-color: var(--accent);
   background: rgba(86, 156, 214, 0.13);
 }
-.workspace-graph-prefix {
-  flex: 0 0 auto;
-  align-self: stretch;
-  display: flex;
-  align-items: center;
-}
-.workspace-graph-prefix svg {
-  display: block;
-  overflow: visible;
-}
-.workspace-worktree-row {
-  color: var(--muted);
-}
-.workspace-worktree-row.workspace-worktree-dirty {
+.workspace-worktree-summary.workspace-worktree-dirty {
   color: var(--fg);
+}
+.workspace-worktree-indicator {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
+  border: 1.5px solid var(--graph-rail-muted);
+  border-radius: 50%;
+}
+.workspace-worktree-dirty .workspace-worktree-indicator {
+  border: 0;
+  border-radius: 1px;
+  background: var(--accent);
+  transform: rotate(45deg);
 }
 .workspace-worktree-label {
   min-width: 0;
@@ -1393,79 +1396,16 @@ a.workspace-repo-name:hover {
   font-size: 9px;
   white-space: nowrap;
 }
-.workspace-commit-content {
-  min-width: 0;
-  flex: 1;
-  height: 28px;
-  padding: 2px 0;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
+.workspace-timeline .log-lines {
+  padding: 3px 0;
 }
-.workspace-commit-topline,
-.workspace-commit-meta {
-  min-width: 0;
-  display: flex;
-  align-items: center;
+.workspace-repo-card .log-row {
+  padding-left: 10px;
+  padding-right: 10px;
 }
-.workspace-commit-topline {
-  gap: 8px;
-  line-height: 14px;
-}
-.workspace-commit-subject {
-  min-width: 0;
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--fg);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  font-size: 11px;
-}
-.workspace-head-row .workspace-commit-subject {
-  color: #fff;
-  font-weight: 650;
-}
-.workspace-commit-age {
-  flex: 0 0 auto;
-  color: var(--muted);
-  font-size: 9px;
-}
-.workspace-commit-meta {
-  height: 11px;
-  gap: 4px;
-  color: var(--muted);
-}
-.workspace-ref-pill {
-  max-width: 112px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: #9ccff2;
-  font-size: 9px;
-}
-.workspace-ref-pill + .workspace-ref-pill::before {
-  content: '·';
-  margin-right: 4px;
-  color: var(--graph-rail-muted);
-}
-.workspace-ref-more {
-  color: var(--muted);
-  font-size: 9px;
-}
-.workspace-commit-sha {
-  margin-left: auto;
-  color: #6f6f6f;
-  font-family: inherit;
-  font-size: 8px;
-}
-.workspace-unreachable-row {
-  opacity: 0.58;
-}
-.workspace-no-commits {
-  padding: 8px 12px;
-  color: var(--muted);
-  font-size: 11px;
+.workspace-repo-card .log-row.workspace-row-selected {
+  box-shadow: inset 3px 0 0 0 var(--accent);
+  background: rgba(86, 156, 214, 0.14);
 }
 .workspace-repo-error {
   min-height: 120px;

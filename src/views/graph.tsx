@@ -468,6 +468,7 @@ function RefPills(props: {
   branchPrefix: string | null
   currentBranch: string | null
   laneColor: string
+  readonly?: boolean
 }) {
   const tokens = decorationTokens(props.decorateRaw)
   if (tokens.length === 0) return null
@@ -503,7 +504,7 @@ function RefPills(props: {
               </>
             ) : null}
             <CopyBtn title="copy name" />
-            {ref === props.currentBranch ? (
+            {props.readonly ? null : ref === props.currentBranch ? (
               peer ? null : (
                 <button
                   type="button"
@@ -561,6 +562,10 @@ function GraphCommitLine(props: {
   currentBranch: string | null
   laneLayout: GraphLaneLayoutRow
   gutterCols: number
+  readonly?: boolean
+  diffUrl?: string
+  diffTarget?: string
+  workspaceRepoPath?: string
 }) {
   const {
     shaFull,
@@ -578,7 +583,8 @@ function GraphCommitLine(props: {
   const laneColor = physicalLaneColor(props.laneLayout.lane)
   const tint = laneTintStyle(laneColor)
   const ageTitle = [author, date].filter(Boolean).join(' · ')
-  const diffUrl = `/api/commit/${encodeURIComponent(shaFull)}`
+  const diffUrl =
+    props.diffUrl ?? `/api/commit/${encodeURIComponent(shaFull)}`
   const cls = [
     'log-row',
     'log-row-commit',
@@ -589,7 +595,12 @@ function GraphCommitLine(props: {
     .join(' ')
 
   return (
-    <div class={cls} data-sha={shaFull}>
+    <div
+      class={cls}
+      data-sha={shaFull}
+      data-workspace-select={props.readonly ? 'commit' : undefined}
+      data-repo={props.workspaceRepoPath}
+    >
       <span class="graph-prefix">
         <GraphLaneSpans
           layout={props.laneLayout}
@@ -618,7 +629,7 @@ function GraphCommitLine(props: {
             </>
           ) : null}
           <CopyBtn title="copy name" />
-          {branchPrefix === props.currentBranch ? (
+          {props.readonly ? null : branchPrefix === props.currentBranch ? (
             branchPrefixPeer ? null : (
               <button
                 type="button"
@@ -652,13 +663,14 @@ function GraphCommitLine(props: {
         branchPrefix={branchPrefix}
         currentBranch={props.currentBranch}
         laneColor={laneColor}
+        readonly={props.readonly}
       />
       <button
         type="button"
         class="msg-btn"
         title={[subject, ageTitle].filter(Boolean).join('\n')}
         hx-get={diffUrl}
-        hx-target="#diff"
+        hx-target={props.diffTarget ?? '#diff'}
         hx-swap="outerHTML"
       >
         {subject}
@@ -676,30 +688,34 @@ function GraphCommitLine(props: {
           {relTimeAgo(date)}
         </span>
         <span class="row-tail">
-          <button
-            type="button"
-            class="row-action-btn"
-            title={`New branch from this commit · git branch … ${shaShort}`}
-            aria-label="new branch"
-            hx-post={`/api/branch/create?sha=${encodeURIComponent(shaFull)}`}
-            hx-target="#graph"
-            hx-swap="outerHTML"
-            hx-prompt="branch name"
-          >
-            {NEW_BRANCH_ICO}
-          </button>
-          <button
-            type="button"
-            class="row-action-btn"
-            title={`Checkout this commit · git switch --detach ${shaShort}`}
-            aria-label="checkout"
-            data-confirm-label="confirm checkout"
-            hx-post={`/api/checkout/commit?sha=${encodeURIComponent(shaFull)}`}
-            hx-target="#graph"
-            hx-swap="outerHTML"
-          >
-            {CHECKOUT_ICO}
-          </button>
+          {props.readonly ? null : (
+            <>
+              <button
+                type="button"
+                class="row-action-btn"
+                title={`New branch from this commit · git branch … ${shaShort}`}
+                aria-label="new branch"
+                hx-post={`/api/branch/create?sha=${encodeURIComponent(shaFull)}`}
+                hx-target="#graph"
+                hx-swap="outerHTML"
+                hx-prompt="branch name"
+              >
+                {NEW_BRANCH_ICO}
+              </button>
+              <button
+                type="button"
+                class="row-action-btn"
+                title={`Checkout this commit · git switch --detach ${shaShort}`}
+                aria-label="checkout"
+                data-confirm-label="confirm checkout"
+                hx-post={`/api/checkout/commit?sha=${encodeURIComponent(shaFull)}`}
+                hx-target="#graph"
+                hx-swap="outerHTML"
+              >
+                {CHECKOUT_ICO}
+              </button>
+            </>
+          )}
           <code class="hash-peek" title={shaFull}>
             {shaShort}
           </code>
@@ -836,6 +852,10 @@ export function GraphRows(props: {
   stashes: PreviewStashEntry[]
   laneLayoutByRow: GraphLaneLayoutRow[]
   gutterCols: number
+  readonly?: boolean
+  workspaceRepoPath?: string
+  diffUrlForSha?: (sha: string) => string
+  diffTarget?: string
 }) {
   const stashesByBase = new Map<string, PreviewStashEntry[]>()
   for (const stash of props.stashes) {
@@ -867,6 +887,10 @@ export function GraphRows(props: {
               currentBranch={props.currentBranch}
               laneLayout={laneLayout}
               gutterCols={props.gutterCols}
+              readonly={props.readonly}
+              workspaceRepoPath={props.workspaceRepoPath}
+              diffUrl={props.diffUrlForSha?.(r.row.shaFull)}
+              diffTarget={props.diffTarget}
             />
           </>
         )

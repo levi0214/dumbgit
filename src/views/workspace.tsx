@@ -1,9 +1,7 @@
 /** @jsxImportSource hono/jsx */
 import path from 'node:path'
-import { decorationTokens } from '../decorations'
 import type {
   CommitSummary,
-  GraphCommitRow,
   GraphRow,
   HeadInfo,
   WorkTreeChangeKind,
@@ -11,11 +9,9 @@ import type {
   WorkTreeSummary,
 } from '../git'
 import {
-  GraphLaneSpans,
-  graphCommitIsHead,
+  GraphRows,
   graphLaneGutterCols,
   graphLaneLayout,
-  relTimeAgo,
 } from './graph'
 import { DiffPanel, DiffPatchBody } from './diff'
 
@@ -70,140 +66,6 @@ function changeTotals(worktree: WorkTreeSummary): {
     deleted += entry.deleted ?? 0
   }
   return { files: paths.size, added, deleted }
-}
-
-function compactRefs(row: GraphCommitRow): string[] {
-  const tokens = decorationTokens(row.decorateRaw)
-  const locals = tokens.filter((token) => token.kind === 'local')
-  const remotes = tokens.filter(
-    (token) => token.kind === 'remote' && !token.name.endsWith('/HEAD'),
-  )
-  const tags = tokens.filter((token) => token.kind === 'tag')
-  const usedRemote = new Set<string>()
-  const refs: string[] = []
-
-  for (const local of locals) {
-    const peer = remotes.find((remote) =>
-      remote.name.endsWith(`/${local.name}`),
-    )
-    if (peer) {
-      usedRemote.add(peer.name)
-      refs.push(`${local.name} | ${peer.name.split('/')[0]}`)
-    } else {
-      refs.push(local.name)
-    }
-  }
-  for (const remote of remotes) {
-    if (!usedRemote.has(remote.name)) refs.push(remote.name)
-  }
-  for (const tag of tags) refs.push(`#${tag.name}`)
-  return refs
-}
-
-function WorkspaceRail(props: {
-  gutterCols: number
-  dirty: boolean
-}) {
-  const width = props.gutterCols * 8
-  const height = 30
-  const x = 4
-  const mid = height / 2
-  return (
-    <svg
-      class="workspace-rail-svg"
-      viewBox={`0 0 ${width} ${height}`}
-      style={`width:${width}px;height:${height}px`}
-      aria-hidden="true"
-      focusable="false"
-    >
-      <line
-        x1={x}
-        y1={mid}
-        x2={x}
-        y2={height + 4}
-        stroke={props.dirty ? 'var(--accent)' : 'var(--graph-rail-muted)'}
-        stroke-width="1.8"
-        stroke-linecap="round"
-      />
-      {props.dirty ? (
-        <rect
-          x={x - 3.5}
-          y={mid - 3.5}
-          width="7"
-          height="7"
-          rx="1.2"
-          transform={`rotate(45 ${x} ${mid})`}
-          fill="var(--accent)"
-        />
-      ) : (
-        <circle
-          cx={x}
-          cy={mid}
-          r="3.2"
-          fill="var(--bg)"
-          stroke="var(--graph-rail-muted)"
-          stroke-width="1.6"
-        />
-      )}
-    </svg>
-  )
-}
-
-function WorkspaceCommit(props: {
-  repoPath: string
-  row: GraphCommitRow
-  layout: ReturnType<typeof graphLaneLayout>['rows'][number]
-  gutterCols: number
-  detached: boolean
-}) {
-  const refs = compactRefs(props.row)
-  const visibleRefs = refs.slice(0, 2)
-  const hiddenRefs = Math.max(0, refs.length - visibleRefs.length)
-  const isHead = graphCommitIsHead(props.row.decorateRaw)
-  const url =
-    `/workspace/commit?repo=${repoQuery(props.repoPath)}` +
-    `&sha=${encodeURIComponent(props.row.shaFull)}`
-
-  return (
-    <button
-      type="button"
-      class={`workspace-timeline-row workspace-commit-row${isHead ? ' workspace-head-row' : ''}${props.row.inHistory ? '' : ' workspace-unreachable-row'}`}
-      data-workspace-select="commit"
-      data-repo={props.repoPath}
-      data-sha={props.row.shaFull}
-      title={`${props.row.subject}\n${props.row.author} · ${props.row.date}`}
-      hx-get={url}
-      hx-target="#workspace-inspector"
-      hx-swap="outerHTML"
-    >
-      <span class="workspace-graph-prefix">
-        <GraphLaneSpans
-          layout={props.layout}
-          gutterCols={props.gutterCols}
-          isHead={isHead}
-          isDetached={isHead && props.detached}
-          rowHeight={30}
-        />
-      </span>
-      <span class="workspace-commit-content">
-        <span class="workspace-commit-topline">
-          <span class="workspace-commit-subject">{props.row.subject}</span>
-          <span class="workspace-commit-age">{relTimeAgo(props.row.date)}</span>
-        </span>
-        <span class="workspace-commit-meta">
-          {visibleRefs.map((ref) => (
-            <span class="workspace-ref-pill" title={ref}>
-              {ref}
-            </span>
-          ))}
-          {hiddenRefs > 0 ? (
-            <span class="workspace-ref-more">+{hiddenRefs}</span>
-          ) : null}
-          <code class="workspace-commit-sha">{props.row.shaShort}</code>
-        </span>
-      </span>
-    </button>
-  )
 }
 
 function WorkspaceRepoCard(props: {
@@ -270,49 +132,56 @@ function WorkspaceRepoCard(props: {
         </a>
       </div>
 
-      <div class="workspace-timeline">
-        <button
-          type="button"
-          class={`workspace-timeline-row workspace-worktree-row${dirty ? ' workspace-worktree-dirty' : ''}`}
-          data-workspace-select="worktree"
-          data-repo={repo.repoPath}
-          hx-get={worktreeUrl}
-          hx-target="#workspace-inspector"
-          hx-swap="outerHTML"
-        >
-          <span class="workspace-graph-prefix">
-            <WorkspaceRail gutterCols={gutterCols} dirty={dirty} />
-          </span>
-          <span class="workspace-worktree-label">
-            <span>{dirty ? 'Uncommitted changes' : 'Working tree clean'}</span>
-            {dirty ? (
-              <span class="workspace-worktree-stats">
-                {totals.files} files
-                {totals.added > 0 ? (
-                  <span class="file-num-add"> +{totals.added}</span>
-                ) : null}
-                {totals.deleted > 0 ? (
-                  <span class="file-num-del"> −{totals.deleted}</span>
-                ) : null}
-              </span>
-            ) : null}
-          </span>
-        </button>
+      <button
+        type="button"
+        class={`workspace-worktree-summary${dirty ? ' workspace-worktree-dirty' : ''}`}
+        data-workspace-select="worktree"
+        data-repo={repo.repoPath}
+        hx-get={worktreeUrl}
+        hx-target="#workspace-inspector"
+        hx-swap="outerHTML"
+      >
+        <span class="workspace-worktree-indicator" aria-hidden="true"></span>
+        <span class="workspace-worktree-label">
+          <span>{dirty ? 'Uncommitted changes' : 'Working tree clean'}</span>
+          {dirty ? (
+            <span class="workspace-worktree-stats">
+              {totals.files} files
+              {totals.added > 0 ? (
+                <span class="file-num-add"> +{totals.added}</span>
+              ) : null}
+              {totals.deleted > 0 ? (
+                <span class="file-num-del"> −{totals.deleted}</span>
+              ) : null}
+            </span>
+          ) : null}
+        </span>
+      </button>
 
-        {repo.rows.length > 0 ? (
-          repo.rows.map((item, index) => (
-            <WorkspaceCommit
-              key={item.row.shaFull}
-              repoPath={repo.repoPath}
-              row={item.row}
-              layout={laneLayout.rows[index]!}
-              gutterCols={gutterCols}
+      <div class="workspace-timeline">
+        <div class={`log-lines${repo.rows.length === 0 ? ' empty' : ''}`}>
+          {repo.rows.length > 0 ? (
+            <GraphRows
+              rows={repo.rows}
               detached={repo.head.kind === 'detached'}
+              currentBranch={
+                repo.head.kind === 'branch' ? repo.head.name : null
+              }
+              stashes={[]}
+              laneLayoutByRow={laneLayout.rows}
+              gutterCols={gutterCols}
+              readonly
+              workspaceRepoPath={repo.repoPath}
+              diffTarget="#workspace-inspector"
+              diffUrlForSha={(sha) =>
+                `/workspace/commit?repo=${repoQuery(repo.repoPath)}` +
+                `&sha=${encodeURIComponent(sha)}`
+              }
             />
-          ))
-        ) : (
-          <div class="workspace-no-commits">(no commits yet)</div>
-        )}
+          ) : (
+            '(no commits yet)'
+          )}
+        </div>
       </div>
     </article>
   )
