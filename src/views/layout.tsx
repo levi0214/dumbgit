@@ -1584,11 +1584,61 @@ body.workspace-reordering {
 .workspace-inspector > .diff-panel {
   border-radius: 0 0 6px 6px;
 }
+.workspace-inspector .diff-patch-placeholder {
+  height: 100%;
+  min-height: 88px;
+  padding: 18px;
+  color: var(--muted);
+  font-size: 11px;
+  display: grid;
+  place-items: center;
+  text-align: center;
+}
 .workspace-file-kind {
   width: 54px;
   flex: 0 0 auto;
   color: var(--muted);
   font-size: 9px;
+}
+
+@media (min-width: 900px) {
+  .workspace-inspector > .diff-panel.diff-summary {
+    display: grid;
+    grid-template-columns: clamp(260px, 24vw, 420px) minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+    overflow: hidden;
+  }
+  .workspace-inspector > .diff-panel.diff-summary > .diff-head {
+    grid-column: 1 / -1;
+    min-width: 0;
+  }
+  .workspace-inspector > .diff-panel.diff-summary > .diff-files-block {
+    grid-column: 1;
+    grid-row: 2;
+    min-width: 0;
+    min-height: 0;
+    overflow: auto;
+    border-right: 1px solid var(--border);
+    border-bottom: 0;
+    background: #232324;
+    scrollbar-gutter: stable;
+  }
+  .workspace-inspector > .diff-panel.diff-summary > .diff-patch-slot {
+    grid-column: 2;
+    grid-row: 2;
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
+    overflow: auto;
+    border-top: 0;
+    scrollbar-gutter: stable;
+  }
+  .workspace-inspector
+    > .diff-panel.diff-summary
+    > .diff-patch-slot:not(:empty) {
+    border-top: 0;
+  }
 }
 
 @media (max-width: 760px) {

@@ -144,4 +144,37 @@ describe('workspace states', () => {
     )
     expect(inspector).toContain('workspace-inspector-close')
   })
+
+  test('gives the workspace inspector a file-detail split view', () => {
+    const inspector = renderToString(
+      WorkspaceCommitInspector({
+        repoPath: '/tmp/example',
+        sha: 'a'.repeat(40),
+        summary: {
+          ok: true,
+          value: {
+            subject: 'show a useful diff',
+            author: 'Test Author',
+            date: '2026-07-18T12:00:00+08:00',
+            tags: [],
+            files: [
+              {
+                status: 'M',
+                path: 'src/example.ts',
+                added: 2,
+                deleted: 1,
+              },
+            ],
+          },
+        },
+      }),
+    )
+
+    expect(inspector).toContain('class="diff-files-block"')
+    expect(inspector).toContain('id="diff-patch-slot"')
+    expect(inspector).toContain('Select a file to view its diff')
+    expect(inspector.indexOf('diff-files-block')).toBeLessThan(
+      inspector.indexOf('diff-patch-slot'),
+    )
+  })
 })

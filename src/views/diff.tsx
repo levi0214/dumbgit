@@ -23,6 +23,7 @@ export type DiffPanelProps =
       sha: string
       summary: CommitSummary
       fileUrlBase?: string
+      patchPlaceholder?: string
     }
   | { state: 'error'; sha: string; stderr: string }
 
@@ -310,7 +311,13 @@ export function DiffPanel(props: DiffPanelProps) {
         )}
       </div>
 
-      <div id="diff-patch-slot" class="diff-patch-slot"></div>
+      <div id="diff-patch-slot" class="diff-patch-slot">
+        {props.patchPlaceholder ? (
+          <div class="diff-patch-placeholder">
+            {props.patchPlaceholder}
+          </div>
+        ) : null}
+      </div>
     </div>
   )
 }

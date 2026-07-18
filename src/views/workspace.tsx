@@ -472,6 +472,7 @@ export function WorkspaceCommitInspector(props: {
           `/workspace/commit/file?repo=${repoQuery(props.repoPath)}` +
           `&sha=${encodeURIComponent(props.sha)}`
         }
+        patchPlaceholder="Select a file to view its diff"
       />
     </section>
   )
@@ -558,7 +559,13 @@ export function WorkspaceWorktreeInspector(props: {
             <div class="diff-files-empty">(no local changes)</div>
           )}
         </div>
-        <div id="diff-patch-slot" class="diff-patch-slot"></div>
+        <div id="diff-patch-slot" class="diff-patch-slot">
+          <div class="diff-patch-placeholder">
+            {entries.length > 0
+              ? 'Select a file to view its diff'
+              : 'No local changes to inspect'}
+          </div>
+        </div>
       </div>
     </section>
   )
