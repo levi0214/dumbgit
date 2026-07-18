@@ -30,6 +30,7 @@ import {
   workTreeFileAbsolutePath,
   workTreeFilePatch,
   workTreeSummary,
+  workspaceRepoFingerprint,
 } from './git'
 import { createIdleExit } from './idle-exit'
 import {
@@ -66,6 +67,7 @@ const HEALTH_BODY = 'dumbgit ok'
 /** Same scan range as `bin/dumbgit` allocatePort (implicit port only). */
 const PORT_PROBE_LO = 7777
 const PORT_PROBE_HI = 7900
+const WORKSPACE_FULL_PORT_SCAN_MS = 30_000
 
 /** Initial / expanded `git log -n` depth (ASCII graph needs full re-fetch each time). */
 const GRAPH_COMMIT_DEFAULT = 50
@@ -208,6 +210,7 @@ type WorkspaceRepoSource = {
   isHost: boolean
   port?: number
   url?: string
+  revision?: number
 }
 
 function clampWorkspaceCommitLimit(raw?: string): number {
@@ -235,6 +238,7 @@ async function probeWorkspaceInstance(
       name?: unknown
       repo?: unknown
       port?: unknown
+      revision?: unknown
     }
     if (
       data.ok !== true ||
@@ -250,6 +254,11 @@ async function probeWorkspaceInstance(
       isHost: port === state.listenPort,
       port,
       url: `http://${LISTEN_HOST}:${port}`,
+      revision:
+        typeof data.revision === 'number' &&
+        Number.isFinite(data.revision)
+          ? data.revision
+          : undefined,
     }
   } catch {
     return null
@@ -258,22 +267,42 @@ async function probeWorkspaceInstance(
   }
 }
 
-async function discoverWorkspaceRepos(): Promise<WorkspaceRepoSource[]> {
-  const ports = Array.from(
-    { length: PORT_PROBE_HI - PORT_PROBE_LO + 1 },
-    (_, index) => PORT_PROBE_LO + index,
-  )
+async function discoverWorkspaceRepos(
+  options: { forceFullScan?: boolean } = {},
+): Promise<WorkspaceRepoSource[]> {
+  const now = Date.now()
+  const shouldFullScan =
+    options.forceFullScan ||
+    state.workspaceLastFullScanAt === undefined ||
+    now - state.workspaceLastFullScanAt >= WORKSPACE_FULL_PORT_SCAN_MS
+  const ports = shouldFullScan
+    ? Array.from(
+        { length: PORT_PROBE_HI - PORT_PROBE_LO + 1 },
+        (_, index) => PORT_PROBE_LO + index,
+      )
+    : [
+        ...new Set(
+          [...state.workspaceRepos.values()]
+            .filter((source) => source.port !== undefined)
+            .map((source) => source.port as number),
+        ),
+      ]
   const live = (await Promise.all(ports.map(probeWorkspaceInstance))).filter(
     (repo): repo is WorkspaceRepoSource => repo !== null,
   )
+  if (shouldFullScan) state.workspaceLastFullScanAt = now
   const history = readRepoHistory()
   const rememberedPaths = new Set(history.map((entry) => entry.repoPath))
   const byPath = new Map<string, WorkspaceRepoSource>()
   for (const entry of history) {
+    const previous = state.workspaceRepos.get(entry.repoPath)
     byPath.set(entry.repoPath, {
       repoPath: entry.repoPath,
       running: false,
       isHost: false,
+      // Retry a known port after a transient health miss. A full scan clears
+      // stale ports, so stopped instances do not accumulate probes forever.
+      port: shouldFullScan ? undefined : previous?.port,
     })
   }
   for (const repo of live) {
@@ -290,6 +319,7 @@ async function discoverWorkspaceRepos(): Promise<WorkspaceRepoSource[]> {
       isHost: true,
       port: currentPort,
       url: `http://${LISTEN_HOST}:${currentPort}`,
+      revision: state.lastChange,
     })
   }
 
@@ -303,9 +333,15 @@ async function discoverWorkspaceRepos(): Promise<WorkspaceRepoSource[]> {
 
 async function loadWorkspace(
   limit: number,
-  options: { refreshStopped?: boolean } = {},
+  options: {
+    refreshStopped?: boolean
+    forceDiscovery?: boolean
+    forceRefresh?: boolean
+  } = {},
 ): Promise<WorkspaceRepoSnapshot[]> {
-  const repos = await discoverWorkspaceRepos()
+  const repos = await discoverWorkspaceRepos({
+    forceFullScan: options.forceDiscovery,
+  })
   return Promise.all(
     repos.map(async (source): Promise<WorkspaceRepoSnapshot> => {
       const cached = state.workspaceSnapshots.get(source.repoPath)
@@ -319,6 +355,32 @@ async function loadWorkspace(
           repoPath: source.repoPath,
           url: source.url,
           running: false,
+          isHost: source.isHost,
+        }
+      }
+
+      let fingerprint: string | undefined
+      if (source.running) {
+        try {
+          fingerprint = await workspaceRepoFingerprint(source.repoPath)
+        } catch {
+          // Fall through to the full read so its existing error UI is used.
+        }
+      }
+      if (
+        source.running &&
+        !options.forceRefresh &&
+        source.revision !== undefined &&
+        cached?.limit === limit &&
+        cached.revision === source.revision &&
+        cached.fingerprint === fingerprint &&
+        cached.snapshot.ok
+      ) {
+        return {
+          ...cached.snapshot,
+          repoPath: source.repoPath,
+          url: source.url,
+          running: true,
           isHost: source.isHost,
         }
       }
@@ -348,7 +410,12 @@ async function loadWorkspace(
             error instanceof Error ? error.message : String(error),
         }
       }
-      state.workspaceSnapshots.set(source.repoPath, { limit, snapshot })
+      state.workspaceSnapshots.set(source.repoPath, {
+        limit,
+        snapshot,
+        revision: source.revision,
+        fingerprint,
+      })
       return snapshot
     }),
   )
@@ -392,8 +459,14 @@ type DumbgitState = {
   /** Last rendered snapshot; stopped repositories do not refresh on polling. */
   workspaceSnapshots: Map<
     string,
-    { limit: number; snapshot: WorkspaceRepoSnapshot }
+    {
+      limit: number
+      snapshot: WorkspaceRepoSnapshot
+      revision?: number
+      fingerprint?: string
+    }
   >
+  workspaceLastFullScanAt?: number
   closeWatch?: () => void
   server?: ReturnType<typeof Bun.serve>
   repoInitialized?: boolean
@@ -526,6 +599,7 @@ app.get('/healthz.json', (c) => {
           repo: getCurrentRepo(),
           pid: process.pid,
           port,
+          revision: state.lastChange,
         },
     200,
   )
@@ -584,7 +658,11 @@ app.get('/workspace', async (c) => {
     return c.redirect(url)
   }
   const limit = clampWorkspaceCommitLimit(c.req.query('limit'))
-  const repos = await loadWorkspace(limit, { refreshStopped: true })
+  const repos = await loadWorkspace(limit, {
+    refreshStopped: true,
+    forceDiscovery: true,
+    forceRefresh: true,
+  })
   return c.html(
     <Layout title="dumbgit: Workspace">
       <WorkspaceView
@@ -657,7 +735,7 @@ app.post('/workspace/repo/start', async (c) => {
       if (!result.ok) controlError = result.stderr
     }
   }
-  const repos = await loadWorkspace(limit)
+  const repos = await loadWorkspace(limit, { forceDiscovery: true })
   return c.html(
     <WorkspaceBoard
       repos={repos}
@@ -686,7 +764,7 @@ app.post('/workspace/repo/stop', async (c) => {
       if (!result.ok) controlError = result.stderr
     }
   }
-  const repos = await loadWorkspace(limit)
+  const repos = await loadWorkspace(limit, { forceDiscovery: true })
   return c.html(
     <WorkspaceBoard
       repos={repos}

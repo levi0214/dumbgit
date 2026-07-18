@@ -1,4 +1,4 @@
-import { existsSync, realpathSync } from 'node:fs'
+import { existsSync, realpathSync, statSync } from 'node:fs'
 import path from 'node:path'
 
 // Core repo state and git process helpers.
@@ -66,6 +66,61 @@ async function spawnGit(
 export async function isGitRepo(dir: string): Promise<boolean> {
   const { code } = await spawnGit(['rev-parse', '--git-dir'], dir)
   return code === 0
+}
+
+/**
+ * Cheap workspace change token.
+ *
+ * `git status` detects state/path changes; file stats also detect subsequent
+ * edits while a path remains in the same ` M` / `??` porcelain state.
+ * Ignored files are absent, so build output does not invalidate snapshots.
+ */
+export async function workspaceRepoFingerprint(
+  cwd = repoRoot,
+): Promise<string> {
+  const status = await spawnGit(
+    ['status', '--porcelain=v1', '-z', '--untracked-files=all'],
+    cwd,
+  )
+  if (status.code !== 0) {
+    throw new GitError(
+      status.stderr.trim() || `git status failed (${status.code})`,
+      status.code,
+    )
+  }
+
+  const records = status.stdout.split('\0')
+  const paths = new Set<string>()
+  for (let i = 0; i < records.length; i++) {
+    const record = records[i] ?? ''
+    if (record.length < 4) continue
+    const mark = record.slice(0, 2)
+    const filePath = record.slice(3)
+    if (filePath) paths.add(filePath)
+    if (mark.includes('R') || mark.includes('C')) {
+      const previousPath = records[++i] ?? ''
+      if (previousPath) paths.add(previousPath)
+    }
+  }
+
+  const root = path.resolve(cwd)
+  const stats: string[] = []
+  for (const filePath of [...paths].sort()) {
+    const absolute = path.resolve(root, filePath)
+    const insideRoot =
+      absolute === root || absolute.startsWith(`${root}${path.sep}`)
+    if (!insideRoot) continue
+    try {
+      const stat = statSync(absolute)
+      stats.push(
+        `${filePath}\x1f${stat.size}\x1f${stat.mtimeMs}\x1f${stat.ctimeMs}`,
+      )
+    } catch {
+      stats.push(`${filePath}\x1fmissing`)
+    }
+  }
+
+  return `${status.stdout}\x1e${stats.join('\x1e')}`
 }
 
 async function gitOrThrow(args: string[]): Promise<string> {

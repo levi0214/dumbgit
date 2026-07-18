@@ -9,6 +9,7 @@ import {
   logGraphRows,
   workTreeFilePatch,
   workTreeSummary,
+  workspaceRepoFingerprint,
 } from '../src/git'
 import {
   WorkspaceCommitInspector,
@@ -86,6 +87,23 @@ describe('workspace git reads', () => {
     const patch = await workTreeFilePatch('unstaged', 'note.txt', second)
     expect(patch.ok).toBe(true)
     if (patch.ok) expect(patch.patch).toContain('+changed in second')
+  })
+
+  test('changes the workspace fingerprint for repeated working tree edits', async () => {
+    const repo = tempRepo('fingerprint repository')
+    const clean = await workspaceRepoFingerprint(repo)
+
+    writeFileSync(path.join(repo, 'note.txt'), 'first working tree edit\n')
+    const firstEdit = await workspaceRepoFingerprint(repo)
+
+    writeFileSync(
+      path.join(repo, 'note.txt'),
+      'second working tree edit with a different size\n',
+    )
+    const secondEdit = await workspaceRepoFingerprint(repo)
+
+    expect(firstEdit).not.toBe(clean)
+    expect(secondEdit).not.toBe(firstEdit)
   })
 })
 
