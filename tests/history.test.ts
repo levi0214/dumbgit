@@ -10,10 +10,11 @@ import path from 'node:path'
 import {
   readRepoHistory,
   rememberRepo,
+  reorderRepoHistory,
   repoHistoryPath,
 } from '../src/history'
 
-test('remembers canonical repository paths without duplicates', () => {
+test('remembers and reorders canonical repository paths', () => {
   const root = mkdtempSync(path.join(os.tmpdir(), 'dumbgit-history-'))
   const historyFile = path.join(root, 'state', 'repos.json')
   const first = path.join(root, 'first')
@@ -31,14 +32,20 @@ test('remembers canonical repository paths without duplicates', () => {
     rememberRepo(first)
     rememberRepo(second)
     expect(readRepoHistory().map((entry) => entry.repoPath)).toEqual([
-      realpathSync(second),
       realpathSync(first),
+      realpathSync(second),
     ])
 
     rememberRepo(first)
     expect(readRepoHistory().map((entry) => entry.repoPath)).toEqual([
       realpathSync(first),
       realpathSync(second),
+    ])
+
+    reorderRepoHistory([realpathSync(second), realpathSync(first)])
+    expect(readRepoHistory().map((entry) => entry.repoPath)).toEqual([
+      realpathSync(second),
+      realpathSync(first),
     ])
   } finally {
     if (previous === undefined) delete process.env.DUMBGIT_HISTORY_FILE

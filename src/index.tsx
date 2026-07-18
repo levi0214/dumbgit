@@ -32,7 +32,11 @@ import {
   workTreeSummary,
 } from './git'
 import { createIdleExit } from './idle-exit'
-import { readRepoHistory, rememberRepo } from './history'
+import {
+  readRepoHistory,
+  rememberRepo,
+  reorderRepoHistory,
+} from './history'
 import { watchGitRefs } from './watch'
 import {
   GraphFragment,
@@ -52,6 +56,7 @@ import {
   WorkspaceView,
   WorkspaceWorktreeInspector,
   type WorkspaceRepoSnapshot,
+  workspaceSafeRepoText,
 } from './views/workspace'
 
 const LISTEN_HOST = '127.0.0.1'
@@ -293,12 +298,7 @@ async function discoverWorkspaceRepos(): Promise<WorkspaceRepoSource[]> {
     state.workspaceRepos.set(source.repoPath, source)
   }
 
-  return [...byPath.values()].sort((a, b) => {
-    const byName = path
-      .basename(a.repoPath)
-      .localeCompare(path.basename(b.repoPath))
-    return byName || a.repoPath.localeCompare(b.repoPath)
-  })
+  return [...byPath.values()]
 }
 
 async function loadWorkspace(
@@ -611,6 +611,35 @@ app.get('/fragment/workspace', async (c) => {
   )
 })
 
+app.post('/workspace/repo/reorder', async (c) => {
+  let body: unknown
+  try {
+    body = await c.req.json()
+  } catch {
+    return c.json({ ok: false, error: 'invalid_json' }, 400)
+  }
+  const repoPaths =
+    body &&
+    typeof body === 'object' &&
+    'repos' in body &&
+    Array.isArray(body.repos)
+      ? body.repos
+      : null
+  if (
+    !repoPaths ||
+    repoPaths.some((repoPath) => typeof repoPath !== 'string')
+  ) {
+    return c.json({ ok: false, error: 'invalid_repositories' }, 400)
+  }
+
+  const ordered = [...new Set(repoPaths as string[])]
+  if (ordered.some((repoPath) => !state.workspaceRepos.has(repoPath))) {
+    return c.json({ ok: false, error: 'unknown_repository' }, 400)
+  }
+  reorderRepoHistory(ordered)
+  return c.body(null, 204)
+})
+
 app.post('/workspace/repo/start', async (c) => {
   c.header('Cache-Control', 'no-store')
   const limit = clampWorkspaceCommitLimit(c.req.query('limit'))
@@ -718,7 +747,9 @@ app.get('/workspace/commit/file', async (c) => {
   const summary = await commitSummary(sha, {}, repoPath)
   if (!summary.ok) {
     return c.html(
-      <pre class="diff-body diff-patch-error">{summary.stderr}</pre>,
+      <pre class="diff-body diff-patch-error">
+        {workspaceSafeRepoText(summary.stderr, repoPath)}
+      </pre>,
       200,
     )
   }
@@ -730,7 +761,9 @@ app.get('/workspace/commit/file', async (c) => {
   )
   if (!patch.ok) {
     return c.html(
-      <pre class="diff-body diff-patch-error">{patch.stderr}</pre>,
+      <pre class="diff-body diff-patch-error">
+        {workspaceSafeRepoText(patch.stderr, repoPath)}
+      </pre>,
       200,
     )
   }
@@ -780,7 +813,9 @@ app.get('/workspace/worktree/file', async (c) => {
   const patch = await workTreeFilePatch(kind, filePath, repoPath)
   if (!patch.ok) {
     return c.html(
-      <pre class="diff-body diff-patch-error">{patch.stderr}</pre>,
+      <pre class="diff-body diff-patch-error">
+        {workspaceSafeRepoText(patch.stderr, repoPath)}
+      </pre>,
       200,
     )
   }

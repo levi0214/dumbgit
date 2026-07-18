@@ -1,4 +1,5 @@
 /** @jsxImportSource hono/jsx */
+import os from 'node:os'
 import path from 'node:path'
 import type {
   CommitSummary,
@@ -37,6 +38,41 @@ export type WorkspaceRepoSnapshot =
 
 function repoQuery(repoPath: string): string {
   return encodeURIComponent(repoPath)
+}
+
+export function workspaceRepoParentLabel(
+  repoPath: string,
+  homeDir = os.homedir(),
+): string {
+  const parent = path.dirname(path.resolve(repoPath))
+  const relative = path.relative(homeDir, parent)
+  const insideHome =
+    relative === '' ||
+    (!path.isAbsolute(relative) &&
+      relative !== '..' &&
+      !relative.startsWith(`..${path.sep}`))
+  if (insideHome) {
+    return relative ? `~/${relative.split(path.sep).join('/')}` : '~'
+  }
+
+  const parts = parent.split(path.sep).filter(Boolean)
+  return `…/${parts.slice(-2).join('/')}`
+}
+
+export function workspaceSafeText(
+  text: string,
+  homeDir = os.homedir(),
+): string {
+  return text.split(homeDir).join('~')
+}
+
+export function workspaceSafeRepoText(
+  text: string,
+  repoPath: string,
+): string {
+  const repoLabel =
+    `${workspaceRepoParentLabel(repoPath)}/${path.basename(repoPath)}`
+  return workspaceSafeText(text.split(repoPath).join(repoLabel))
 }
 
 function worktreeEntries(worktree: WorkTreeSummary): Array<{
@@ -81,12 +117,12 @@ function WorkspaceRepoName(props: {
     <a
       class="workspace-repo-name"
       href={props.repoUrl}
-      title={`Open full repository view · ${props.repoPath}`}
+      title={`Open ${name}`}
     >
       {name}
     </a>
   ) : (
-    <span class="workspace-repo-name" title={props.repoPath}>
+    <span class="workspace-repo-name" title={name}>
       {name}
     </span>
   )
@@ -105,6 +141,15 @@ function WorkspaceCardActions(props: {
     `?repo=${repoQuery(props.repoPath)}&limit=${props.limit}`
   return (
     <div class="workspace-card-actions">
+      <button
+        type="button"
+        class="workspace-drag-handle"
+        draggable="true"
+        title={`Drag ${name} to reorder`}
+        aria-label={`Drag ${name} to reorder`}
+      >
+        ⠿
+      </button>
       <button
         type="button"
         class={`workspace-instance-toggle${props.running ? '' : ' is-start'}`}
@@ -143,9 +188,11 @@ function WorkspaceRepoCard(props: {
   if (!props.repo.ok) {
     const repoUrl =
       props.repo.repoPath === props.currentRepo ? '/' : props.repo.url
+    const parentLabel = workspaceRepoParentLabel(props.repo.repoPath)
     return (
       <article
         class={`workspace-repo-card workspace-repo-error${props.repo.running ? '' : ' workspace-repo-stopped'}`}
+        data-workspace-repo={props.repo.repoPath}
       >
         <div class="workspace-card-head">
           <div>
@@ -153,7 +200,9 @@ function WorkspaceRepoCard(props: {
               repoPath={props.repo.repoPath}
               repoUrl={repoUrl}
             />
-            <div class="workspace-repo-path">{props.repo.repoPath}</div>
+            <div class="workspace-repo-path" title={parentLabel}>
+              {parentLabel}
+            </div>
           </div>
           <WorkspaceCardActions
             repoPath={props.repo.repoPath}
@@ -163,7 +212,9 @@ function WorkspaceRepoCard(props: {
             limit={props.limit}
           />
         </div>
-        <pre>{props.repo.stderr}</pre>
+        <pre>
+          {workspaceSafeRepoText(props.repo.stderr, props.repo.repoPath)}
+        </pre>
       </article>
     )
   }
@@ -179,6 +230,7 @@ function WorkspaceRepoCard(props: {
       : `detached · ${repo.head.sha.slice(0, 7)}`
   const repoUrl =
     repo.repoPath === props.currentRepo ? '/' : repo.url
+  const parentLabel = workspaceRepoParentLabel(repo.repoPath)
   const worktreeUrl = `/workspace/worktree?repo=${repoQuery(repo.repoPath)}`
 
   return (
@@ -192,8 +244,8 @@ function WorkspaceRepoCard(props: {
           <span class="workspace-branch" title={branch}>
             {branch}
           </span>
-          <div class="workspace-repo-path" title={repo.repoPath}>
-            {path.dirname(repo.repoPath)}
+          <div class="workspace-repo-path" title={parentLabel}>
+            {parentLabel}
           </div>
         </div>
         <WorkspaceCardActions
@@ -328,7 +380,9 @@ export function WorkspaceBoard(props: {
       data-workspace-limit={String(props.limit)}
     >
       {props.controlError ? (
-        <div class="workspace-control-error">{props.controlError}</div>
+        <div class="workspace-control-error">
+          {workspaceSafeText(props.controlError)}
+        </div>
       ) : null}
       {props.repos.map((repo) => (
         <WorkspaceRepoCard
@@ -390,7 +444,10 @@ export function WorkspaceCommitInspector(props: {
         <DiffPanel
           state="error"
           sha={props.sha}
-          stderr={props.summary.stderr}
+          stderr={workspaceSafeRepoText(
+            props.summary.stderr,
+            props.repoPath,
+          )}
         />
       </section>
     )

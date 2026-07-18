@@ -51,7 +51,9 @@ Opening a repository remembers it in
 `~/Library/Application Support/dumbgit/repos.json`, so stopped repositories
 remain available the next time Workspace opens. Active cards refresh
 automatically; inactive cards stay dimmed at their last snapshot until a manual
-refresh or restart.
+refresh or restart. Drag a card by its handle to keep a custom order across
+Workspace restarts. Visible paths use `~` or a shortened suffix so screenshots
+do not expose the macOS username.
 
 Servers exit on their own about a minute after the last browser tab disconnects
 (no SSE clients). `list` / `stop` / `restart` remain for stuck or stale

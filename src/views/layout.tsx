@@ -1352,6 +1352,33 @@ a.workspace-repo-name:hover {
   align-items: center;
   gap: 6px;
 }
+.workspace-drag-handle {
+  width: 20px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #626262;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1;
+  cursor: grab;
+}
+.workspace-drag-handle:hover {
+  color: var(--fg);
+}
+.workspace-drag-handle:active {
+  cursor: grabbing;
+}
+.workspace-repo-card.workspace-card-dragging {
+  outline: 1px dashed rgba(86, 156, 214, 0.7);
+  outline-offset: -2px;
+  opacity: 0.32;
+}
+body.workspace-reordering {
+  cursor: grabbing;
+  user-select: none;
+}
 .workspace-instance-toggle {
   min-width: 43px;
   min-height: 26px;
@@ -2005,6 +2032,7 @@ const WORKSPACE_POLL_SCRIPT = `
 setInterval(function () {
   if (document.visibilityState !== 'visible') return;
   if (typeof htmx === 'undefined') return;
+  if (document.body.classList.contains('workspace-reordering')) return;
   var board = document.getElementById('workspace-board');
   if (!board) return;
   var limit = board.dataset ? board.dataset.workspaceLimit : '5';
@@ -2013,6 +2041,89 @@ setInterval(function () {
     swap: 'outerHTML',
   });
 }, 5000);
+`
+
+const WORKSPACE_REORDER_SCRIPT = `
+(function () {
+  var draggedCard = null;
+  var draggedHandle = null;
+  var initialOrder = '';
+
+  function boardOrder(board) {
+    return Array.from(board.querySelectorAll('.workspace-repo-card'))
+      .map(function (card) { return card.dataset.workspaceRepo || ''; })
+      .filter(Boolean);
+  }
+
+  document.addEventListener('dragstart', function (event) {
+    var handle = event.target && event.target.closest &&
+      event.target.closest('.workspace-drag-handle');
+    if (!handle) return;
+    var card = handle.closest('.workspace-repo-card');
+    var board = card && card.closest('#workspace-board');
+    if (!card || !board) return;
+
+    draggedCard = card;
+    draggedHandle = handle;
+    initialOrder = boardOrder(board).join('\\n');
+    card.classList.add('workspace-card-dragging');
+    handle.setAttribute('aria-grabbed', 'true');
+    document.body.classList.add('workspace-reordering');
+    if (event.dataTransfer) {
+      event.dataTransfer.effectAllowed = 'move';
+      event.dataTransfer.setData(
+        'text/plain',
+        card.dataset.workspaceRepo || '',
+      );
+    }
+  });
+
+  document.addEventListener('dragover', function (event) {
+    if (!draggedCard) return;
+    var target = event.target && event.target.closest &&
+      event.target.closest('.workspace-repo-card');
+    if (!target || target === draggedCard) return;
+    var board = target.closest('#workspace-board');
+    if (!board || draggedCard.closest('#workspace-board') !== board) return;
+
+    event.preventDefault();
+    if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+    var rect = target.getBoundingClientRect();
+    var insertBefore = event.clientX < rect.left + rect.width / 2;
+    board.insertBefore(
+      draggedCard,
+      insertBefore ? target : target.nextSibling,
+    );
+  });
+
+  document.addEventListener('drop', function (event) {
+    if (draggedCard) event.preventDefault();
+  });
+
+  document.addEventListener('dragend', function () {
+    if (!draggedCard) return;
+    var board = draggedCard.closest('#workspace-board');
+    draggedCard.classList.remove('workspace-card-dragging');
+    if (draggedHandle) draggedHandle.setAttribute('aria-grabbed', 'false');
+    var repos = board ? boardOrder(board) : [];
+    var changed = repos.join('\\n') !== initialOrder;
+    draggedCard = null;
+    draggedHandle = null;
+    initialOrder = '';
+
+    if (!changed) {
+      document.body.classList.remove('workspace-reordering');
+      return;
+    }
+    fetch('/workspace/repo/reorder', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ repos: repos }),
+    }).finally(function () {
+      document.body.classList.remove('workspace-reordering');
+    });
+  });
+})();
 `
 
 export function Layout(props: { children: unknown; title?: string }) {
@@ -2071,6 +2182,7 @@ export function Layout(props: { children: unknown; title?: string }) {
         <script>{raw(SSE_SCRIPT)}</script>
         <script>{raw(WT_POLL_SCRIPT)}</script>
         <script>{raw(WORKSPACE_POLL_SCRIPT)}</script>
+        <script>{raw(WORKSPACE_REORDER_SCRIPT)}</script>
         <script>{raw(RESIZER_SCRIPT)}</script>
       </body>
     </html>

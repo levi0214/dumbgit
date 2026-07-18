@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import os, { tmpdir } from 'node:os'
 import path from 'node:path'
 import { renderToString } from 'hono/jsx/dom/server'
 import {
@@ -13,6 +13,8 @@ import {
 import {
   WorkspaceCommitInspector,
   WorkspaceView,
+  workspaceRepoParentLabel,
+  workspaceSafeRepoText,
 } from '../src/views/workspace'
 
 const roots: string[] = []
@@ -78,6 +80,27 @@ describe('workspace git reads', () => {
 })
 
 describe('workspace states', () => {
+  test('uses screenshot-safe repository path labels', () => {
+    const privateRepo = path.join(
+      os.homedir(),
+      'dev',
+      '2025',
+      'secret-repo',
+    )
+    expect(
+      workspaceRepoParentLabel(privateRepo),
+    ).toBe('~/dev/2025')
+    expect(
+      workspaceRepoParentLabel('/Volumes/company/projects/secret-repo'),
+    ).toBe('…/company/projects')
+    expect(
+      workspaceSafeRepoText(
+        `fatal: ${privateRepo}/.git is unavailable`,
+        privateRepo,
+      ),
+    ).toBe('fatal: ~/dev/2025/secret-repo/.git is unavailable')
+  })
+
   test('renders inactive repositories without status labels', () => {
     const html = renderToString(
       WorkspaceView({
@@ -96,6 +119,7 @@ describe('workspace states', () => {
     )
 
     expect(html).toContain('workspace-repo-stopped')
+    expect(html).toContain('workspace-drag-handle')
     expect(html).toContain('workspace-instance-toggle is-start')
     expect(html).toContain('>Start</button>')
     expect(html).not.toContain('>running<')
