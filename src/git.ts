@@ -257,6 +257,7 @@ export type TagInfo = {
 
 export type CommitSummary = {
   subject: string
+  body: string
   author: string
   date: string
   tags: TagInfo[]
@@ -373,20 +374,29 @@ function parseShowNameStatus(stdout: string): CommitFile[] {
   return files
 }
 
-/** Subject, author, ISO date, changed files — no patch body (cheap). */
+/** Full message, author, ISO date, changed files — no patch body (cheap). */
 export async function commitSummary(
   sha: string,
   opts: { includeTags?: boolean } = {},
   cwd = repoRoot,
 ): Promise<{ ok: true; value: CommitSummary } | { ok: false; stderr: string }> {
   const meta = await spawnGit(
-    ['log', '-1', '--format=%s%n%an%n%aI', sha],
+    ['log', '-1', '--format=%s%x00%b%x00%an%x00%aI', sha],
     cwd,
   )
   if (meta.code !== 0) {
     return { ok: false, stderr: meta.stderr.trim() || `git log failed (${meta.code})` }
   }
-  const [subject = '', author = '', date = ''] = meta.stdout.trimEnd().split('\n')
+  const [
+    subjectRaw = '',
+    bodyRaw = '',
+    authorRaw = '',
+    dateRaw = '',
+  ] = meta.stdout.split('\0')
+  const subject = subjectRaw.trimEnd()
+  const body = bodyRaw.trimEnd()
+  const author = authorRaw.trim()
+  const date = dateRaw.trim()
 
   const fileShow = await spawnGit([
     'show',
@@ -416,6 +426,7 @@ export async function commitSummary(
     ok: true,
     value: {
       subject,
+      body,
       author,
       date,
       tags,
@@ -655,6 +666,7 @@ export async function stashSummary(
     ok: true,
     value: {
       subject: stash.subject,
+      body: '',
       author,
       date,
       tags: [],

@@ -263,6 +263,9 @@ export function DiffPanel(props: DiffPanelProps) {
         <div class="diff-meta" title={summary.date}>
           {summary.author} · {shortCommitDate(summary.date)}
         </div>
+        {summary.body ? (
+          <pre class="diff-message-body">{summary.body}</pre>
+        ) : null}
         {summary.tags.length > 0 ? (
           <div class="diff-tags">
             {summary.tags.map((tag) => (

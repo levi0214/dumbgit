@@ -862,6 +862,22 @@ body.main-grid-dragging {
   color: var(--muted);
   font-size: 11px;
 }
+.diff-message-body {
+  max-height: 128px;
+  margin: 8px 0 0;
+  padding: 8px 0 1px;
+  overflow: auto;
+  border: 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  background: transparent;
+  color: #c6c6c6;
+  font: inherit;
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  scrollbar-gutter: stable;
+}
 .diff-tags {
   margin-top: 6px;
   display: flex;

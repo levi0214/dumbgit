@@ -30,7 +30,7 @@ function git(cwd: string, args: string[]): void {
   }
 }
 
-function tempRepo(subject: string): string {
+function tempRepo(subject: string, body?: string): string {
   const root = mkdtempSync(path.join(tmpdir(), 'dumbgit-workspace-'))
   roots.push(root)
   git(root, ['init', '-b', 'main'])
@@ -38,7 +38,9 @@ function tempRepo(subject: string): string {
   git(root, ['config', 'user.name', 'Workspace Test'])
   writeFileSync(path.join(root, 'note.txt'), `${subject}\n`)
   git(root, ['add', 'note.txt'])
-  git(root, ['commit', '-m', subject])
+  const commitArgs = ['commit', '-m', subject]
+  if (body) commitArgs.push('-m', body)
+  git(root, commitArgs)
   return root
 }
 
@@ -51,7 +53,10 @@ describe('workspace git reads', () => {
 
   test('read an explicit repository without rebinding the process', async () => {
     const first = tempRepo('first repository')
-    const second = tempRepo('second repository')
+    const second = tempRepo(
+      'second repository',
+      'Explain the change in full.\n\nKeep this second paragraph.',
+    )
     writeFileSync(path.join(second, 'note.txt'), 'changed in second\n')
 
     const [firstHead, secondHead, secondRows, secondWorktree] =
@@ -71,7 +76,12 @@ describe('workspace git reads', () => {
 
     const summary = await commitSummary(secondHead.sha, {}, second)
     expect(summary.ok).toBe(true)
-    if (summary.ok) expect(summary.value.subject).toBe('second repository')
+    if (summary.ok) {
+      expect(summary.value.subject).toBe('second repository')
+      expect(summary.value.body).toBe(
+        'Explain the change in full.\n\nKeep this second paragraph.',
+      )
+    }
 
     const patch = await workTreeFilePatch('unstaged', 'note.txt', second)
     expect(patch.ok).toBe(true)
@@ -187,6 +197,7 @@ describe('workspace states', () => {
           ok: true,
           value: {
             subject: 'show a useful diff',
+            body: 'First paragraph.\n\nSecond paragraph.',
             author: 'Test Author',
             date: '2026-07-18T12:00:00+08:00',
             tags: [],
@@ -204,6 +215,9 @@ describe('workspace states', () => {
     )
 
     expect(inspector).toContain('class="diff-files-block"')
+    expect(inspector).toContain('class="diff-message-body"')
+    expect(inspector).toContain('First paragraph.')
+    expect(inspector).toContain('Second paragraph.')
     expect(inspector).toContain('id="diff-patch-slot"')
     expect(inspector).toContain('Select a file to view its diff')
     expect(inspector.indexOf('diff-files-block')).toBeLessThan(
