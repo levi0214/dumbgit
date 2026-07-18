@@ -32,6 +32,7 @@ import {
   workTreeSummary,
 } from './git'
 import { createIdleExit } from './idle-exit'
+import { readRepoHistory, rememberRepo } from './history'
 import { watchGitRefs } from './watch'
 import {
   GraphFragment,
@@ -67,6 +68,8 @@ const GRAPH_COMMIT_STEP = 50
 const GRAPH_COMMIT_MAX = 500
 const WORKSPACE_COMMIT_DEFAULT = 5
 const WORKSPACE_COMMIT_MAX = 10
+const APP_ROOT = path.resolve(import.meta.dir, '..')
+const LAUNCHER_PATH = path.join(APP_ROOT, 'bin', 'dumbgit')
 
 /** After last `/events` client leaves (or boot with none), exit. */
 const IDLE_EXIT_GRACE_MS_DEFAULT = 60_000
@@ -89,12 +92,14 @@ function parseServerArgv(): {
   open: boolean
   idleExit: boolean
   idleGraceMs: number
+  workspace: boolean
   repoAbs: string
 } {
   let port: number | null = null
   let open = false
   let idleExit = true
   let idleGraceMs = IDLE_EXIT_GRACE_MS_DEFAULT
+  let workspace = false
   const pos: string[] = []
   for (let i = 2; i < process.argv.length; i++) {
     const a = process.argv[i]
@@ -104,6 +109,10 @@ function parseServerArgv(): {
     }
     if (a === '--no-idle-exit') {
       idleExit = false
+      continue
+    }
+    if (a === '--workspace') {
+      workspace = true
       continue
     }
     if (a === '--idle-grace-ms') {
@@ -129,7 +138,7 @@ function parseServerArgv(): {
   }
   const raw = pos[0]
   const repoAbs = raw ? path.resolve(expandUser(raw)) : path.resolve(process.cwd())
-  return { port, open, idleExit, idleGraceMs, repoAbs }
+  return { port, open, idleExit, idleGraceMs, workspace, repoAbs }
 }
 
 function portLooksFree(p: number): Promise<boolean> {
@@ -190,8 +199,10 @@ async function loadGraph(limit?: number): Promise<GraphFragmentProps> {
 
 type WorkspaceRepoSource = {
   repoPath: string
-  port: number
-  url: string
+  running: boolean
+  isHost: boolean
+  port?: number
+  url?: string
 }
 
 function clampWorkspaceCommitLimit(raw?: string): number {
@@ -230,6 +241,8 @@ async function probeWorkspaceInstance(
     }
     return {
       repoPath: realpathSync(data.repo),
+      running: true,
+      isHost: port === state.listenPort,
       port,
       url: `http://${LISTEN_HOST}:${port}`,
     }
@@ -248,36 +261,76 @@ async function discoverWorkspaceRepos(): Promise<WorkspaceRepoSource[]> {
   const live = (await Promise.all(ports.map(probeWorkspaceInstance))).filter(
     (repo): repo is WorkspaceRepoSource => repo !== null,
   )
-  for (const repo of live) state.workspaceRepos.set(repo.repoPath, repo)
+  const history = readRepoHistory()
+  const rememberedPaths = new Set(history.map((entry) => entry.repoPath))
+  const byPath = new Map<string, WorkspaceRepoSource>()
+  for (const entry of history) {
+    byPath.set(entry.repoPath, {
+      repoPath: entry.repoPath,
+      running: false,
+      isHost: false,
+    })
+  }
+  for (const repo of live) {
+    byPath.set(repo.repoPath, repo)
+    if (!rememberedPaths.has(repo.repoPath)) rememberRepo(repo.repoPath)
+  }
 
   const currentPort = state.listenPort
-  if (currentPort !== undefined) {
+  if (!BOOT.workspace && currentPort !== undefined) {
     const repoPath = getCurrentRepo()
-    state.workspaceRepos.set(repoPath, {
+    byPath.set(repoPath, {
       repoPath,
+      running: true,
+      isHost: true,
       port: currentPort,
       url: `http://${LISTEN_HOST}:${currentPort}`,
     })
   }
 
-  return [...state.workspaceRepos.values()].sort((a, b) =>
-    path.basename(a.repoPath).localeCompare(path.basename(b.repoPath)),
-  )
+  state.workspaceRepos.clear()
+  for (const source of byPath.values()) {
+    state.workspaceRepos.set(source.repoPath, source)
+  }
+
+  return [...byPath.values()].sort((a, b) => {
+    const byName = path
+      .basename(a.repoPath)
+      .localeCompare(path.basename(b.repoPath))
+    return byName || a.repoPath.localeCompare(b.repoPath)
+  })
 }
 
 async function loadWorkspace(
   limit: number,
+  options: { refreshStopped?: boolean } = {},
 ): Promise<WorkspaceRepoSnapshot[]> {
   const repos = await discoverWorkspaceRepos()
   return Promise.all(
     repos.map(async (source): Promise<WorkspaceRepoSnapshot> => {
+      const cached = state.workspaceSnapshots.get(source.repoPath)
+      if (
+        !source.running &&
+        !options.refreshStopped &&
+        cached?.limit === limit
+      ) {
+        return {
+          ...cached.snapshot,
+          repoPath: source.repoPath,
+          url: source.url,
+          running: false,
+          isHost: source.isHost,
+        }
+      }
+
+      let snapshot: WorkspaceRepoSnapshot
       try {
         const [head, rows, worktree] = await Promise.all([
           headInfo(source.repoPath),
           logGraphRows(limit, source.repoPath),
           workTreeSummary(source.repoPath),
         ])
-        return {
+        snapshot = {
           ok: true,
           ...source,
           head,
@@ -285,16 +338,45 @@ async function loadWorkspace(
           worktree,
         }
       } catch (error) {
-        return {
+        snapshot = {
           ok: false,
           repoPath: source.repoPath,
+          running: source.running,
+          isHost: source.isHost,
           url: source.url,
           stderr:
             error instanceof Error ? error.message : String(error),
         }
       }
+      state.workspaceSnapshots.set(source.repoPath, { limit, snapshot })
+      return snapshot
     }),
   )
+}
+
+async function runDumbgitLauncher(
+  args: string[],
+): Promise<
+  { ok: true; stdout: string } | { ok: false; stderr: string }
+> {
+  const child = Bun.spawn([process.execPath, LAUNCHER_PATH, ...args], {
+    cwd: APP_ROOT,
+    stdout: 'pipe',
+    stderr: 'pipe',
+  })
+  const [stdout, stderr, code] = await Promise.all([
+    new Response(child.stdout).text(),
+    new Response(child.stderr).text(),
+    child.exited,
+  ])
+  if (code === 0) return { ok: true, stdout: stdout.trim() }
+  return {
+    ok: false,
+    stderr:
+      stderr.trim() ||
+      stdout.trim() ||
+      `dumbgit launcher exited with status ${code}`,
+  }
 }
 
 /**
@@ -307,6 +389,11 @@ type DumbgitState = {
   changeWaiters: Set<() => void>
   /** Repositories seen through local dumbgit instances during this process. */
   workspaceRepos: Map<string, WorkspaceRepoSource>
+  /** Last rendered snapshot; stopped repositories do not refresh on polling. */
+  workspaceSnapshots: Map<
+    string,
+    { limit: number; snapshot: WorkspaceRepoSnapshot }
+  >
   closeWatch?: () => void
   server?: ReturnType<typeof Bun.serve>
   repoInitialized?: boolean
@@ -318,11 +405,13 @@ if (!G.__dumbgit) {
     lastChange: Date.now(),
     changeWaiters: new Set(),
     workspaceRepos: new Map(),
+    workspaceSnapshots: new Map(),
   }
 }
 const state = G.__dumbgit
 if (!state.changeWaiters) state.changeWaiters = new Set()
 if (!state.workspaceRepos) state.workspaceRepos = new Map()
+if (!state.workspaceSnapshots) state.workspaceSnapshots = new Map()
 
 /** Record a refs change and wake every idle `/events` stream. */
 function bumpGitChange() {
@@ -376,9 +465,10 @@ async function listenPort(): Promise<number> {
   process.exit(1)
 }
 
-if (!state.repoInitialized) {
+if (!BOOT.workspace && !state.repoInitialized) {
   try {
     await initRepo(BOOT.repoAbs)
+    rememberRepo(getCurrentRepo())
     state.repoInitialized = true
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
@@ -397,7 +487,7 @@ async function attachWatcher() {
   })
 }
 
-await attachWatcher()
+if (!BOOT.workspace) await attachWatcher()
 
 const idle = BOOT.idleExit
   ? createIdleExit({
@@ -421,18 +511,28 @@ app.get('/healthz.json', (c) => {
     return c.json({ ok: false, error: 'not_ready' }, 503)
   }
   return c.json(
-    {
-      ok: true,
-      name: 'dumbgit',
-      repo: getCurrentRepo(),
-      pid: process.pid,
-      port,
-    },
+    BOOT.workspace
+      ? {
+          ok: true,
+          name: 'dumbgit',
+          kind: 'workspace',
+          pid: process.pid,
+          port,
+        }
+      : {
+          ok: true,
+          name: 'dumbgit',
+          kind: 'repo',
+          repo: getCurrentRepo(),
+          pid: process.pid,
+          port,
+        },
     200,
   )
 })
 
 app.get('/', async (c) => {
+  if (BOOT.workspace) return c.redirect('/workspace')
   c.header('Cache-Control', 'no-store')
   const graph = await loadGraph()
   const tabTitle = `dumbgit: ${path.basename(graph.repoPath)}`
@@ -461,7 +561,7 @@ function workspaceRepoFromQuery(raw?: string): string | null {
   try {
     const repoPath = realpathSync(raw)
     if (
-      repoPath === getCurrentRepo() ||
+      (!BOOT.workspace && repoPath === getCurrentRepo()) ||
       state.workspaceRepos.has(repoPath)
     ) {
       return repoPath
@@ -474,13 +574,22 @@ function workspaceRepoFromQuery(raw?: string): string | null {
 
 app.get('/workspace', async (c) => {
   c.header('Cache-Control', 'no-store')
+  if (!BOOT.workspace) {
+    const result = await runDumbgitLauncher(['workspace', '--no-open'])
+    if (!result.ok) return c.text(result.stderr, 500)
+    const url = result.stdout
+      .split(/\s+/)
+      .find((value) => /^http:\/\/127\.0\.0\.1:\d+\/workspace$/.test(value))
+    if (!url) return c.text('dumbgit: workspace URL not found', 500)
+    return c.redirect(url)
+  }
   const limit = clampWorkspaceCommitLimit(c.req.query('limit'))
-  const repos = await loadWorkspace(limit)
+  const repos = await loadWorkspace(limit, { refreshStopped: true })
   return c.html(
     <Layout title="dumbgit: Workspace">
       <WorkspaceView
         repos={repos}
-        currentRepo={getCurrentRepo()}
+        currentRepo={BOOT.workspace ? '' : getCurrentRepo()}
         limit={limit}
       />
     </Layout>,
@@ -495,8 +604,66 @@ app.get('/fragment/workspace', async (c) => {
   return c.html(
     <WorkspaceBoard
       repos={repos}
-      currentRepo={getCurrentRepo()}
+      currentRepo={BOOT.workspace ? '' : getCurrentRepo()}
       limit={limit}
+    />,
+    200,
+  )
+})
+
+app.post('/workspace/repo/start', async (c) => {
+  c.header('Cache-Control', 'no-store')
+  const limit = clampWorkspaceCommitLimit(c.req.query('limit'))
+  const repoPath = workspaceRepoFromQuery(c.req.query('repo'))
+  let controlError: string | undefined
+  if (!repoPath) {
+    controlError = 'Repository is not in Workspace history.'
+  } else {
+    const source = state.workspaceRepos.get(repoPath)
+    if (!source?.running) {
+      const result = await runDumbgitLauncher([
+        '--no-open',
+        repoPath,
+      ])
+      if (!result.ok) controlError = result.stderr
+    }
+  }
+  const repos = await loadWorkspace(limit)
+  return c.html(
+    <WorkspaceBoard
+      repos={repos}
+      currentRepo={BOOT.workspace ? '' : getCurrentRepo()}
+      limit={limit}
+      controlError={controlError}
+    />,
+    200,
+  )
+})
+
+app.post('/workspace/repo/stop', async (c) => {
+  c.header('Cache-Control', 'no-store')
+  const limit = clampWorkspaceCommitLimit(c.req.query('limit'))
+  const repoPath = workspaceRepoFromQuery(c.req.query('repo'))
+  let controlError: string | undefined
+  if (!repoPath) {
+    controlError = 'Repository is not in Workspace history.'
+  } else {
+    const source = state.workspaceRepos.get(repoPath)
+    if (source?.isHost) {
+      controlError =
+        'This repository is hosting the current Workspace. Run `dumbgit workspace` to use the independent controller.'
+    } else if (source?.running) {
+      const result = await runDumbgitLauncher(['stop', repoPath])
+      if (!result.ok) controlError = result.stderr
+    }
+  }
+  const repos = await loadWorkspace(limit)
+  return c.html(
+    <WorkspaceBoard
+      repos={repos}
+      currentRepo={BOOT.workspace ? '' : getCurrentRepo()}
+      limit={limit}
+      controlError={controlError}
     />,
     200,
   )
@@ -1074,7 +1241,11 @@ if (state.server) {
     idleTimeout: 0,
   })
   const base = `http://${LISTEN_HOST}:${port}`
-  console.log(`dumbgit on ${base}  (repo: ${getCurrentRepo()})`)
+  console.log(
+    BOOT.workspace
+      ? `dumbgit workspace on ${base}/workspace`
+      : `dumbgit on ${base}  (repo: ${getCurrentRepo()})`,
+  )
   if (idle) {
     idle.start()
     console.log(
@@ -1085,7 +1256,7 @@ if (state.server) {
   }
   if (BOOT.open) {
     setTimeout(() => {
-      Bun.spawn(['open', base])
+      Bun.spawn(['open', BOOT.workspace ? `${base}/workspace` : base])
     }, 200)
   }
 }

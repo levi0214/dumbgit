@@ -10,6 +10,7 @@ import net from 'node:net'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { rememberRepo } from '../src/history'
 
 const LISTEN_HOST = '127.0.0.1'
 const PORT_LO = 7777
@@ -21,6 +22,7 @@ const logPath = path.join(os.homedir(), 'Library', 'Logs', 'dumbgit.log')
 
 function usage(code = 0) {
   const text = `usage: dumbgit [dir]
+       dumbgit workspace
        dumbgit list
        dumbgit stop [id|dir]
        dumbgit stop --all
@@ -41,17 +43,25 @@ function expandUser(p) {
   return p
 }
 
-function repoRoot(raw) {
+function tryRepoRoot(raw) {
   const dir = path.resolve(expandUser(raw))
   const r = spawnSync('git', ['-C', dir, 'rev-parse', '--show-toplevel'], {
     encoding: 'utf8',
   })
   if (r.status !== 0) {
-    const msg = String(r.stderr ?? '').trim() || `not a git repo: ${dir}`
-    console.error(`dumbgit: ${msg}`)
-    process.exit(1)
+    return {
+      ok: false,
+      error: String(r.stderr ?? '').trim() || `not a git repo: ${dir}`,
+    }
   }
-  return realpathSync(r.stdout.trim())
+  return { ok: true, repo: realpathSync(r.stdout.trim()) }
+}
+
+function repoRoot(raw) {
+  const result = tryRepoRoot(raw)
+  if (result.ok) return result.repo
+  console.error(`dumbgit: ${result.error}`)
+  process.exit(1)
 }
 
 function sameRepo(a, b) {
@@ -95,13 +105,21 @@ async function fetchInstance(port) {
     const j = await r.json()
     if (!j || j.ok !== true || j.name !== 'dumbgit') return null
     if (
-      typeof j.repo !== 'string' ||
       typeof j.pid !== 'number' ||
       typeof j.port !== 'number'
     ) {
       return null
     }
     if (j.port !== port) return null
+    if (j.kind === 'workspace') {
+      return {
+        kind: 'workspace',
+        pid: j.pid,
+        port: j.port,
+        url: `http://${LISTEN_HOST}:${port}`,
+      }
+    }
+    if (typeof j.repo !== 'string') return null
     let repoAbs
     try {
       repoAbs = realpathSync(j.repo)
@@ -109,6 +127,7 @@ async function fetchInstance(port) {
       return null
     }
     return {
+      kind: 'repo',
       repo: repoAbs,
       pid: j.pid,
       port: j.port,
@@ -202,7 +221,9 @@ async function cmdStopAll() {
 }
 
 async function cmdStop(repoAbs) {
-  const ports = await portsMatching((inst) => sameRepo(inst.repo, repoAbs))
+  const ports = await portsMatching(
+    (inst) => inst.kind === 'repo' && sameRepo(inst.repo, repoAbs),
+  )
   if (ports.length === 0) {
     console.log(`dumbgit: no dumbgit running for ${repoAbs}`)
     return
@@ -230,11 +251,12 @@ async function cmdStopId(rawId) {
   }
 
   const stopped = await stopPorts([hit.port])
+  const label = hit.kind === 'workspace' ? 'workspace' : hit.repo
   if (!stopped) {
-    console.error(`dumbgit: found ${hit.repo}, but no process was stopped`)
+    console.error(`dumbgit: found ${label}, but no process was stopped`)
     process.exit(1)
   }
-  console.log(`dumbgit: stopped ${hit.repo}`)
+  console.log(`dumbgit: stopped ${label}`)
 }
 
 async function cmdList() {
@@ -244,7 +266,8 @@ async function cmdList() {
     return
   }
   for (const [index, i] of inst.entries()) {
-    console.log(`${index + 1}\t${i.repo}\t${i.url}`)
+    const label = i.kind === 'workspace' ? '[workspace]' : i.repo
+    console.log(`${index + 1}\t${label}\t${i.url}`)
   }
 }
 
@@ -269,7 +292,12 @@ async function cmdRestart() {
     return
   }
 
-  const targets = inst.map((i) => ({ repo: i.repo, port: i.port, url: i.url }))
+  const targets = inst.map((i) => ({
+    kind: i.kind,
+    repo: i.kind === 'repo' ? i.repo : undefined,
+    port: i.port,
+    url: i.url,
+  }))
   const stopped = await stopPorts(targets.map((t) => t.port))
   if (!stopped) {
     console.error('dumbgit: found listeners, but no process was stopped')
@@ -278,26 +306,33 @@ async function cmdRestart() {
 
   for (const t of targets) {
     if (!(await waitPortFree(t.port))) {
-      console.error(`dumbgit: port ${t.port} still busy after stop (${t.repo})`)
+      console.error(
+        `dumbgit: port ${t.port} still busy after stop (${t.repo ?? 'workspace'})`,
+      )
       process.exit(1)
     }
-    startServer(t.repo, t.port)
+    startServer(t.repo, t.port, t.kind === 'workspace')
     const ok = await waitForHealthy(t.port)
     if (!ok) {
-      console.error(`dumbgit: failed to restart ${t.repo}; see ${logPath}`)
+      console.error(
+        `dumbgit: failed to restart ${t.repo ?? 'workspace'}; see ${logPath}`,
+      )
       process.exit(1)
     }
-    console.log(`${t.repo}\t${t.url}`)
+    console.log(`${t.repo ?? '[workspace]'}\t${t.url}`)
   }
   console.log(`dumbgit: restarted ${targets.length}`)
 }
 
-function startServer(repo, port) {
+function startServer(repo, port, workspace = false) {
   mkdirSync(path.dirname(logPath), { recursive: true })
   const log = openSync(logPath, 'a')
+  const args = ['run', 'src/index.tsx', '--port', String(port)]
+  if (workspace) args.push('--workspace')
+  else args.push(repo)
   const child = spawn(
     process.execPath,
-    ['run', 'src/index.tsx', '--port', String(port), repo],
+    args,
     {
       cwd: appRoot,
       detached: true,
@@ -318,20 +353,23 @@ async function waitForHealthy(port, msTotal = 10000) {
   return false
 }
 
-function openBrowserAt(port) {
-  const url = `http://${LISTEN_HOST}:${port}`
+function openBrowserAt(port, pathname = '') {
+  const url = `http://${LISTEN_HOST}:${port}${pathname}`
   const r = spawnSync('open', [url], {
     stdio: 'ignore',
   })
   if (r.status !== 0) console.log(`dumbgit: open ${url}`)
 }
 
-async function cmdStart(rawDir) {
+async function cmdStart(rawDir, open = true) {
   const repo = repoRoot(rawDir)
+  rememberRepo(repo)
   const existing = await scanInstances()
-  const hit = existing.find((i) => sameRepo(i.repo, repo))
+  const hit = existing.find(
+    (i) => i.kind === 'repo' && sameRepo(i.repo, repo),
+  )
   if (hit) {
-    openBrowserAt(hit.port)
+    if (open) openBrowserAt(hit.port)
     console.log(`dumbgit: ${repo}`)
     console.log(hit.url)
     return
@@ -350,16 +388,52 @@ async function cmdStart(rawDir) {
     process.exit(1)
   }
 
-  openBrowserAt(port)
+  if (open) openBrowserAt(port)
   const url = `http://${LISTEN_HOST}:${port}`
   console.log(`dumbgit: ${repo}`)
   console.log(url)
 }
 
-const argv = process.argv.slice(2)
+async function cmdWorkspace(open = true) {
+  const existing = await scanInstances()
+  const hit = existing.find((instance) => instance.kind === 'workspace')
+  if (hit) {
+    if (open) openBrowserAt(hit.port, '/workspace')
+    console.log('dumbgit: workspace')
+    console.log(`${hit.url}/workspace`)
+    return
+  }
+
+  const port = await allocatePort()
+  if (port === undefined) {
+    console.error(`dumbgit: no free TCP port ${PORT_LO}-${PORT_HI}`)
+    process.exit(1)
+  }
+
+  startServer(undefined, port, true)
+  const ok = await waitForHealthy(port)
+  if (!ok) {
+    console.error(`dumbgit: workspace did not start; see ${logPath}`)
+    process.exit(1)
+  }
+  if (open) openBrowserAt(port, '/workspace')
+  const url = `http://${LISTEN_HOST}:${port}/workspace`
+  console.log('dumbgit: workspace')
+  console.log(url)
+}
+
+const rawArgv = process.argv.slice(2)
+const noOpen = rawArgv.includes('--no-open')
+const argv = rawArgv.filter((arg) => arg !== '--no-open')
 
 if (argv.length === 1 && (argv[0] === '-h' || argv[0] === '--help')) {
   usage(0)
+}
+
+if (argv.length >= 1 && argv[0] === 'workspace') {
+  if (argv.length !== 1) die('too many arguments')
+  await cmdWorkspace(!noOpen)
+  process.exit(0)
 }
 
 if (argv.length >= 1 && argv[0] === 'list') {
@@ -400,4 +474,10 @@ for (const a of argv) {
 }
 if (argv.length > 1) die('too many arguments')
 
-await cmdStart(argv[0] ?? process.cwd())
+if (argv[0]) {
+  await cmdStart(argv[0], !noOpen)
+} else {
+  const cwdRepo = tryRepoRoot(process.cwd())
+  if (cwdRepo.ok) await cmdStart(cwdRepo.repo, !noOpen)
+  else await cmdWorkspace(!noOpen)
+}

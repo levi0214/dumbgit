@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
+import { renderToString } from 'hono/jsx/dom/server'
 import {
   commitSummary,
   headInfo,
@@ -9,6 +10,10 @@ import {
   workTreeFilePatch,
   workTreeSummary,
 } from '../src/git'
+import {
+  WorkspaceCommitInspector,
+  WorkspaceView,
+} from '../src/views/workspace'
 
 const roots: string[] = []
 
@@ -69,5 +74,50 @@ describe('workspace git reads', () => {
     const patch = await workTreeFilePatch('unstaged', 'note.txt', second)
     expect(patch.ok).toBe(true)
     if (patch.ok) expect(patch.patch).toContain('+changed in second')
+  })
+})
+
+describe('workspace states', () => {
+  test('renders inactive repositories without status labels', () => {
+    const html = renderToString(
+      WorkspaceView({
+        repos: [
+          {
+            ok: false,
+            repoPath: '/tmp/example',
+            running: false,
+            isHost: false,
+            stderr: 'unavailable',
+          },
+        ],
+        currentRepo: '',
+        limit: 5,
+      }),
+    )
+
+    expect(html).toContain('workspace-repo-stopped')
+    expect(html).toContain('workspace-instance-toggle is-start')
+    expect(html).toContain('>Start</button>')
+    expect(html).not.toContain('>running<')
+    expect(html).not.toContain('>stopped<')
+  })
+
+  test('keeps the inspector hidden until requested and makes it closable', () => {
+    const page = renderToString(
+      WorkspaceView({ repos: [], currentRepo: '', limit: 5 }),
+    )
+    expect(page).toContain(
+      'id="workspace-inspector" class="workspace-inspector" hidden',
+    )
+    expect(page).not.toContain('Shared inspector')
+
+    const inspector = renderToString(
+      WorkspaceCommitInspector({
+        repoPath: '/tmp/example',
+        sha: 'a'.repeat(40),
+        summary: { ok: false, stderr: 'unavailable' },
+      }),
+    )
+    expect(inspector).toContain('workspace-inspector-close')
   })
 })

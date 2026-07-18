@@ -19,7 +19,9 @@ export type WorkspaceRepoSnapshot =
   | {
       ok: true
       repoPath: string
-      url: string
+      url?: string
+      running: boolean
+      isHost: boolean
       head: HeadInfo
       rows: GraphRow[]
       worktree: WorkTreeSummary
@@ -27,7 +29,9 @@ export type WorkspaceRepoSnapshot =
   | {
       ok: false
       repoPath: string
-      url: string
+      url?: string
+      running: boolean
+      isHost: boolean
       stderr: string
     }
 
@@ -68,20 +72,96 @@ function changeTotals(worktree: WorkTreeSummary): {
   return { files: paths.size, added, deleted }
 }
 
+function WorkspaceRepoName(props: {
+  repoPath: string
+  repoUrl?: string
+}) {
+  const name = path.basename(props.repoPath)
+  return props.repoUrl ? (
+    <a
+      class="workspace-repo-name"
+      href={props.repoUrl}
+      title={`Open full repository view · ${props.repoPath}`}
+    >
+      {name}
+    </a>
+  ) : (
+    <span class="workspace-repo-name" title={props.repoPath}>
+      {name}
+    </span>
+  )
+}
+
+function WorkspaceCardActions(props: {
+  repoPath: string
+  repoUrl?: string
+  running: boolean
+  isHost: boolean
+  limit: number
+}) {
+  const name = path.basename(props.repoPath)
+  const controlUrl =
+    `/workspace/repo/${props.running ? 'stop' : 'start'}` +
+    `?repo=${repoQuery(props.repoPath)}&limit=${props.limit}`
+  return (
+    <div class="workspace-card-actions">
+      <button
+        type="button"
+        class={`workspace-instance-toggle${props.running ? '' : ' is-start'}`}
+        disabled={props.isHost}
+        title={
+          props.isHost
+            ? 'This repository is hosting the current Workspace'
+            : `${props.running ? 'Stop' : 'Start'} ${name}`
+        }
+        hx-post={controlUrl}
+        hx-target="#workspace-board"
+        hx-swap="outerHTML"
+        hx-disabled-elt="this"
+      >
+        {props.running ? 'Stop' : 'Start'}
+      </button>
+      {props.repoUrl ? (
+        <a
+          class="workspace-open-repo"
+          href={props.repoUrl}
+          title="Open full repository view"
+          aria-label={`Open ${name}`}
+        >
+          ↗
+        </a>
+      ) : null}
+    </div>
+  )
+}
+
 function WorkspaceRepoCard(props: {
   repo: WorkspaceRepoSnapshot
   currentRepo: string
+  limit: number
 }) {
   if (!props.repo.ok) {
+    const repoUrl =
+      props.repo.repoPath === props.currentRepo ? '/' : props.repo.url
     return (
-      <article class="workspace-repo-card workspace-repo-error">
+      <article
+        class={`workspace-repo-card workspace-repo-error${props.repo.running ? '' : ' workspace-repo-stopped'}`}
+      >
         <div class="workspace-card-head">
           <div>
-            <div class="workspace-repo-name">
-              {path.basename(props.repo.repoPath)}
-            </div>
+            <WorkspaceRepoName
+              repoPath={props.repo.repoPath}
+              repoUrl={repoUrl}
+            />
             <div class="workspace-repo-path">{props.repo.repoPath}</div>
           </div>
+          <WorkspaceCardActions
+            repoPath={props.repo.repoPath}
+            repoUrl={repoUrl}
+            running={props.repo.running}
+            isHost={props.repo.isHost}
+            limit={props.limit}
+          />
         </div>
         <pre>{props.repo.stderr}</pre>
       </article>
@@ -103,18 +183,12 @@ function WorkspaceRepoCard(props: {
 
   return (
     <article
-      class="workspace-repo-card"
+      class={`workspace-repo-card${repo.running ? '' : ' workspace-repo-stopped'}`}
       data-workspace-repo={repo.repoPath}
     >
       <div class="workspace-card-head">
         <div class="workspace-repo-identity">
-          <a
-            class="workspace-repo-name"
-            href={repoUrl}
-            title={`Open full repository view · ${repo.repoPath}`}
-          >
-            {path.basename(repo.repoPath)}
-          </a>
+          <WorkspaceRepoName repoPath={repo.repoPath} repoUrl={repoUrl} />
           <span class="workspace-branch" title={branch}>
             {branch}
           </span>
@@ -122,14 +196,13 @@ function WorkspaceRepoCard(props: {
             {path.dirname(repo.repoPath)}
           </div>
         </div>
-        <a
-          class="workspace-open-repo"
-          href={repoUrl}
-          title="Open full repository view"
-          aria-label={`Open ${path.basename(repo.repoPath)}`}
-        >
-          ↗
-        </a>
+        <WorkspaceCardActions
+          repoPath={repo.repoPath}
+          repoUrl={repoUrl}
+          running={repo.running}
+          isHost={repo.isHost}
+          limit={props.limit}
+        />
       </div>
 
       <button
@@ -196,14 +269,18 @@ export function WorkspaceView(props: {
     <main class="workspace-page">
       <header class="workspace-toolbar">
         <div class="workspace-title-block">
-          <a class="workspace-back" href="/" title="Back to repository view">
-            ←
-          </a>
+          {props.currentRepo ? (
+            <a class="workspace-back" href="/" title="Back to repository view">
+              ←
+            </a>
+          ) : null}
           <div>
             <h1>Workspace</h1>
             <p>
               {props.repos.length}{' '}
               {props.repos.length === 1 ? 'repository' : 'repositories'}
+              {' · '}
+              {props.repos.filter((repo) => repo.running).length} active
             </p>
           </div>
         </div>
@@ -241,6 +318,7 @@ export function WorkspaceBoard(props: {
   repos: WorkspaceRepoSnapshot[]
   currentRepo: string
   limit: number
+  controlError?: string
 }) {
   return (
     <section
@@ -249,11 +327,15 @@ export function WorkspaceBoard(props: {
       aria-label="Repositories"
       data-workspace-limit={String(props.limit)}
     >
+      {props.controlError ? (
+        <div class="workspace-control-error">{props.controlError}</div>
+      ) : null}
       {props.repos.map((repo) => (
         <WorkspaceRepoCard
           key={repo.repoPath}
           repo={repo}
           currentRepo={props.currentRepo}
+          limit={props.limit}
         />
       ))}
     </section>
@@ -264,14 +346,29 @@ export function WorkspaceInspectorEmpty() {
   return (
     <section
       id="workspace-inspector"
-      class="workspace-inspector workspace-inspector-empty"
-    >
-      <div class="workspace-inspector-empty-mark">⌁</div>
-      <div>
-        <strong>Shared inspector</strong>
-        <span>Select a working tree or commit from any repository.</span>
-      </div>
-    </section>
+      class="workspace-inspector"
+      hidden
+    ></section>
+  )
+}
+
+function WorkspaceInspectorContext(props: {
+  name: string
+  detail: string
+}) {
+  return (
+    <div class="workspace-inspector-context">
+      <strong>{props.name}</strong>
+      <span>{props.detail}</span>
+      <button
+        type="button"
+        class="workspace-inspector-close"
+        title="Close inspector"
+        aria-label="Close inspector"
+      >
+        ×
+      </button>
+    </div>
   )
 }
 
@@ -286,10 +383,10 @@ export function WorkspaceCommitInspector(props: {
   if (!props.summary.ok) {
     return (
       <section id="workspace-inspector" class="workspace-inspector">
-        <div class="workspace-inspector-context">
-          <strong>{name}</strong>
-          <span>{props.sha.slice(0, 7)}</span>
-        </div>
+        <WorkspaceInspectorContext
+          name={name}
+          detail={props.sha.slice(0, 7)}
+        />
         <DiffPanel
           state="error"
           sha={props.sha}
@@ -306,10 +403,10 @@ export function WorkspaceCommitInspector(props: {
       data-workspace-repo={props.repoPath}
       data-workspace-sha={props.sha}
     >
-      <div class="workspace-inspector-context">
-        <strong>{name}</strong>
-        <span>commit · {props.sha.slice(0, 7)}</span>
-      </div>
+      <WorkspaceInspectorContext
+        name={name}
+        detail={`commit · ${props.sha.slice(0, 7)}`}
+      />
       <DiffPanel
         state="summary"
         sha={props.sha}
@@ -360,10 +457,7 @@ export function WorkspaceWorktreeInspector(props: {
       data-workspace-repo={props.repoPath}
       data-workspace-kind="worktree"
     >
-      <div class="workspace-inspector-context">
-        <strong>{name}</strong>
-        <span>working tree</span>
-      </div>
+      <WorkspaceInspectorContext name={name} detail="working tree" />
       <div class="diff-panel diff-summary workspace-worktree-inspector">
         <div class="diff-head">
           <div class="diff-subject">
