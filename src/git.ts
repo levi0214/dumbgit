@@ -41,8 +41,8 @@ export function getCurrentRepo(): string {
   return repoRoot
 }
 
-async function previousReflogBranch(): Promise<string | undefined> {
-  const prev = await spawnGit(['rev-parse', '--abbrev-ref', '@{-1}'])
+async function previousReflogBranch(cwd = repoRoot): Promise<string | undefined> {
+  const prev = await spawnGit(['rev-parse', '--abbrev-ref', '@{-1}'], cwd)
   const name = prev.code === 0 ? prev.stdout.trim() : ''
   return name && name !== 'HEAD' && !name.includes('@') ? name : undefined
 }
@@ -76,16 +76,24 @@ async function gitOrThrow(args: string[]): Promise<string> {
   return stdout.replace(/\n+$/, '')
 }
 
-export async function headInfo(): Promise<HeadInfo> {
-  const sha = (await gitOrThrow(['rev-parse', 'HEAD'])).trim()
-  const sym = await spawnGit(['symbolic-ref', '-q', '--short', 'HEAD'])
+export async function headInfo(cwd = repoRoot): Promise<HeadInfo> {
+  const head = await spawnGit(['rev-parse', 'HEAD'], cwd)
+  if (head.code !== 0) {
+    throw new GitError(
+      head.stderr.trim() || `git rev-parse failed (${head.code})`,
+      head.code,
+    )
+  }
+  const sha = head.stdout.trim()
+  const sym = await spawnGit(['symbolic-ref', '-q', '--short', 'HEAD'], cwd)
   if (sym.code === 0) {
     const name = sym.stdout.trim()
-    if (name) lastBranchByRepo.set(repoRoot, name)
+    if (name) lastBranchByRepo.set(cwd, name)
     return { kind: 'branch', name, sha }
   }
-  const previousBranch = lastBranchByRepo.get(repoRoot) ?? (await previousReflogBranch())
-  if (previousBranch) lastBranchByRepo.set(repoRoot, previousBranch)
+  const previousBranch =
+    lastBranchByRepo.get(cwd) ?? (await previousReflogBranch(cwd))
+  if (previousBranch) lastBranchByRepo.set(cwd, previousBranch)
   return { kind: 'detached', sha, previousBranch }
 }
 
@@ -113,8 +121,8 @@ export type GraphCommitRow = {
 export type GraphRow = { kind: 'commit'; row: GraphCommitRow }
 
 /** Full hashes reachable from HEAD. Empty on failure. */
-async function reachableShas(): Promise<Set<string>> {
-  const { code, stdout } = await spawnGit(['rev-list', 'HEAD'])
+async function reachableShas(cwd = repoRoot): Promise<Set<string>> {
+  const { code, stdout } = await spawnGit(['rev-list', 'HEAD'], cwd)
   if (code !== 0) return new Set()
   const set = new Set<string>()
   for (const line of stdout.split('\n')) {
@@ -125,7 +133,10 @@ async function reachableShas(): Promise<Set<string>> {
 }
 
 /** Commits in date order. The view derives graph lanes from hashes + parents. */
-export async function logGraphRows(limit = 50): Promise<GraphRow[]> {
+export async function logGraphRows(
+  limit = 50,
+  cwd = repoRoot,
+): Promise<GraphRow[]> {
   const { code, stdout, stderr } = await spawnGit([
     'log',
     '--date-order',
@@ -136,7 +147,7 @@ export async function logGraphRows(limit = 50): Promise<GraphRow[]> {
     '--color=always',
     '-n',
     String(limit),
-  ])
+  ], cwd)
 
   if (code !== 0) {
     const err = stderr.trim()
@@ -151,7 +162,7 @@ export async function logGraphRows(limit = 50): Promise<GraphRow[]> {
 
   // Match on full %H — never %h. In larger repos Git widens %h past 7 chars,
   // so a fixed 7-char prefix set would mark every row as out-of-history (dim).
-  const reachable = await reachableShas()
+  const reachable = await reachableShas(cwd)
   const text = stdout.replace(/\n+$/, '')
   const rows: GraphRow[] = []
 
@@ -266,21 +277,24 @@ export function parseTagForEachRefLine(line: string): {
   return { name, objectType }
 }
 
-async function annotatedTagMessage(name: string): Promise<string | undefined> {
-  const r = await spawnGit(['tag', '-l', name, '--format=%(contents)'])
+async function annotatedTagMessage(
+  name: string,
+  cwd = repoRoot,
+): Promise<string | undefined> {
+  const r = await spawnGit(['tag', '-l', name, '--format=%(contents)'], cwd)
   if (r.code !== 0) return undefined
   const message = r.stdout.trimEnd()
   return message || undefined
 }
 
-async function tagsAtCommit(sha: string): Promise<TagInfo[]> {
+async function tagsAtCommit(sha: string, cwd = repoRoot): Promise<TagInfo[]> {
   const r = await spawnGit([
     'for-each-ref',
     `--points-at=${sha}`,
     'refs/tags',
     '--format',
     `%(refname:short)${TAG_REF_FIELD}%(objecttype)`,
-  ])
+  ], cwd)
   if (r.code !== 0 || !r.stdout.trim()) return []
 
   const parsed = r.stdout
@@ -292,7 +306,10 @@ async function tagsAtCommit(sha: string): Promise<TagInfo[]> {
   return Promise.all(
     parsed.map(async (row) => {
       if (row.objectType === 'commit') return { name: row.name }
-      return { name: row.name, message: await annotatedTagMessage(row.name) }
+      return {
+        name: row.name,
+        message: await annotatedTagMessage(row.name, cwd),
+      }
     }),
   )
 }
@@ -360,8 +377,12 @@ function parseShowNameStatus(stdout: string): CommitFile[] {
 export async function commitSummary(
   sha: string,
   opts: { includeTags?: boolean } = {},
+  cwd = repoRoot,
 ): Promise<{ ok: true; value: CommitSummary } | { ok: false; stderr: string }> {
-  const meta = await spawnGit(['log', '-1', '--format=%s%n%an%n%aI', sha])
+  const meta = await spawnGit(
+    ['log', '-1', '--format=%s%n%an%n%aI', sha],
+    cwd,
+  )
   if (meta.code !== 0) {
     return { ok: false, stderr: meta.stderr.trim() || `git log failed (${meta.code})` }
   }
@@ -373,7 +394,7 @@ export async function commitSummary(
     '--format=',
     '--no-color',
     sha,
-  ])
+  ], cwd)
   if (fileShow.code !== 0) {
     return {
       ok: false,
@@ -381,12 +402,15 @@ export async function commitSummary(
     }
   }
 
-  const numstat = await spawnGit(['show', '--numstat', '--format=', sha])
+  const numstat = await spawnGit(
+    ['show', '--numstat', '--format=', sha],
+    cwd,
+  )
   let files = parseShowNameStatus(fileShow.stdout)
   if (numstat.code === 0) {
     files = mergeNumstat(files, parseNumstat(numstat.stdout))
   }
-  const tags = opts.includeTags ? await tagsAtCommit(sha) : []
+  const tags = opts.includeTags ? await tagsAtCommit(sha, cwd) : []
 
   return {
     ok: true,
@@ -405,9 +429,10 @@ export async function commitFilePatch(
   sha: string,
   displayPath: string,
   files?: CommitFile[],
+  cwd = repoRoot,
 ): Promise<{ ok: true; patch: string } | { ok: false; stderr: string }> {
   if (!files) {
-    const summary = await commitSummary(sha)
+    const summary = await commitSummary(sha, {}, cwd)
     if (!summary.ok) return summary
     files = summary.value.files
   }
@@ -428,7 +453,7 @@ export async function commitFilePatch(
     sha,
     '--',
     raw,
-  ])
+  ], cwd)
   if (patch.code !== 0) {
     return {
       ok: false,
@@ -665,12 +690,12 @@ function parseNameStatus(stdout: string): WorkTreeEntry[] {
 }
 
 /** Files changed in the working tree (not yet reflected in `git log`). */
-export async function workTreeSummary(): Promise<WorkTreeSummary> {
+export async function workTreeSummary(cwd = repoRoot): Promise<WorkTreeSummary> {
   const [stagedR, unstagedR, stagedNumsR, unstagedNumsR] = await Promise.all([
-    spawnGit(['diff', '--cached', '--name-status']),
-    spawnGit(['diff', '--name-status']),
-    spawnGit(['diff', '--cached', '--numstat']),
-    spawnGit(['diff', '--numstat']),
+    spawnGit(['diff', '--cached', '--name-status'], cwd),
+    spawnGit(['diff', '--name-status'], cwd),
+    spawnGit(['diff', '--cached', '--numstat'], cwd),
+    spawnGit(['diff', '--numstat'], cwd),
   ])
   let staged = stagedR.code === 0 ? parseNameStatus(stagedR.stdout) : []
   let unstaged = unstagedR.code === 0 ? parseNameStatus(unstagedR.stdout) : []
@@ -681,7 +706,10 @@ export async function workTreeSummary(): Promise<WorkTreeSummary> {
     unstaged = mergeNumstat(unstaged, parseNumstat(unstagedNumsR.stdout))
   }
 
-  const ut = await spawnGit(['ls-files', '--others', '--exclude-standard'])
+  const ut = await spawnGit(
+    ['ls-files', '--others', '--exclude-standard'],
+    cwd,
+  )
   const untracked =
     ut.code === 0
       ? ut.stdout
@@ -707,8 +735,11 @@ function gitDiffPath(displayPath: string): string {
 }
 
 /** Resolve `relPath` under repo root; rejects `..` escapes; returns POSIX-ish relative path for git argv. */
-async function strictRepoRelative(relPath: string): Promise<string | null> {
-  const topR = await spawnGit(['rev-parse', '--show-toplevel'])
+async function strictRepoRelative(
+  relPath: string,
+  cwd = repoRoot,
+): Promise<string | null> {
+  const topR = await spawnGit(['rev-parse', '--show-toplevel'], cwd)
   if (topR.code !== 0) return null
   const top = path.resolve(topR.stdout.trim())
   const joined = path.resolve(top, relPath)
@@ -721,8 +752,9 @@ async function strictRepoRelative(relPath: string): Promise<string | null> {
 export async function workTreeFilePatch(
   kind: WorkTreeChangeKind,
   displayPath: string,
+  cwd = repoRoot,
 ): Promise<{ ok: true; patch: string } | { ok: false; stderr: string }> {
-  const wt = await workTreeSummary()
+  const wt = await workTreeSummary(cwd)
   const bucket =
     kind === 'staged' ? wt.staged : kind === 'unstaged' ? wt.unstaged : wt.untracked
   if (!bucket.some((e) => e.path === displayPath)) {
@@ -735,7 +767,7 @@ export async function workTreeFilePatch(
   const raw = gitDiffPath(displayPath)
   if (!raw) return { ok: false, stderr: 'invalid path' }
 
-  const rel = await strictRepoRelative(raw)
+  const rel = await strictRepoRelative(raw, cwd)
   if (!rel) return { ok: false, stderr: 'invalid path' }
 
   if (kind === 'untracked') {
@@ -746,7 +778,7 @@ export async function workTreeFilePatch(
       '--',
       '/dev/null',
       rel,
-    ])
+    ], cwd)
     if (!(r.code === 0 || r.code === 1)) {
       return {
         ok: false,
@@ -772,7 +804,7 @@ export async function workTreeFilePatch(
       ? (['diff', '--cached', '--no-color', '--', rel] as const)
       : (['diff', '--no-color', '--', rel] as const)
 
-  const r = await spawnGit([...args])
+  const r = await spawnGit([...args], cwd)
   if (!(r.code === 0 || r.code === 1)) {
     return {
       ok: false,

@@ -1,0 +1,73 @@
+import { afterEach, describe, expect, test } from 'bun:test'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import path from 'node:path'
+import {
+  commitSummary,
+  headInfo,
+  logGraphRows,
+  workTreeFilePatch,
+  workTreeSummary,
+} from '../src/git'
+
+const roots: string[] = []
+
+function git(cwd: string, args: string[]): void {
+  const result = Bun.spawnSync(['git', ...args], {
+    cwd,
+    stdout: 'pipe',
+    stderr: 'pipe',
+  })
+  if (result.exitCode !== 0) {
+    throw new Error(result.stderr.toString())
+  }
+}
+
+function tempRepo(subject: string): string {
+  const root = mkdtempSync(path.join(tmpdir(), 'dumbgit-workspace-'))
+  roots.push(root)
+  git(root, ['init', '-b', 'main'])
+  git(root, ['config', 'user.email', 'workspace@example.test'])
+  git(root, ['config', 'user.name', 'Workspace Test'])
+  writeFileSync(path.join(root, 'note.txt'), `${subject}\n`)
+  git(root, ['add', 'note.txt'])
+  git(root, ['commit', '-m', subject])
+  return root
+}
+
+describe('workspace git reads', () => {
+  afterEach(() => {
+    for (const root of roots.splice(0)) {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  test('read an explicit repository without rebinding the process', async () => {
+    const first = tempRepo('first repository')
+    const second = tempRepo('second repository')
+    writeFileSync(path.join(second, 'note.txt'), 'changed in second\n')
+
+    const [firstHead, secondHead, secondRows, secondWorktree] =
+      await Promise.all([
+        headInfo(first),
+        headInfo(second),
+        logGraphRows(5, second),
+        workTreeSummary(second),
+      ])
+
+    expect(firstHead.kind).toBe('branch')
+    expect(secondHead.kind).toBe('branch')
+    expect(secondRows[0]?.row.subject).toBe('second repository')
+    expect(secondWorktree.unstaged.map((entry) => entry.path)).toEqual([
+      'note.txt',
+    ])
+
+    const summary = await commitSummary(secondHead.sha, {}, second)
+    expect(summary.ok).toBe(true)
+    if (summary.ok) expect(summary.value.subject).toBe('second repository')
+
+    const patch = await workTreeFilePatch('unstaged', 'note.txt', second)
+    expect(patch.ok).toBe(true)
+    if (patch.ok) expect(patch.patch).toContain('+changed in second')
+  })
+})

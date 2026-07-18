@@ -37,6 +37,10 @@ starts each again on the same port (picks up source changes after `bun link`).
 Each repo gets its own server. Starting the same repo again reopens it. Ports
 come from `7777` to `7900`.
 
+Open **workspace** from any repository view to see every currently running
+dumbgit repo together. Workspace keeps a compact 5- or 10-commit timeline for
+each repo and uses one shared inspector for commit and working-tree diffs.
+
 Servers exit on their own about a minute after the last browser tab disconnects
 (no SSE clients). `list` / `stop` / `restart` remain for stuck or stale
 processes.
@@ -51,6 +55,8 @@ exits.
 
 - Shows the current repo, HEAD, local branches, remote refs, tags, stashes,
   and recent commits in a compact graph.
+- Shows running repos side by side in Workspace, with short branch histories
+  and one shared diff inspector.
 - Shows `main | origin` when a local branch and `origin/main` point at the
   same commit.
 - Copy a branch name by clicking it; hover to reveal switch or push when there

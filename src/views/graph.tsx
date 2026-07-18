@@ -182,7 +182,7 @@ function collectTagNames(tokens: DecorationToken[]): string[] {
   return out
 }
 
-function graphCommitIsHead(decorateRaw: string): boolean {
+export function graphCommitIsHead(decorateRaw: string): boolean {
   const decoPlain = stripAnsi(decorateRaw)
   return (
     decoPlain.includes('HEAD ->') ||
@@ -316,18 +316,19 @@ function physicalLaneX(lane: number): number {
   return graphColX(lane * 2)
 }
 
-function physicalLaneColor(lane: number): string {
+export function physicalLaneColor(lane: number): string {
   return GRAPH_LANE_PALETTE[lane % GRAPH_LANE_PALETTE.length]!
 }
 
 /** One SVG row: paths may meet only at the commit dot in its center. */
-function SimpleLaneSpans(props: {
+export function GraphLaneSpans(props: {
   layout: GraphLaneLayoutRow
   gutterCols: number
   isHead: boolean
   isDetached: boolean
+  rowHeight?: number
 }) {
-  const height = GRAPH_ROW_HEIGHT
+  const height = props.rowHeight ?? GRAPH_ROW_HEIGHT
   const mid = height / 2
   const width = props.gutterCols * GRAPH_COL_WIDTH
   const nodeX = physicalLaneX(props.layout.lane)
@@ -537,7 +538,7 @@ function RefPills(props: {
 }
 
 /** Relative time with trailing “ago” where English allows it. */
-function relTimeAgo(iso: string): string {
+export function relTimeAgo(iso: string): string {
   const t = new Date(iso).getTime()
   if (Number.isNaN(t)) return ''
   const diff = Math.max(0, Date.now() - t)
@@ -590,7 +591,7 @@ function GraphCommitLine(props: {
   return (
     <div class={cls} data-sha={shaFull}>
       <span class="graph-prefix">
-        <SimpleLaneSpans
+        <GraphLaneSpans
           layout={props.laneLayout}
           gutterCols={props.gutterCols}
           isHead={isHead}
@@ -943,6 +944,9 @@ export function GraphFragment(props: GraphFragmentProps) {
           <span class="graph-repo-name" title={props.repoPath}>
             {path.basename(props.repoPath)}
           </span>
+          <a class="workspace-entry" href="/workspace">
+            workspace
+          </a>
         </div>
         <p class="msg">{props.stderr}</p>
       </div>
@@ -971,8 +975,8 @@ export function GraphFragment(props: GraphFragmentProps) {
         <div class="graph-head-line">
           <HeadLine head={head} />
         </div>
-        {head.kind === 'detached' && head.previousBranch ? (
-          <div class="graph-head-actions">
+        <div class="graph-head-actions">
+          {head.kind === 'detached' && head.previousBranch ? (
             <button
               type="button"
               class="head-back-btn"
@@ -983,8 +987,11 @@ export function GraphFragment(props: GraphFragmentProps) {
             >
               ← back to {head.previousBranch}
             </button>
-          </div>
-        ) : null}
+          ) : null}
+          <a class="workspace-entry" href="/workspace">
+            workspace
+          </a>
+        </div>
       </div>
       <WorkTreeFragment
         {...worktree}
