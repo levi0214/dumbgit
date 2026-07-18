@@ -1174,8 +1174,7 @@ body.main-grid-dragging {
   font-size: 10px;
 }
 .workspace-back,
-.workspace-refresh,
-.workspace-depth a {
+.workspace-refresh {
   color: var(--muted);
   text-decoration: none;
   border: 1px solid var(--border);
@@ -1203,42 +1202,13 @@ body.main-grid-dragging {
   align-items: center;
   font-size: 11px;
 }
-.workspace-depth {
-  display: flex;
-  align-items: center;
-}
-.workspace-depth a {
-  min-width: 30px;
-  min-height: 30px;
-  padding: 5px 8px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 11px;
-}
-.workspace-depth a:first-child {
-  border-radius: 4px 0 0 4px;
-}
-.workspace-depth a:last-child {
-  margin-left: -1px;
-  border-radius: 0 4px 4px 0;
-}
-.workspace-depth a.is-active {
-  position: relative;
-  z-index: 1;
-  color: var(--accent);
-  border-color: rgba(86, 156, 214, 0.65);
-  background: rgba(86, 156, 214, 0.13);
-}
 .workspace-back:hover,
-.workspace-refresh:hover,
-.workspace-depth a:hover {
+.workspace-refresh:hover {
   color: var(--accent);
   border-color: var(--accent);
 }
 .workspace-back:active,
 .workspace-refresh:active,
-.workspace-depth a:active,
 .workspace-open-repo:active {
   transform: scale(0.97);
 }
@@ -1259,6 +1229,8 @@ body.main-grid-dragging {
   border-radius: 7px;
   background: #252526;
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.025);
+  display: flex;
+  flex-direction: column;
 }
 .workspace-repo-stopped {
   border-color: #282828;
@@ -1520,6 +1492,55 @@ body.workspace-reordering {
   box-shadow: inset 3px 0 0 0 var(--accent);
   background: rgba(86, 156, 214, 0.14);
 }
+.workspace-depth-toggle {
+  width: 100%;
+  height: 15px;
+  flex: 0 0 15px;
+  margin-top: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.workspace-depth-toggle:focus-visible {
+  position: relative;
+  z-index: 1;
+  outline: 1px solid var(--accent);
+  outline-offset: -2px;
+}
+.workspace-depth-toggle:disabled {
+  cursor: wait;
+  opacity: 0.45;
+}
+.workspace-depth-chevron {
+  pointer-events: none;
+  opacity: 0.28;
+  transition:
+    opacity 120ms ease,
+    transform 120ms ease-out;
+}
+.workspace-depth-toggle:active:not(:disabled) .workspace-depth-chevron {
+  transform: scale(0.88);
+}
+.workspace-repo-stopped .workspace-depth-chevron {
+  opacity: 0.16;
+}
+@media (hover: hover) and (pointer: fine) {
+  .workspace-depth-toggle:hover .workspace-depth-chevron {
+    opacity: 0.78;
+  }
+  .workspace-repo-stopped
+    .workspace-depth-toggle:hover
+    .workspace-depth-chevron {
+    opacity: 0.62;
+  }
+}
 .workspace-repo-error {
   min-height: 120px;
 }
@@ -1749,6 +1770,17 @@ function syncWorkspaceSelection() {
   });
 }
 
+var workspaceBoardScrollTop = null;
+
+function syncWorkspaceControls() {
+  var board = document.getElementById('workspace-board');
+  var refresh = document.querySelector('.workspace-refresh');
+  var limit = board && board.dataset ? board.dataset.workspaceLimit : '';
+  if (refresh && limit) {
+    refresh.setAttribute('href', '/workspace?limit=' + encodeURIComponent(limit));
+  }
+}
+
 function closeWorkspaceInspector() {
   var inspector = document.getElementById('workspace-inspector');
   if (!inspector || inspector.hasAttribute('hidden')) return false;
@@ -1794,6 +1826,7 @@ document.addEventListener('DOMContentLoaded', function () {
   syncViewingHighlight();
   syncWorktreeFileSelection();
   syncWorkspaceSelection();
+  syncWorkspaceControls();
 });
 
 document.addEventListener('click', function (e) {
@@ -1828,6 +1861,26 @@ document.body.addEventListener('htmx:afterSwap', function (e) {
   if (t.id === 'workspace-board' || t.id === 'workspace-inspector') {
     syncWorkspaceSelection();
   }
+  if (t.id === 'workspace-board') {
+    var board = document.getElementById('workspace-board');
+    if (board && workspaceBoardScrollTop !== null) {
+      board.scrollTop = workspaceBoardScrollTop;
+    }
+    workspaceBoardScrollTop = null;
+    syncWorkspaceControls();
+  }
+});
+
+document.body.addEventListener('htmx:beforeSwap', function (e) {
+  var t = e.detail && e.detail.target;
+  if (t && t.id === 'workspace-board') {
+    workspaceBoardScrollTop = t.scrollTop;
+  }
+});
+
+document.body.addEventListener('htmx:historyRestore', function () {
+  syncWorkspaceSelection();
+  syncWorkspaceControls();
 });
 
 document.addEventListener('click', function (e) {

@@ -180,6 +180,45 @@ function WorkspaceCardActions(props: {
   )
 }
 
+function WorkspaceDepthToggle(props: { limit: number }) {
+  const expanded = props.limit === 10
+  const nextLimit = expanded ? 5 : 10
+  const label = expanded
+    ? 'Show 5 commits in all repositories'
+    : 'Show 10 commits in all repositories'
+
+  return (
+    <button
+      type="button"
+      class="workspace-depth-toggle"
+      aria-controls="workspace-board"
+      aria-expanded={expanded ? 'true' : 'false'}
+      aria-label={label}
+      title={label}
+      hx-get={`/fragment/workspace?limit=${nextLimit}`}
+      hx-target="#workspace-board"
+      hx-swap="outerHTML"
+      hx-push-url={`/workspace?limit=${nextLimit}`}
+      hx-disabled-elt="this"
+    >
+      <svg
+        class="workspace-depth-chevron"
+        width="12"
+        height="12"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        aria-hidden="true"
+      >
+        <path d={expanded ? 'm18 15-6-6-6 6' : 'm6 9 6 6 6-6'} />
+      </svg>
+    </button>
+  )
+}
+
 function WorkspaceRepoCard(props: {
   repo: WorkspaceRepoSnapshot
   currentRepo: string
@@ -215,6 +254,7 @@ function WorkspaceRepoCard(props: {
         <pre>
           {workspaceSafeRepoText(props.repo.stderr, props.repo.repoPath)}
         </pre>
+        <WorkspaceDepthToggle limit={props.limit} />
       </article>
     )
   }
@@ -308,6 +348,7 @@ function WorkspaceRepoCard(props: {
           )}
         </div>
       </div>
+      <WorkspaceDepthToggle limit={props.limit} />
     </article>
   )
 }
@@ -337,22 +378,6 @@ export function WorkspaceView(props: {
           </div>
         </div>
         <div class="workspace-toolbar-actions">
-          <nav class="workspace-depth" aria-label="Commit depth">
-            <a
-              href="/workspace?limit=5"
-              class={props.limit === 5 ? 'is-active' : ''}
-              aria-current={props.limit === 5 ? 'page' : undefined}
-            >
-              5
-            </a>
-            <a
-              href="/workspace?limit=10"
-              class={props.limit === 10 ? 'is-active' : ''}
-              aria-current={props.limit === 10 ? 'page' : undefined}
-            >
-              10
-            </a>
-          </nav>
           <a class="workspace-refresh" href={`/workspace?limit=${props.limit}`}>
             Refresh
           </a>

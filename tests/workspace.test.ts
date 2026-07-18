@@ -122,8 +122,36 @@ describe('workspace states', () => {
     expect(html).toContain('workspace-drag-handle')
     expect(html).toContain('workspace-instance-toggle is-start')
     expect(html).toContain('>Start</button>')
+    expect(html).toContain('class="workspace-depth-toggle"')
+    expect(html).toContain('aria-expanded="false"')
+    expect(html).toContain('Show 10 commits in all repositories')
+    expect(html).toContain('hx-get="/fragment/workspace?limit=10"')
+    expect(html).not.toContain('class="workspace-depth"')
     expect(html).not.toContain('>running<')
     expect(html).not.toContain('>stopped<')
+  })
+
+  test('collapses every repository from each expanded card footer', () => {
+    const html = renderToString(
+      WorkspaceView({
+        repos: [
+          {
+            ok: false,
+            repoPath: '/tmp/example',
+            running: false,
+            isHost: false,
+            stderr: 'unavailable',
+          },
+        ],
+        currentRepo: '',
+        limit: 10,
+      }),
+    )
+
+    expect(html).toContain('aria-expanded="true"')
+    expect(html).toContain('Show 5 commits in all repositories')
+    expect(html).toContain('hx-get="/fragment/workspace?limit=5"')
+    expect(html).toContain('hx-push-url="/workspace?limit=5"')
   })
 
   test('keeps the inspector hidden until requested and makes it closable', () => {
