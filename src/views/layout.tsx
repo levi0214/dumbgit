@@ -607,6 +607,12 @@ body.main-grid-dragging {
   cursor: pointer;
   user-select: none;
 }
+.branch-prefix-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .row-action-btn {
   all: unset;
   cursor: pointer;
@@ -1538,6 +1544,17 @@ body.workspace-reordering {
   padding-left: 10px;
   padding-right: 10px;
 }
+.workspace-repo-card [data-commit-row] {
+  cursor: pointer;
+}
+.workspace-repo-card .branch-prefix {
+  min-width: 0;
+  max-width: min(42%, 180px);
+  overflow: hidden;
+}
+.workspace-repo-card [data-commit-ignore] {
+  cursor: default;
+}
 .workspace-repo-card .log-row.workspace-row-selected {
   box-shadow: inset 3px 0 0 0 var(--accent);
   background: rgba(86, 156, 214, 0.14);
@@ -1986,6 +2003,15 @@ document.addEventListener('click', function (e) {
   if (!close) return;
   e.preventDefault();
   closeWorkspaceInspector();
+});
+
+document.addEventListener('click', function (e) {
+  var target = e.target && e.target.closest ? e.target : null;
+  var row = target && target.closest('[data-workspace-select="commit"]');
+  if (!row) return;
+  if (target.closest('button, a, input, select, textarea, [data-copy], [data-commit-ignore]')) return;
+  var trigger = row.querySelector('[data-commit-trigger]');
+  if (trigger) trigger.click();
 });
 
 document.addEventListener('click', function (e) {

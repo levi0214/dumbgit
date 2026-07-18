@@ -1,6 +1,11 @@
 import { describe, expect, test } from 'bun:test'
+import { renderToString } from 'hono/jsx/dom/server'
 import type { GraphRow } from '../src/git'
-import { graphLaneGutterCols, graphLaneLayout } from '../src/views/graph'
+import {
+  GraphRows,
+  graphLaneGutterCols,
+  graphLaneLayout,
+} from '../src/views/graph'
 
 function commit(sha: string, parents: string[]): GraphRow {
   return {
@@ -68,5 +73,32 @@ describe('graphLaneLayout', () => {
 
     expect(layout.rows.map((row) => row.lane)).toEqual([0, 1, 0, 1])
     expect(graphLaneGutterCols(layout.laneCount)).toBe(3)
+  })
+
+  test('marks commit rows for a larger workspace click target', () => {
+    const row = commit('a', [])
+    if (row.kind !== 'commit') throw new Error('expected commit row')
+    row.row.decorateRaw = 'HEAD -> feature/a-very-long-branch-name'
+    const layout = graphLaneLayout([row])
+    const html = renderToString(
+      GraphRows({
+        rows: [row],
+        detached: false,
+        currentBranch: 'feature/a-very-long-branch-name',
+        stashes: [],
+        laneLayoutByRow: layout.rows,
+        gutterCols: graphLaneGutterCols(layout.laneCount),
+        readonly: true,
+        workspaceRepoPath: '/tmp/example',
+        diffUrlForSha: (sha) => `/workspace/commit?sha=${sha}`,
+        diffTarget: '#workspace-inspector',
+      }),
+    )
+
+    expect(html).toContain('data-commit-row="true"')
+    expect(html).toContain('data-workspace-select="commit"')
+    expect(html).toContain('class="branch-prefix-name"')
+    expect(html).toContain('data-commit-trigger="true"')
+    expect(html).toContain('data-commit-ignore="true"')
   })
 })

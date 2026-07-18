@@ -598,6 +598,7 @@ function GraphCommitLine(props: {
     <div
       class={cls}
       data-sha={shaFull}
+      data-commit-row="true"
       data-workspace-select={props.readonly ? 'commit' : undefined}
       data-repo={props.workspaceRepoPath}
     >
@@ -621,7 +622,7 @@ function GraphCommitLine(props: {
           data-copy={branchPrefix}
         >
           {REF_BRANCH_ICO}
-          {branchPrefix}
+          <span class="branch-prefix-name">{branchPrefix}</span>
           {branchPrefixPeer ? (
             <>
               <span class="ref-peer-sep">|</span>
@@ -668,6 +669,7 @@ function GraphCommitLine(props: {
       <button
         type="button"
         class="msg-btn"
+        data-commit-trigger="true"
         title={[subject, ageTitle].filter(Boolean).join('\n')}
         hx-get={diffUrl}
         hx-target={props.diffTarget ?? '#diff'}
@@ -687,7 +689,7 @@ function GraphCommitLine(props: {
         <span class="msg-age" title={ageTitle}>
           {relTimeAgo(date)}
         </span>
-        <span class="row-tail">
+        <span class="row-tail" data-commit-ignore="true">
           {props.readonly ? null : (
             <>
               <button
