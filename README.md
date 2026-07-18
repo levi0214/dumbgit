@@ -55,9 +55,9 @@ refresh or restart. Drag a card by its handle to keep a custom order across
 Workspace restarts. Visible paths use `~` or a shortened suffix so screenshots
 do not expose the macOS username.
 
-Servers exit on their own about a minute after the last browser tab disconnects
-(no SSE clients). `list` / `stop` / `restart` remain for stuck or stale
-processes.
+Servers exit on their own about 20 minutes after the last browser tab
+disconnects, or after starting with no browser connection (no SSE clients).
+`list` / `stop` / `restart` remain for stuck or stale processes.
 
 Use `bun run dev` when working on dumbgit itself. It disables idle exit and
 runs with `bun --watch`; if `7777` is busy, it picks the next free port.

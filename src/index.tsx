@@ -77,7 +77,7 @@ const APP_ROOT = path.resolve(import.meta.dir, '..')
 const LAUNCHER_PATH = path.join(APP_ROOT, 'bin', 'dumbgit')
 
 /** After last `/events` client leaves (or boot with none), exit. */
-const IDLE_EXIT_GRACE_MS_DEFAULT = 60_000
+const IDLE_EXIT_GRACE_MS_DEFAULT = 20 * 60_000
 
 function clampGraphCommitLimit(n: number): number {
   if (!Number.isFinite(n)) return GRAPH_COMMIT_DEFAULT
