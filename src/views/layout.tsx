@@ -1649,6 +1649,7 @@ body.workspace-reordering {
   width: 100%;
   min-height: 31px;
   padding: 5px 10px;
+  position: relative;
   border: 1px solid #3a3c40;
   border-top-color: rgba(86, 156, 214, 0.34);
   border-bottom: 0;
@@ -1681,6 +1682,28 @@ body.workspace-reordering {
 .workspace-inspector-context span {
   color: var(--muted);
   font-size: 10px;
+}
+.workspace-inspector-chevron {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  color: #92969c;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(-50%);
+  transition: opacity 120ms ease;
+}
+.workspace-inspector-context:focus-visible
+  .workspace-inspector-chevron,
+.workspace-inspector-context:active
+  .workspace-inspector-chevron {
+  opacity: 0.82;
+}
+@media (hover: hover) and (pointer: fine) {
+  .workspace-inspector-context:hover
+    .workspace-inspector-chevron {
+    opacity: 0.82;
+  }
 }
 .workspace-inspector-close-hint {
   min-width: 64px;
@@ -1921,10 +1944,19 @@ function revealWorkspaceInspectorRepo() {
     : card.querySelector('.workspace-row-selected') || card;
   var targetRect = target.getBoundingClientRect();
   var edge = 4;
+  var delta = 0;
   if (targetRect.top < boardRect.top + edge) {
-    board.scrollTop -= boardRect.top + edge - targetRect.top;
+    delta = targetRect.top - boardRect.top - edge;
   } else if (targetRect.bottom > boardRect.bottom - edge) {
-    board.scrollTop += targetRect.bottom - boardRect.bottom + edge;
+    delta = targetRect.bottom - boardRect.bottom + edge;
+  }
+  if (delta !== 0) {
+    var reduceMotion = window.matchMedia &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    board.scrollTo({
+      top: board.scrollTop + delta,
+      behavior: reduceMotion ? 'auto' : 'smooth'
+    });
   }
 }
 

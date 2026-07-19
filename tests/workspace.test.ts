@@ -197,6 +197,7 @@ describe('workspace states', () => {
       }),
     )
     expect(inspector).toContain('workspace-inspector-collapse')
+    expect(inspector).toContain('workspace-inspector-chevron')
     expect(inspector).toContain('workspace-inspector-close-hint')
     expect(inspector).toContain('aria-label="Collapse inspector"')
     expect(inspector).toContain('<span>Close</span>')
