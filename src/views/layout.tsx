@@ -1646,6 +1646,7 @@ body.workspace-reordering {
   display: none;
 }
 .workspace-inspector-context {
+  width: 100%;
   min-height: 31px;
   padding: 5px 10px;
   border: 1px solid #3a3c40;
@@ -1653,9 +1654,25 @@ body.workspace-reordering {
   border-bottom: 0;
   border-radius: 6px 6px 0 0;
   background: #28292c;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
   display: flex;
   align-items: center;
   gap: 8px;
+}
+.workspace-inspector-context:hover {
+  border-top-color: rgba(86, 156, 214, 0.62);
+  background: #2d2e31;
+}
+.workspace-inspector-context:focus-visible {
+  z-index: 1;
+  outline: 1px solid var(--accent);
+  outline-offset: -2px;
+}
+.workspace-inspector-context:active {
+  background: #303135;
 }
 .workspace-inspector-context strong {
   color: var(--fg);
@@ -1665,54 +1682,20 @@ body.workspace-reordering {
   color: var(--muted);
   font-size: 10px;
 }
-.workspace-inspector-collapse {
-  width: 36px;
-  height: 24px;
-  padding: 0;
-  position: absolute;
-  top: 4px;
-  left: 50%;
-  border: 1px solid transparent;
-  border-radius: 4px;
-  background: transparent;
-  color: #797c80;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  transform: translateX(-50%);
-}
-.workspace-inspector-collapse:hover {
-  border-color: #4a4c50;
-  background: rgba(255, 255, 255, 0.05);
-  color: var(--fg);
-}
-.workspace-inspector-collapse:focus-visible {
-  outline: 1px solid var(--accent);
-  outline-offset: -2px;
-}
-.workspace-inspector-collapse:active {
-  transform: translateX(-50%) scale(0.97);
-}
-.workspace-inspector-close {
+.workspace-inspector-close-hint {
   min-width: 64px;
   height: 24px;
   margin-left: auto;
   padding: 0 6px;
-  border: 1px solid transparent;
-  border-radius: 4px;
-  background: transparent;
   color: var(--muted);
-  font: inherit;
   font-size: 9px;
   line-height: 1;
-  cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
 }
-.workspace-inspector-close kbd {
+.workspace-inspector-close-hint kbd {
   padding: 1px 4px;
   border: 1px solid #484a4e;
   border-radius: 3px;
@@ -1722,17 +1705,9 @@ body.workspace-reordering {
   font-size: 8px;
   line-height: 1.35;
 }
-.workspace-inspector-close > span {
+.workspace-inspector-close-hint > span {
   color: inherit;
   font-size: inherit;
-}
-.workspace-inspector-close:hover {
-  border-color: #4a4c50;
-  background: rgba(255, 255, 255, 0.05);
-  color: var(--fg);
-}
-.workspace-inspector-close:active {
-  transform: scale(0.97);
 }
 .workspace-inspector > .diff-panel {
   border-radius: 0 0 6px 6px;
@@ -2066,9 +2041,8 @@ document.body.addEventListener('htmx:historyRestore', function () {
 });
 
 document.addEventListener('click', function (e) {
-  var close = e.target && e.target.closest && e.target.closest(
-    '.workspace-inspector-close, .workspace-inspector-collapse'
-  );
+  var close = e.target && e.target.closest &&
+    e.target.closest('.workspace-inspector-collapse');
   if (!close) return;
   e.preventDefault();
   closeWorkspaceInspector();

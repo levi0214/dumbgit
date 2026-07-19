@@ -443,39 +443,19 @@ function WorkspaceInspectorContext(props: {
   detail: string
 }) {
   return (
-    <div class="workspace-inspector-context">
+    <button
+      type="button"
+      class="workspace-inspector-context workspace-inspector-collapse"
+      title="Collapse inspector (Esc)"
+      aria-label="Collapse inspector"
+    >
       <strong>{props.name}</strong>
       <span>{props.detail}</span>
-      <button
-        type="button"
-        class="workspace-inspector-collapse"
-        title="Collapse inspector (Esc)"
-        aria-label="Collapse inspector"
-      >
-        <svg
-          width="14"
-          height="14"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          aria-hidden="true"
-        >
-          <path d="m6 9 6 6 6-6" />
-        </svg>
-      </button>
-      <button
-        type="button"
-        class="workspace-inspector-close"
-        title="Close inspector (Esc)"
-        aria-label="Close inspector"
-      >
+      <span class="workspace-inspector-close-hint" aria-hidden="true">
         <span>Close</span>
         <kbd>Esc</kbd>
-      </button>
-    </div>
+      </span>
+    </button>
   )
 }
 
