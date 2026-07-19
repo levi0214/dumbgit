@@ -1929,6 +1929,30 @@ function syncWorkspaceControls() {
   }
 }
 
+function revealWorkspaceInspectorRepo() {
+  var board = document.getElementById('workspace-board');
+  var inspector = document.getElementById('workspace-inspector');
+  var repo = inspector && inspector.dataset ? inspector.dataset.workspaceRepo : '';
+  if (!board || !repo) return;
+  var card = Array.from(board.querySelectorAll('[data-workspace-repo]')).find(function (item) {
+    return item.dataset && item.dataset.workspaceRepo === repo;
+  });
+  if (!card) return;
+
+  var boardRect = board.getBoundingClientRect();
+  var cardRect = card.getBoundingClientRect();
+  var target = cardRect.height <= boardRect.height
+    ? card
+    : card.querySelector('.workspace-row-selected') || card;
+  var targetRect = target.getBoundingClientRect();
+  var edge = 4;
+  if (targetRect.top < boardRect.top + edge) {
+    board.scrollTop -= boardRect.top + edge - targetRect.top;
+  } else if (targetRect.bottom > boardRect.bottom - edge) {
+    board.scrollTop += targetRect.bottom - boardRect.bottom + edge;
+  }
+}
+
 function closeWorkspaceInspector() {
   var inspector = document.getElementById('workspace-inspector');
   if (!inspector || inspector.hasAttribute('hidden')) return false;
@@ -2015,6 +2039,9 @@ document.body.addEventListener('htmx:afterSwap', function (e) {
   if (t.id === 'worktree') syncWorktreeFileSelection();
   if (t.id === 'workspace-board' || t.id === 'workspace-inspector') {
     syncWorkspaceSelection();
+  }
+  if (t.id === 'workspace-inspector') {
+    requestAnimationFrame(revealWorkspaceInspectorRepo);
   }
   if (t.id === 'workspace-board') {
     var board = document.getElementById('workspace-board');
