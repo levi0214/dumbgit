@@ -1832,12 +1832,13 @@ const EMPTY_DIFF_HTML =
 const KEY_SCRIPT =
   `const EMPTY_DIFF = ${JSON.stringify(EMPTY_DIFF_HTML)};` +
   `
-document.body.addEventListener('htmx:configRequest', function (event) {
+function withRepo(url) {
   var repo = document.body.dataset ? document.body.dataset.repo : '';
-  if (repo && event.detail && event.detail.parameters) {
-    event.detail.parameters.repo = repo;
-  }
-});
+  if (!repo) return url;
+  var next = new URL(url, location.origin);
+  next.searchParams.set('repo', repo);
+  return next.pathname + next.search;
+}
 
 function syncViewingHighlight() {
   var inp = document.getElementById('viewing-sha');
@@ -2201,7 +2202,7 @@ const SSE_SCRIPT = `
       var limRaw = g && g.dataset ? g.dataset.graphLimit : '';
       var lim = parseInt(String(limRaw || '50'), 10);
       if (!Number.isFinite(lim) || lim < 10) lim = 50;
-      htmx.ajax('GET', '/fragment/graph?limit=' + encodeURIComponent(String(lim)), { target: '#graph', swap: 'outerHTML' });
+      htmx.ajax('GET', withRepo('/fragment/graph?limit=' + encodeURIComponent(String(lim))), { target: '#graph', swap: 'outerHTML' });
     });
   }
   start();
@@ -2298,7 +2299,7 @@ setInterval(async function () {
   if (await ensureRepoSync()) return;
   var w = document.getElementById('worktree');
   if (w) {
-    htmx.ajax('GET', '/fragment/worktree', { target: '#worktree', swap: 'outerHTML' });
+    htmx.ajax('GET', withRepo('/fragment/worktree'), { target: '#worktree', swap: 'outerHTML' });
   }
 }, 3000);
 `
@@ -2418,7 +2419,14 @@ export function Layout(props: {
         ></script>
         <style>{raw(CSS)}</style>
       </head>
-      <body data-repo={props.repoPath}>
+      <body
+        data-repo={props.repoPath}
+        hx-vals={
+          props.repoPath
+            ? JSON.stringify({ repo: props.repoPath })
+            : undefined
+        }
+      >
         <div
           id="sse-disconnect-overlay"
           class="sse-disconnect-overlay"

@@ -65,7 +65,7 @@ with `bun --watch` on the same default port.
 
 - Shows the current repo, HEAD, local branches, remote refs, tags, stashes,
   and recent commits in a compact graph.
-- Remembers opened repos and shows running or stopped repos side by side in
+- Remembers opened repos and shows active or inactive repos side by side in
   Workspace as active or dimmed cards, with short branch histories, Start/Stop
   controls, and an on-demand shared diff inspector.
 - Shows `main | origin` when a local branch and `origin/main` point at the

@@ -136,12 +136,10 @@ describe('workspace states', () => {
           {
             ok: false,
             repoPath: '/tmp/example',
-            running: false,
-            isHost: false,
+            active: false,
             stderr: 'unavailable',
           },
         ],
-        currentRepo: '',
         limit: 5,
       }),
     )
@@ -166,12 +164,10 @@ describe('workspace states', () => {
           {
             ok: false,
             repoPath: '/tmp/example',
-            running: false,
-            isHost: false,
+            active: false,
             stderr: 'unavailable',
           },
         ],
-        currentRepo: '',
         limit: 10,
       }),
     )
@@ -185,7 +181,7 @@ describe('workspace states', () => {
 
   test('keeps the inspector hidden until requested and makes it closable', () => {
     const page = renderToString(
-      WorkspaceView({ repos: [], currentRepo: '', limit: 5 }),
+      WorkspaceView({ repos: [], limit: 5 }),
     )
     expect(page).toContain(
       'id="workspace-inspector" class="workspace-inspector" hidden',

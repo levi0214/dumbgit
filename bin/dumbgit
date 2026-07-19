@@ -97,22 +97,13 @@ async function fetchController() {
   }
 }
 
-function listeningPids() {
-  const result = spawnSync('lsof', ['-ti', `tcp:${PORT}`, '-sTCP:LISTEN'], {
-    encoding: 'utf8',
-  })
-  return [...new Set(result.stdout.split(/\s+/).filter(Boolean))]
-}
-
 async function stopController() {
   const instance = await fetchController()
   if (!instance) return false
-  for (const pid of listeningPids()) {
-    try {
-      process.kill(Number(pid), 'SIGTERM')
-    } catch {
-      // The process may already have exited.
-    }
+  try {
+    process.kill(instance.pid, 'SIGTERM')
+  } catch {
+    // The process may already have exited.
   }
   const deadline = Date.now() + 5000
   while (Date.now() < deadline) {
@@ -127,7 +118,7 @@ function startController() {
   const log = openSync(logPath, 'a')
   const child = spawn(
     process.execPath,
-    ['run', 'src/index.tsx', '--port', String(PORT), '--workspace'],
+    ['run', 'src/index.tsx', '--port', String(PORT)],
     {
       cwd: appRoot,
       detached: true,

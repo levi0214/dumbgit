@@ -20,9 +20,7 @@ export type WorkspaceRepoSnapshot =
   | {
       ok: true
       repoPath: string
-      url?: string
-      running: boolean
-      isHost: boolean
+      active: boolean
       head: HeadInfo
       rows: GraphRow[]
       worktree: WorkTreeSummary
@@ -30,9 +28,7 @@ export type WorkspaceRepoSnapshot =
   | {
       ok: false
       repoPath: string
-      url?: string
-      running: boolean
-      isHost: boolean
+      active: boolean
       stderr: string
     }
 
@@ -131,13 +127,12 @@ function WorkspaceRepoName(props: {
 function WorkspaceCardActions(props: {
   repoPath: string
   repoUrl?: string
-  running: boolean
-  isHost: boolean
+  active: boolean
   limit: number
 }) {
   const name = path.basename(props.repoPath)
   const controlUrl =
-    `/workspace/repo/${props.running ? 'stop' : 'start'}` +
+    `/workspace/repo/${props.active ? 'stop' : 'start'}` +
     `?repo=${repoQuery(props.repoPath)}&limit=${props.limit}`
   return (
     <div class="workspace-card-actions">
@@ -152,19 +147,14 @@ function WorkspaceCardActions(props: {
       </button>
       <button
         type="button"
-        class={`workspace-instance-toggle${props.running ? '' : ' is-start'}`}
-        disabled={props.isHost}
-        title={
-          props.isHost
-            ? 'This repository is hosting the current Workspace'
-            : `${props.running ? 'Stop monitoring' : 'Start monitoring'} ${name}`
-        }
+        class={`workspace-instance-toggle${props.active ? '' : ' is-start'}`}
+        title={`${props.active ? 'Stop monitoring' : 'Start monitoring'} ${name}`}
         hx-post={controlUrl}
         hx-target="#workspace-board"
         hx-swap="outerHTML"
         hx-disabled-elt="this"
       >
-        {props.running ? 'Stop' : 'Start'}
+        {props.active ? 'Stop' : 'Start'}
       </button>
       {props.repoUrl ? (
         <a
@@ -221,16 +211,16 @@ function WorkspaceDepthToggle(props: { limit: number }) {
 
 function WorkspaceRepoCard(props: {
   repo: WorkspaceRepoSnapshot
-  currentRepo: string
   limit: number
 }) {
   if (!props.repo.ok) {
-    const repoUrl =
-      props.repo.repoPath === props.currentRepo ? '/' : props.repo.url
+    const repoUrl = props.repo.active
+      ? `/repo?repo=${repoQuery(props.repo.repoPath)}`
+      : undefined
     const parentLabel = workspaceRepoParentLabel(props.repo.repoPath)
     return (
       <article
-        class={`workspace-repo-card workspace-repo-error${props.repo.running ? '' : ' workspace-repo-stopped'}`}
+        class={`workspace-repo-card workspace-repo-error${props.repo.active ? '' : ' workspace-repo-stopped'}`}
         data-workspace-repo={props.repo.repoPath}
       >
         <div class="workspace-card-head">
@@ -246,8 +236,7 @@ function WorkspaceRepoCard(props: {
           <WorkspaceCardActions
             repoPath={props.repo.repoPath}
             repoUrl={repoUrl}
-            running={props.repo.running}
-            isHost={props.repo.isHost}
+            active={props.repo.active}
             limit={props.limit}
           />
         </div>
@@ -268,14 +257,15 @@ function WorkspaceRepoCard(props: {
     repo.head.kind === 'branch'
       ? repo.head.name
       : `detached · ${repo.head.sha.slice(0, 7)}`
-  const repoUrl =
-    repo.repoPath === props.currentRepo ? '/' : repo.url
+  const repoUrl = repo.active
+    ? `/repo?repo=${repoQuery(repo.repoPath)}`
+    : undefined
   const parentLabel = workspaceRepoParentLabel(repo.repoPath)
   const worktreeUrl = `/workspace/worktree?repo=${repoQuery(repo.repoPath)}`
 
   return (
     <article
-      class={`workspace-repo-card${repo.running ? '' : ' workspace-repo-stopped'}`}
+      class={`workspace-repo-card${repo.active ? '' : ' workspace-repo-stopped'}`}
       data-workspace-repo={repo.repoPath}
     >
       <div class="workspace-card-head">
@@ -291,8 +281,7 @@ function WorkspaceRepoCard(props: {
         <WorkspaceCardActions
           repoPath={repo.repoPath}
           repoUrl={repoUrl}
-          running={repo.running}
-          isHost={repo.isHost}
+          active={repo.active}
           limit={props.limit}
         />
       </div>
@@ -355,25 +344,19 @@ function WorkspaceRepoCard(props: {
 
 export function WorkspaceView(props: {
   repos: WorkspaceRepoSnapshot[]
-  currentRepo: string
   limit: number
 }) {
   return (
     <main class="workspace-page">
       <header class="workspace-toolbar">
         <div class="workspace-title-block">
-          {props.currentRepo ? (
-            <a class="workspace-back" href="/" title="Back to repository view">
-              ←
-            </a>
-          ) : null}
           <div>
             <h1>Workspace</h1>
             <p>
               {props.repos.length}{' '}
               {props.repos.length === 1 ? 'repository' : 'repositories'}
               {' · '}
-              {props.repos.filter((repo) => repo.running).length} active
+              {props.repos.filter((repo) => repo.active).length} active
             </p>
           </div>
         </div>
@@ -393,7 +376,6 @@ export function WorkspaceView(props: {
 
 export function WorkspaceBoard(props: {
   repos: WorkspaceRepoSnapshot[]
-  currentRepo: string
   limit: number
   controlError?: string
 }) {
@@ -413,7 +395,6 @@ export function WorkspaceBoard(props: {
         <WorkspaceRepoCard
           key={repo.repoPath}
           repo={repo}
-          currentRepo={props.currentRepo}
           limit={props.limit}
         />
       ))}

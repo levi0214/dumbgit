@@ -25,6 +25,7 @@ import path from 'node:path'
 export function watchGitRefs(
   gitDirPath: string,
   onChange: () => void,
+  options: { pollIntervalMs?: number } = {},
 ): () => void {
   let timer: ReturnType<typeof setTimeout> | null = null
   const fire = () => {
@@ -115,16 +116,19 @@ export function watchGitRefs(
     watchGitDir(commonDir)
   }
 
-  lastFingerprint = fingerprint()
-  const poll = setInterval(() => {
-    const next = fingerprint()
-    if (next === lastFingerprint) return
-    lastFingerprint = next
-    fire()
-  }, 150)
+  const poll =
+    options.pollIntervalMs === undefined
+      ? undefined
+      : setInterval(() => {
+          const next = fingerprint()
+          if (next === lastFingerprint) return
+          lastFingerprint = next
+          fire()
+        }, options.pollIntervalMs)
+  if (poll) lastFingerprint = fingerprint()
 
   return () => {
-    clearInterval(poll)
+    if (poll) clearInterval(poll)
     if (timer) clearTimeout(timer)
     timer = null
     for (const w of watchers) {

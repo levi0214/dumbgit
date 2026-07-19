@@ -10,12 +10,10 @@ import path from 'node:path'
 
 export type RememberedRepo = {
   repoPath: string
-  lastOpenedAt: string
   active: boolean
 }
 
 type HistoryFile = {
-  version: 2
   repos: RememberedRepo[]
 }
 
@@ -36,12 +34,11 @@ export function readRepoHistory(): RememberedRepo[] {
     const parsed = JSON.parse(
       readFileSync(repoHistoryPath(), 'utf8'),
     ) as Partial<HistoryFile>
-    if (parsed.version !== 2 || !Array.isArray(parsed.repos)) return []
+    if (!Array.isArray(parsed.repos)) return []
     return parsed.repos.filter(
       (entry): entry is RememberedRepo =>
         !!entry &&
         typeof entry.repoPath === 'string' &&
-        typeof entry.lastOpenedAt === 'string' &&
         typeof entry.active === 'boolean',
     )
   } catch {
@@ -53,7 +50,7 @@ function writeRepoHistory(repos: RememberedRepo[]): void {
   const file = repoHistoryPath()
   mkdirSync(path.dirname(file), { recursive: true })
   const temp = `${file}.${process.pid}.tmp`
-  const payload: HistoryFile = { version: 2, repos }
+  const payload: HistoryFile = { repos }
   writeFileSync(temp, `${JSON.stringify(payload, null, 2)}\n`, {
     mode: 0o600,
   })
@@ -63,16 +60,14 @@ function writeRepoHistory(repos: RememberedRepo[]): void {
 export function rememberRepo(repoPath: string, active = true): void {
   try {
     const canonical = realpathSync(repoPath)
-    const now = new Date().toISOString()
     const repos = readRepoHistory()
     const existing = repos.find(
       (entry) => entry.repoPath === canonical,
     )
     if (existing) {
-      existing.lastOpenedAt = now
       if (active) existing.active = true
     } else {
-      repos.push({ repoPath: canonical, lastOpenedAt: now, active })
+      repos.push({ repoPath: canonical, active })
     }
     writeRepoHistory(repos)
   } catch {
@@ -87,7 +82,6 @@ export function setRepoActive(repoPath: string, active: boolean): boolean {
     const existing = repos.find((entry) => entry.repoPath === canonical)
     if (!existing) return false
     existing.active = active
-    if (active) existing.lastOpenedAt = new Date().toISOString()
     writeRepoHistory(repos)
     return true
   } catch {

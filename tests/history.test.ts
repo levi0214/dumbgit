@@ -2,6 +2,7 @@ import { expect, test } from 'bun:test'
 import {
   mkdirSync,
   mkdtempSync,
+  readFileSync,
   realpathSync,
   rmSync,
 } from 'node:fs'
@@ -53,6 +54,12 @@ test('remembers and reorders canonical repository paths', () => {
       realpathSync(second),
       realpathSync(first),
     ])
+    expect(JSON.parse(readFileSync(historyFile, 'utf8'))).toEqual({
+      repos: [
+        { repoPath: realpathSync(second), active: true },
+        { repoPath: realpathSync(first), active: true },
+      ],
+    })
   } finally {
     if (previous === undefined) delete process.env.DUMBGIT_HISTORY_FILE
     else process.env.DUMBGIT_HISTORY_FILE = previous

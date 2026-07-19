@@ -100,9 +100,6 @@ function parseServerArgv(): {
       idleExit = false
       continue
     }
-    if (a === '--workspace') {
-      continue
-    }
     if (a === '--idle-grace-ms') {
       const n = Number(process.argv[++i])
       if (!Number.isFinite(n) || n < 1) {
@@ -177,9 +174,7 @@ async function loadGraph(
 
 type WorkspaceRepoSource = {
   repoPath: string
-  running: boolean
-  isHost: boolean
-  url?: string
+  active: boolean
   revision?: number
 }
 
@@ -219,15 +214,9 @@ async function syncRepoWatchers(): Promise<void> {
 async function discoverWorkspaceRepos(): Promise<WorkspaceRepoSource[]> {
   const repos = readRepoHistory().map((entry) => ({
     repoPath: entry.repoPath,
-    running: entry.active,
-    isHost: false,
-    url: entry.active
-      ? `/repo?repo=${encodeURIComponent(entry.repoPath)}`
-      : undefined,
+    active: entry.active,
     revision: state.repoRevisions.get(entry.repoPath),
   }))
-  state.workspaceRepos.clear()
-  for (const source of repos) state.workspaceRepos.set(source.repoPath, source)
   await syncRepoWatchers()
   return repos
 }
@@ -235,7 +224,7 @@ async function discoverWorkspaceRepos(): Promise<WorkspaceRepoSource[]> {
 async function loadWorkspace(
   limit: number,
   options: {
-    refreshStopped?: boolean
+    refreshInactive?: boolean
     forceRefresh?: boolean
   } = {},
 ): Promise<WorkspaceRepoSnapshot[]> {
@@ -244,21 +233,19 @@ async function loadWorkspace(
     repos.map(async (source): Promise<WorkspaceRepoSnapshot> => {
       const cached = state.workspaceSnapshots.get(source.repoPath)
       if (
-        !source.running &&
-        !options.refreshStopped &&
+        !source.active &&
+        !options.refreshInactive &&
         cached?.limit === limit
       ) {
         return {
           ...cached.snapshot,
           repoPath: source.repoPath,
-          url: source.url,
-          running: false,
-          isHost: false,
+          active: false,
         }
       }
 
       let fingerprint: string | undefined
-      if (source.running) {
+      if (source.active) {
         try {
           fingerprint = await workspaceRepoFingerprint(source.repoPath)
         } catch {
@@ -266,7 +253,7 @@ async function loadWorkspace(
         }
       }
       if (
-        source.running &&
+        source.active &&
         !options.forceRefresh &&
         cached?.limit === limit &&
         cached.revision === source.revision &&
@@ -276,9 +263,7 @@ async function loadWorkspace(
         return {
           ...cached.snapshot,
           repoPath: source.repoPath,
-          url: source.url,
-          running: true,
-          isHost: false,
+          active: true,
         }
       }
 
@@ -289,14 +274,19 @@ async function loadWorkspace(
           logGraphRows(limit, source.repoPath),
           workTreeSummary(source.repoPath),
         ])
-        snapshot = { ok: true, ...source, head, rows, worktree }
+        snapshot = {
+          ok: true,
+          repoPath: source.repoPath,
+          active: source.active,
+          head,
+          rows,
+          worktree,
+        }
       } catch (error) {
         snapshot = {
           ok: false,
           repoPath: source.repoPath,
-          running: source.running,
-          isHost: false,
-          url: source.url,
+          active: source.active,
           stderr: error instanceof Error ? error.message : String(error),
         }
       }
@@ -319,9 +309,7 @@ type DumbgitState = {
   lastChange: number
   /** SSE waiters woken by `bumpGitChange` (replaces 100ms polling). */
   changeWaiters: Set<() => void>
-  /** Repositories seen through local dumbgit instances during this process. */
-  workspaceRepos: Map<string, WorkspaceRepoSource>
-  /** Last rendered snapshot; stopped repositories do not refresh on polling. */
+  /** Last rendered snapshot; inactive repositories do not refresh on polling. */
   workspaceSnapshots: Map<
     string,
     {
@@ -334,7 +322,6 @@ type DumbgitState = {
   repoWatchers: Map<string, () => void>
   repoRevisions: Map<string, number>
   server?: ReturnType<typeof Bun.serve>
-  repoInitialized?: boolean
   listenPort?: number
 }
 const G = globalThis as { __dumbgit?: DumbgitState }
@@ -342,7 +329,6 @@ if (!G.__dumbgit) {
   G.__dumbgit = {
     lastChange: Date.now(),
     changeWaiters: new Set(),
-    workspaceRepos: new Map(),
     workspaceSnapshots: new Map(),
     repoWatchers: new Map(),
     repoRevisions: new Map(),
@@ -350,7 +336,6 @@ if (!G.__dumbgit) {
 }
 const state = G.__dumbgit
 if (!state.changeWaiters) state.changeWaiters = new Set()
-if (!state.workspaceRepos) state.workspaceRepos = new Map()
 if (!state.workspaceSnapshots) state.workspaceSnapshots = new Map()
 if (!state.repoWatchers) state.repoWatchers = new Map()
 if (!state.repoRevisions) state.repoRevisions = new Map()
@@ -403,8 +388,6 @@ async function listenPort(): Promise<number> {
   return (state.listenPort = BOOT.port ?? DEFAULT_PORT)
 }
 
-await syncRepoWatchers()
-
 const idle = BOOT.idleExit
   ? createIdleExit({
       graceMs: BOOT.idleGraceMs,
@@ -415,11 +398,17 @@ const idle = BOOT.idleExit
     })
   : null
 
-const app = new Hono()
+type AppEnv = {
+  Variables: {
+    repoPath: string
+  }
+}
+
+export const app = new Hono<AppEnv>()
 
 app.get('/healthz', (c) => c.text(`${HEALTH_BODY}\n`))
 
-/** Launcher discovers running servers via this endpoint (JSON). */
+/** Launcher finds the controller and its PID here. */
 app.get('/healthz.json', (c) => {
   c.header('Cache-Control', 'no-store')
   const port = state.listenPort
@@ -456,12 +445,12 @@ async function renderWorkspace(c: Context) {
   c.header('Cache-Control', 'no-store')
   const limit = clampWorkspaceCommitLimit(c.req.query('limit'))
   const repos = await loadWorkspace(limit, {
-    refreshStopped: true,
+    refreshInactive: true,
     forceRefresh: true,
   })
   return c.html(
     <Layout title="dumbgit: Workspace">
-      <WorkspaceView repos={repos} currentRepo="" limit={limit} />
+      <WorkspaceView repos={repos} limit={limit} />
     </Layout>,
     200,
   )
@@ -506,11 +495,7 @@ app.get('/fragment/workspace', async (c) => {
   const limit = clampWorkspaceCommitLimit(c.req.query('limit'))
   const repos = await loadWorkspace(limit)
   return c.html(
-    <WorkspaceBoard
-      repos={repos}
-      currentRepo=""
-      limit={limit}
-    />,
+    <WorkspaceBoard repos={repos} limit={limit} />,
     200,
   )
 })
@@ -537,7 +522,8 @@ app.post('/workspace/repo/reorder', async (c) => {
   }
 
   const ordered = [...new Set(repoPaths as string[])]
-  if (ordered.some((repoPath) => !state.workspaceRepos.has(repoPath))) {
+  const known = new Set(readRepoHistory().map((repo) => repo.repoPath))
+  if (ordered.some((repoPath) => !known.has(repoPath))) {
     return c.json({ ok: false, error: 'unknown_repository' }, 400)
   }
   reorderRepoHistory(ordered)
@@ -557,7 +543,6 @@ app.post('/workspace/repo/start', async (c) => {
   return c.html(
     <WorkspaceBoard
       repos={repos}
-      currentRepo=""
       limit={limit}
       controlError={controlError}
     />,
@@ -578,7 +563,6 @@ app.post('/workspace/repo/stop', async (c) => {
   return c.html(
     <WorkspaceBoard
       repos={repos}
-      currentRepo=""
       limit={limit}
       controlError={controlError}
     />,
@@ -710,11 +694,12 @@ app.get('/workspace/worktree/file', async (c) => {
   return c.html(<WorkspacePatch patch={patch.patch} />, 200)
 })
 
-async function requireActiveRepo(c: Context, next: Next) {
+async function requireActiveRepo(c: Context<AppEnv>, next: Next) {
   const repoPath = workspaceRepoFromQuery(c.req.query('repo'), {
     requireActive: true,
   })
   if (!repoPath) return c.text('missing, inactive, or unknown repository', 400)
+  c.set('repoPath', repoPath)
   await next()
 }
 
@@ -724,7 +709,7 @@ app.use('/fragment/worktree', requireActiveRepo)
 app.use('/api/*', requireActiveRepo)
 
 app.get('/fragment/graph', async (c) => {
-  const repoPath = workspaceRepoFromQuery(c.req.query('repo'), { requireActive: true })!
+  const repoPath = c.get('repoPath')
   c.header('Cache-Control', 'no-store')
   const q = c.req.query('limit')
   const parsed = q !== undefined ? Number.parseInt(q, 10) : NaN
@@ -736,7 +721,7 @@ app.get('/fragment/graph', async (c) => {
 })
 
 app.get('/fragment/graph/tail', async (c) => {
-  const repoPath = workspaceRepoFromQuery(c.req.query('repo'), { requireActive: true })!
+  const repoPath = c.get('repoPath')
   c.header('Cache-Control', 'no-store')
   const offset = Math.max(
     0,
@@ -792,7 +777,7 @@ app.get('/fragment/graph/tail', async (c) => {
 })
 
 app.get('/fragment/worktree', async (c) => {
-  const repoPath = workspaceRepoFromQuery(c.req.query('repo'), { requireActive: true })!
+  const repoPath = c.get('repoPath')
   c.header('Cache-Control', 'no-store')
   const wt = await workTreeSummary(repoPath)
   const head = await headInfo(repoPath)
@@ -809,7 +794,7 @@ app.get('/fragment/worktree', async (c) => {
 })
 
 app.get('/api/worktree/file', async (c) => {
-  const repoPath = workspaceRepoFromQuery(c.req.query('repo'), { requireActive: true })!
+  const repoPath = c.get('repoPath')
   c.header('Cache-Control', 'no-store')
   const kind = c.req.query('kind')
   const filePath = c.req.query('path') ?? ''
@@ -838,7 +823,7 @@ app.get('/api/worktree/file', async (c) => {
 })
 
 app.post('/api/worktree/action', async (c) => {
-  const repoPath = workspaceRepoFromQuery(c.req.query('repo'), { requireActive: true })!
+  const repoPath = c.get('repoPath')
   const kind = c.req.query('kind')
   const op = c.req.query('op')
   const filePath = c.req.query('path') ?? ''
@@ -867,7 +852,7 @@ app.post('/api/worktree/action', async (c) => {
 })
 
 app.post('/api/worktree/open', async (c) => {
-  const repoPath = workspaceRepoFromQuery(c.req.query('repo'), { requireActive: true })!
+  const repoPath = c.get('repoPath')
   const kind = c.req.query('kind')
   const filePath = c.req.query('path') ?? ''
   if (
@@ -899,7 +884,7 @@ app.post('/api/worktree/open', async (c) => {
 })
 
 app.post('/api/worktree/stash-toggle', async (c) => {
-  const repoPath = workspaceRepoFromQuery(c.req.query('repo'), { requireActive: true })!
+  const repoPath = c.get('repoPath')
   const r = await togglePreviewStash(repoPath)
   const next = await loadGraph(repoPath)
   if (!next.ok) {
@@ -922,7 +907,7 @@ app.post('/api/worktree/stash-toggle', async (c) => {
 })
 
 app.post('/api/worktree/stash-restore', async (c) => {
-  const repoPath = workspaceRepoFromQuery(c.req.query('repo'), { requireActive: true })!
+  const repoPath = c.get('repoPath')
   const r = await restorePreviewStash(c.req.query('ref'), repoPath)
   const next = await loadGraph(repoPath)
   return c.html(
@@ -936,7 +921,7 @@ app.post('/api/worktree/stash-restore', async (c) => {
 })
 
 app.post('/api/worktree/stash-drop', async (c) => {
-  const repoPath = workspaceRepoFromQuery(c.req.query('repo'), { requireActive: true })!
+  const repoPath = c.get('repoPath')
   const r = await dropPreviewStash(c.req.query('ref'), repoPath)
   const next = await loadGraph(repoPath)
   return c.html(
@@ -950,7 +935,7 @@ app.post('/api/worktree/stash-drop', async (c) => {
 })
 
 app.post('/api/checkout/branch', async (c) => {
-  const repoPath = workspaceRepoFromQuery(c.req.query('repo'), { requireActive: true })!
+  const repoPath = c.get('repoPath')
   const name = c.req.query('name')
   if (!name) {
     const graph = await loadGraph(repoPath)
@@ -974,7 +959,7 @@ app.post('/api/checkout/branch', async (c) => {
 })
 
 app.post('/api/checkout/commit', async (c) => {
-  const repoPath = workspaceRepoFromQuery(c.req.query('repo'), { requireActive: true })!
+  const repoPath = c.get('repoPath')
   const sha = c.req.query('sha')
   if (!sha) {
     const graph = await loadGraph(repoPath)
@@ -998,7 +983,7 @@ app.post('/api/checkout/commit', async (c) => {
 })
 
 app.get('/api/commit/:sha', async (c) => {
-  const repoPath = workspaceRepoFromQuery(c.req.query('repo'), { requireActive: true })!
+  const repoPath = c.get('repoPath')
   const sha = c.req.param('sha')
   const r = await commitSummary(sha, { includeTags: true }, repoPath)
   if (!r.ok) {
@@ -1008,7 +993,7 @@ app.get('/api/commit/:sha', async (c) => {
 })
 
 app.get('/api/commit/:sha/file', async (c) => {
-  const repoPath = workspaceRepoFromQuery(c.req.query('repo'), { requireActive: true })!
+  const repoPath = c.get('repoPath')
   c.header('Cache-Control', 'no-store')
   const sha = c.req.param('sha')
   const filePath = c.req.query('path') ?? ''
@@ -1049,7 +1034,7 @@ app.get('/api/commit/:sha/file', async (c) => {
 })
 
 app.get('/api/stash', async (c) => {
-  const repoPath = workspaceRepoFromQuery(c.req.query('repo'), { requireActive: true })!
+  const repoPath = c.get('repoPath')
   const ref = c.req.query('ref') ?? ''
   if (!ref) {
     return c.html(<DiffPanel state="error" sha="stash" stderr="missing stash ref" />, 200)
@@ -1070,7 +1055,7 @@ app.get('/api/stash', async (c) => {
 })
 
 app.get('/api/stash/file', async (c) => {
-  const repoPath = workspaceRepoFromQuery(c.req.query('repo'), { requireActive: true })!
+  const repoPath = c.get('repoPath')
   c.header('Cache-Control', 'no-store')
   const ref = c.req.query('ref') ?? ''
   const filePath = c.req.query('path') ?? ''
@@ -1095,7 +1080,7 @@ app.get('/api/stash/file', async (c) => {
 })
 
 app.post('/api/branch/create', async (c) => {
-  const repoPath = workspaceRepoFromQuery(c.req.query('repo'), { requireActive: true })!
+  const repoPath = c.get('repoPath')
   const sha = c.req.query('sha') ?? ''
   const body = await c.req.parseBody()
   let name = typeof body.name === 'string' ? body.name.trim() : ''
@@ -1125,7 +1110,7 @@ app.post('/api/branch/create', async (c) => {
 })
 
 app.post('/api/push', async (c) => {
-  const repoPath = workspaceRepoFromQuery(c.req.query('repo'), { requireActive: true })!
+  const repoPath = c.get('repoPath')
   const r = await push(repoPath)
   const next = await loadGraph(repoPath)
   return c.html(
@@ -1177,36 +1162,39 @@ app.get('/events', (c) => {
   })
 })
 
-const port = await listenPort()
+if (import.meta.main) {
+  await syncRepoWatchers()
+  const port = await listenPort()
 
-if (state.server) {
-  state.server.reload({
-    hostname: LISTEN_HOST,
-    port,
-    fetch: app.fetch,
-    // Long-lived /events streams; process lifetime is owned by idle-exit.
-    idleTimeout: 0,
-  })
-} else {
-  state.server = Bun.serve({
-    hostname: LISTEN_HOST,
-    port,
-    fetch: app.fetch,
-    idleTimeout: 0,
-  })
-  const base = `http://${LISTEN_HOST}:${port}`
-  console.log(`dumbgit workspace on ${base}/`)
-  if (idle) {
-    idle.start()
-    console.log(
-      `exits after ${Math.round(BOOT.idleGraceMs / 1000)}s with no browser`,
-    )
+  if (state.server) {
+    state.server.reload({
+      hostname: LISTEN_HOST,
+      port,
+      fetch: app.fetch,
+      // Long-lived /events streams; process lifetime is owned by idle-exit.
+      idleTimeout: 0,
+    })
   } else {
-    console.log('ctrl-c to quit, or `dumbgit stop --all`')
-  }
-  if (BOOT.open) {
-    setTimeout(() => {
-      Bun.spawn(['open', base])
-    }, 200)
+    state.server = Bun.serve({
+      hostname: LISTEN_HOST,
+      port,
+      fetch: app.fetch,
+      idleTimeout: 0,
+    })
+    const base = `http://${LISTEN_HOST}:${port}`
+    console.log(`dumbgit workspace on ${base}/`)
+    if (idle) {
+      idle.start()
+      console.log(
+        `exits after ${Math.round(BOOT.idleGraceMs / 1000)}s with no browser`,
+      )
+    } else {
+      console.log('ctrl-c to quit, or `dumbgit stop --all`')
+    }
+    if (BOOT.open) {
+      setTimeout(() => {
+        Bun.spawn(['open', base])
+      }, 200)
+    }
   }
 }

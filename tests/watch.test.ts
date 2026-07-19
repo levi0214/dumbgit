@@ -34,9 +34,13 @@ describe('watchGitRefs', () => {
     dirs.push(gitDir)
 
     let hits = 0
-    const close = watchGitRefs(gitDir, () => {
-      hits++
-    })
+    const close = watchGitRefs(
+      gitDir,
+      () => {
+        hits++
+      },
+      { pollIntervalMs: 150 },
+    )
     cleanups.push(close)
 
     // Let the watcher attach (FSEvents can be slightly async).
@@ -75,9 +79,13 @@ describe('watchGitRefs', () => {
     writeFileSync(path.join(worktreeGit, 'HEAD'), 'ref: refs/heads/main\n')
 
     let hits = 0
-    const close = watchGitRefs(worktreeGit, () => {
-      hits++
-    })
+    const close = watchGitRefs(
+      worktreeGit,
+      () => {
+        hits++
+      },
+      { pollIntervalMs: 150 },
+    )
     cleanups.push(close)
     await Bun.sleep(50)
 
