@@ -42,7 +42,22 @@ test('Workspace owns repository activation and repository routing', async () => 
     const query = `repo=${encodeURIComponent(repo)}`
     const workspace = await app.request('/')
     expect(workspace.status).toBe(200)
-    expect(await workspace.text()).toContain('1 repository · 1 active')
+    const workspacePage = await workspace.text()
+    expect(workspacePage).toContain('<title>dumbgit</title>')
+    expect(workspacePage).toContain('<h1>dumbgit</h1>')
+    expect(workspacePage).toContain('1 repository · 1 active')
+    expect(workspacePage).toContain(
+      `/workspace/repo/terminal?repo=${encodeURIComponent(repo)}`,
+    )
+    expect(workspacePage).toContain(`Open example in Ghostty`)
+    expect(
+      (
+        await app.request(
+          '/workspace/repo/terminal?repo=/not/a/workspace/repo',
+          { method: 'POST' },
+        )
+      ).status,
+    ).toBe(404)
 
     const stopped = await app.request(
       `/workspace/repo/stop?${query}&limit=5`,

@@ -1264,8 +1264,7 @@ body.main-grid-dragging {
   border-color: var(--accent);
 }
 .workspace-back:active,
-.workspace-refresh:active,
-.workspace-open-repo:active {
+.workspace-refresh:active {
   transform: scale(0.97);
 }
 .workspace-board {
@@ -1362,17 +1361,33 @@ a.workspace-repo-name:hover {
   color: var(--muted);
   font-size: 9px;
 }
-.workspace-open-repo {
+.workspace-icon-action {
   width: 26px;
   height: 26px;
   flex: 0 0 auto;
   border: 1px solid transparent;
   border-radius: 4px;
+  padding: 0;
+  background: transparent;
   color: var(--muted);
   text-decoration: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  cursor: pointer;
+  transition: transform 120ms ease-out;
+}
+.workspace-icon-action:hover:not(:disabled) {
+  color: var(--accent);
+  border-color: var(--border);
+  background: rgba(86, 156, 214, 0.08);
+}
+.workspace-icon-action:active:not(:disabled) {
+  transform: scale(0.97);
+}
+.workspace-icon-action:disabled {
+  opacity: 0.38;
+  cursor: default;
 }
 .workspace-card-actions {
   flex: 0 0 auto;
@@ -1458,11 +1473,6 @@ body.workspace-reordering {
   background: rgba(244, 135, 113, 0.08);
   color: var(--error);
   font-size: 10px;
-}
-.workspace-open-repo:hover {
-  color: var(--accent);
-  border-color: var(--border);
-  background: rgba(86, 156, 214, 0.08);
 }
 .workspace-timeline {
   padding: 2px 0 5px;

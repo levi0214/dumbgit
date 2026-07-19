@@ -70,6 +70,18 @@ const GRAPH_COMMIT_MAX = 500
 const WORKSPACE_COMMIT_DEFAULT = 5
 const WORKSPACE_COMMIT_MAX = 10
 
+const GHOSTTY_NEW_WINDOW_SCRIPT = `
+on run argv
+  tell application "Ghostty"
+    activate
+    set cfg to new surface configuration
+    set initial working directory of cfg to item 1 of argv
+    set win to new window with configuration cfg
+    focus (terminal 1 of selected tab of win)
+  end tell
+end run
+`
+
 /** After last `/events` client leaves (or boot with none), exit. */
 const IDLE_EXIT_GRACE_MS_DEFAULT = 20 * 60_000
 
@@ -449,7 +461,7 @@ async function renderWorkspace(c: Context) {
     forceRefresh: true,
   })
   return c.html(
-    <Layout title="dumbgit: Workspace">
+    <Layout title="dumbgit">
       <WorkspaceView repos={repos} limit={limit} />
     </Layout>,
     200,
@@ -568,6 +580,34 @@ app.post('/workspace/repo/stop', async (c) => {
     />,
     200,
   )
+})
+
+app.post('/workspace/repo/terminal', (c) => {
+  const repoPath = workspaceRepoFromQuery(c.req.query('repo'))
+  if (!repoPath) {
+    return c.text('Repository is not in Workspace history.', 404)
+  }
+
+  const result = spawnSync(
+    'osascript',
+    [
+      '-e',
+      GHOSTTY_NEW_WINDOW_SCRIPT,
+      '--',
+      repoPath,
+    ],
+    { encoding: 'utf8' },
+  )
+  if (result.status !== 0) {
+    const stderr = String(result.stderr ?? '').trim()
+    return c.text(
+      stderr ||
+        `Failed to create Ghostty window (${result.status ?? 'unknown'}).`,
+      500,
+    )
+  }
+
+  return c.body(null, 204)
 })
 
 app.get('/workspace/commit', async (c) => {

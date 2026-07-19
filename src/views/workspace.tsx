@@ -134,6 +134,8 @@ function WorkspaceCardActions(props: {
   const controlUrl =
     `/workspace/repo/${props.active ? 'stop' : 'start'}` +
     `?repo=${repoQuery(props.repoPath)}&limit=${props.limit}`
+  const terminalUrl =
+    `/workspace/repo/terminal?repo=${repoQuery(props.repoPath)}`
   return (
     <div class="workspace-card-actions">
       <button
@@ -156,9 +158,33 @@ function WorkspaceCardActions(props: {
       >
         {props.active ? 'Stop' : 'Start'}
       </button>
+      <button
+        type="button"
+        class="workspace-icon-action workspace-open-terminal"
+        title={`Open ${name} in Ghostty`}
+        aria-label={`Open ${name} in Ghostty`}
+        hx-post={terminalUrl}
+        hx-swap="none"
+        hx-disabled-elt="this"
+      >
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <polyline points="4 17 10 11 4 5" />
+          <line x1="12" y1="19" x2="20" y2="19" />
+        </svg>
+      </button>
       {props.repoUrl ? (
         <a
-          class="workspace-open-repo"
+          class="workspace-icon-action workspace-open-repo"
           href={props.repoUrl}
           title="Open full repository view"
           aria-label={`Open ${name}`}
@@ -351,7 +377,7 @@ export function WorkspaceView(props: {
       <header class="workspace-toolbar">
         <div class="workspace-title-block">
           <div>
-            <h1>Workspace</h1>
+            <h1>dumbgit</h1>
             <p>
               {props.repos.length}{' '}
               {props.repos.length === 1 ? 'repository' : 'repositories'}
