@@ -1273,6 +1273,7 @@ body.main-grid-dragging {
   padding: 1px 4px 8px 1px;
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  grid-auto-rows: max-content;
   align-content: start;
   gap: 10px;
   scrollbar-gutter: stable;
@@ -1585,28 +1586,6 @@ body.workspace-reordering {
   align-items: center;
   justify-content: center;
 }
-.workspace-page:has(.workspace-inspector:not([hidden]))
-  .workspace-depth-toggle {
-  height: 21px;
-  flex-basis: 21px;
-  border-top: 1px solid rgba(255, 255, 255, 0.075);
-  background: #252526;
-}
-.workspace-page:has(.workspace-inspector:not([hidden]))
-  .workspace-depth-chevron {
-  opacity: 0.56;
-}
-.workspace-page:has(.workspace-inspector:not([hidden]))
-  .workspace-repo-stopped
-  .workspace-depth-toggle {
-  border-top-color: rgba(255, 255, 255, 0.035);
-  background: #191919;
-}
-.workspace-page:has(.workspace-inspector:not([hidden]))
-  .workspace-repo-stopped
-  .workspace-depth-chevron {
-  opacity: 0.3;
-}
 .workspace-depth-toggle:focus-visible {
   position: relative;
   z-index: 1;
@@ -1638,17 +1617,6 @@ body.workspace-reordering {
     .workspace-depth-toggle:hover
     .workspace-depth-chevron {
     opacity: 0.62;
-  }
-  .workspace-page:has(.workspace-inspector:not([hidden]))
-    .workspace-depth-toggle:hover
-    .workspace-depth-chevron {
-    opacity: 0.82;
-  }
-  .workspace-page:has(.workspace-inspector:not([hidden]))
-    .workspace-repo-stopped
-    .workspace-depth-toggle:hover
-    .workspace-depth-chevron {
-    opacity: 0.58;
   }
 }
 .workspace-repo-error {
