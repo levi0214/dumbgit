@@ -1756,11 +1756,40 @@ body.workspace-reordering {
   place-items: center;
   text-align: center;
 }
-.workspace-file-kind {
-  width: 54px;
-  flex: 0 0 auto;
-  color: var(--muted);
+.workspace-file-groups {
+  padding: 4px 0 8px;
+}
+.workspace-file-group + .workspace-file-group {
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+.workspace-file-group-head {
+  padding: 4px 12px 2px;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
   font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.workspace-file-group-head span:last-child {
+  opacity: 0.55;
+  font-variant-numeric: tabular-nums;
+}
+.workspace-file-group-staged .workspace-file-group-head {
+  color: rgba(137, 209, 133, 0.78);
+}
+.workspace-file-group-unstaged .workspace-file-group-head {
+  color: rgba(220, 220, 170, 0.72);
+}
+.workspace-file-group-untracked .workspace-file-group-head {
+  color: rgba(86, 156, 214, 0.76);
+}
+.workspace-file-group .diff-files {
+  padding: 1px 12px 4px;
 }
 
 @media (min-width: 900px) {
@@ -1818,9 +1847,6 @@ body.workspace-reordering {
   }
   .workspace-card-head {
     min-height: 43px;
-  }
-  .workspace-file-kind {
-    display: none;
   }
 }
 `

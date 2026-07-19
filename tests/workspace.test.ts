@@ -14,6 +14,7 @@ import {
 import {
   WorkspaceCommitInspector,
   WorkspaceView,
+  WorkspaceWorktreeInspector,
   workspaceRepoParentLabel,
   workspaceSafeRepoText,
 } from '../src/views/workspace'
@@ -237,5 +238,50 @@ describe('workspace states', () => {
     expect(inspector.indexOf('diff-files-block')).toBeLessThan(
       inspector.indexOf('diff-patch-slot'),
     )
+  })
+
+  test('groups working tree files without repeating kind labels', () => {
+    const inspector = renderToString(
+      WorkspaceWorktreeInspector({
+        repoPath: '/tmp/example',
+        worktree: {
+          staged: [
+            {
+              mark: 'M ',
+              path: 'src/staged.ts',
+              added: 3,
+              deleted: 1,
+            },
+          ],
+          unstaged: [
+            {
+              mark: ' M',
+              path: 'src/unstaged.ts',
+              added: 2,
+              deleted: 0,
+            },
+          ],
+          untracked: [
+            {
+              mark: '??',
+              path: 'src/untracked.ts',
+              added: 4,
+              deleted: 0,
+            },
+          ],
+        },
+      }),
+    )
+
+    expect(inspector).toContain('workspace-file-group-staged')
+    expect(inspector).toContain('workspace-file-group-unstaged')
+    expect(inspector).toContain('workspace-file-group-untracked')
+    expect(inspector.indexOf('>Staged</span>')).toBeLessThan(
+      inspector.indexOf('>Unstaged</span>'),
+    )
+    expect(inspector.indexOf('>Unstaged</span>')).toBeLessThan(
+      inspector.indexOf('>Untracked</span>'),
+    )
+    expect(inspector).not.toContain('workspace-file-kind')
   })
 })

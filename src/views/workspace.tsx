@@ -555,11 +555,62 @@ function WorkspaceFileNums(props: {
   )
 }
 
+function WorkspaceWorktreeFile(props: {
+  repoPath: string
+  kind: WorkTreeChangeKind
+  entry: WorkTreeEntry
+}) {
+  const fileUrl =
+    `/workspace/worktree/file?repo=${repoQuery(props.repoPath)}` +
+    `&kind=${props.kind}&path=${encodeURIComponent(props.entry.path)}`
+  return (
+    <li>
+      <button
+        type="button"
+        class="diff-file-btn"
+        title={`${props.kind} · ${props.entry.path}`}
+        hx-get={fileUrl}
+        hx-target="#diff-patch-slot"
+        hx-swap="innerHTML"
+      >
+        <span
+          class={`file-status file-${props.entry.mark[0] ?? '_'}`}
+        >
+          {props.entry.mark}
+        </span>
+        <span class="file-path">{props.entry.path}</span>
+        <WorkspaceFileNums file={props.entry} />
+      </button>
+    </li>
+  )
+}
+
 export function WorkspaceWorktreeInspector(props: {
   repoPath: string
   worktree: WorkTreeSummary
 }) {
   const entries = worktreeEntries(props.worktree)
+  const groups: Array<{
+    kind: WorkTreeChangeKind
+    label: string
+    entries: WorkTreeEntry[]
+  }> = [
+    {
+      kind: 'staged',
+      label: 'Staged',
+      entries: props.worktree.staged,
+    },
+    {
+      kind: 'unstaged',
+      label: 'Unstaged',
+      entries: props.worktree.unstaged,
+    },
+    {
+      kind: 'untracked',
+      label: 'Untracked',
+      entries: props.worktree.untracked,
+    },
+  ]
   const name = path.basename(props.repoPath)
   return (
     <section
@@ -576,38 +627,34 @@ export function WorkspaceWorktreeInspector(props: {
               ? `${entries.length} changed ${entries.length === 1 ? 'entry' : 'entries'}`
               : 'Working tree clean'}
           </div>
-          <div class="diff-meta">
-            staged · unstaged · untracked
-          </div>
         </div>
         <div class="diff-files-block">
           {entries.length > 0 ? (
-            <ul class="diff-files">
-              {entries.map(({ kind, entry }) => {
-                const fileUrl =
-                  `/workspace/worktree/file?repo=${repoQuery(props.repoPath)}` +
-                  `&kind=${kind}&path=${encodeURIComponent(entry.path)}`
-                return (
-                  <li>
-                    <button
-                      type="button"
-                      class="diff-file-btn"
-                      title={`${kind} · ${entry.path}`}
-                      hx-get={fileUrl}
-                      hx-target="#diff-patch-slot"
-                      hx-swap="innerHTML"
-                    >
-                      <span class={`file-status file-${entry.mark[0] ?? '_'}`}>
-                        {entry.mark}
-                      </span>
-                      <span class="workspace-file-kind">{kind}</span>
-                      <span class="file-path">{entry.path}</span>
-                      <WorkspaceFileNums file={entry} />
-                    </button>
-                  </li>
-                )
-              })}
-            </ul>
+            <div class="workspace-file-groups">
+              {groups
+                .filter((group) => group.entries.length > 0)
+                .map((group) => (
+                  <section
+                    class={`workspace-file-group workspace-file-group-${group.kind}`}
+                    aria-label={group.label}
+                  >
+                    <div class="workspace-file-group-head">
+                      <span>{group.label}</span>
+                      <span>{group.entries.length}</span>
+                    </div>
+                    <ul class="diff-files">
+                      {group.entries.map((entry) => (
+                        <WorkspaceWorktreeFile
+                          key={`${group.kind}:${entry.path}`}
+                          repoPath={props.repoPath}
+                          kind={group.kind}
+                          entry={entry}
+                        />
+                      ))}
+                    </ul>
+                  </section>
+                ))}
+            </div>
           ) : (
             <div class="diff-files-empty">(no local changes)</div>
           )}
