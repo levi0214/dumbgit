@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test'
 import {
   mkdtempSync,
+  readFileSync,
   realpathSync,
   rmSync,
   writeFileSync,
@@ -10,7 +11,7 @@ import path from 'node:path'
 import { rememberRepo } from '../src/history'
 import { app } from '../src/index'
 
-function git(cwd: string, args: string[]): void {
+function git(cwd: string, args: string[]): string {
   const result = Bun.spawnSync(['git', ...args], {
     cwd,
     stdout: 'pipe',
@@ -19,6 +20,7 @@ function git(cwd: string, args: string[]): void {
   if (result.exitCode !== 0) {
     throw new Error(result.stderr.toString())
   }
+  return result.stdout.toString().trim()
 }
 
 test('Workspace owns repository activation and repository routing', async () => {
@@ -85,6 +87,61 @@ test('Workspace owns repository activation and repository routing', async () => 
 
     expect((await app.request('/fragment/graph')).status).toBe(400)
     expect((await app.request(`/fragment/graph?${query}`)).status).toBe(200)
+
+    const post = (url: string, fields: Record<string, string> = {}) =>
+      app.request(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ repo, ...fields }).toString(),
+      })
+
+    writeFileSync(path.join(repo, 'README.md'), 'changed\n')
+    expect(
+      (
+        await post(
+          '/api/worktree/action?op=stage&kind=unstaged&path=README.md',
+        )
+      ).status,
+    ).toBe(200)
+    expect(
+      (
+        await post(
+          '/api/worktree/action?op=unstage&kind=staged&path=README.md',
+        )
+      ).status,
+    ).toBe(200)
+    expect(
+      (
+        await post(
+          '/api/worktree/action?op=discard&kind=unstaged&path=README.md',
+        )
+      ).status,
+    ).toBe(200)
+    expect(readFileSync(path.join(repo, 'README.md'), 'utf8')).toBe('example\n')
+
+    writeFileSync(path.join(repo, 'scratch.txt'), 'temporary\n')
+    expect(
+      (
+        await post(
+          '/api/worktree/action?op=discard&kind=untracked&path=scratch.txt',
+        )
+      ).status,
+    ).toBe(200)
+    expect(
+      Bun.file(path.join(repo, 'scratch.txt')).exists(),
+    ).resolves.toBe(false)
+
+    const head = git(repo, ['rev-parse', 'HEAD'])
+    expect(
+      (
+        await post(`/api/branch/create?sha=${head}`, {
+          name: 'body-context',
+        })
+      ).status,
+    ).toBe(200)
+    expect(
+      git(repo, ['rev-parse', '--verify', 'refs/heads/body-context']),
+    ).toBe(head)
   } finally {
     await app.request(
       `/workspace/repo/stop?repo=${encodeURIComponent(repo)}&limit=5`,

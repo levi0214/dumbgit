@@ -436,7 +436,7 @@ app.get('/healthz.json', (c) => {
   })
 })
 
-function workspaceRepoFromQuery(
+function resolveWorkspaceRepo(
   raw?: string,
   options: { requireActive?: boolean } = {},
 ): string | null {
@@ -472,7 +472,7 @@ app.get('/', renderWorkspace)
 
 app.get('/repo', async (c) => {
   c.header('Cache-Control', 'no-store')
-  const repoPath = workspaceRepoFromQuery(c.req.query('repo'), {
+  const repoPath = resolveWorkspaceRepo(c.req.query('repo'), {
     requireActive: true,
   })
   if (!repoPath) return c.redirect('/')
@@ -545,7 +545,7 @@ app.post('/workspace/repo/reorder', async (c) => {
 app.post('/workspace/repo/start', async (c) => {
   c.header('Cache-Control', 'no-store')
   const limit = clampWorkspaceCommitLimit(c.req.query('limit'))
-  const repoPath = workspaceRepoFromQuery(c.req.query('repo'))
+  const repoPath = resolveWorkspaceRepo(c.req.query('repo'))
   const controlError =
     repoPath && setRepoActive(repoPath, true)
       ? undefined
@@ -565,7 +565,7 @@ app.post('/workspace/repo/start', async (c) => {
 app.post('/workspace/repo/stop', async (c) => {
   c.header('Cache-Control', 'no-store')
   const limit = clampWorkspaceCommitLimit(c.req.query('limit'))
-  const repoPath = workspaceRepoFromQuery(c.req.query('repo'))
+  const repoPath = resolveWorkspaceRepo(c.req.query('repo'))
   const controlError =
     repoPath && setRepoActive(repoPath, false)
       ? undefined
@@ -583,7 +583,7 @@ app.post('/workspace/repo/stop', async (c) => {
 })
 
 app.post('/workspace/repo/terminal', (c) => {
-  const repoPath = workspaceRepoFromQuery(c.req.query('repo'))
+  const repoPath = resolveWorkspaceRepo(c.req.query('repo'))
   if (!repoPath) {
     return c.text('Repository is not in Workspace history.', 404)
   }
@@ -612,7 +612,7 @@ app.post('/workspace/repo/terminal', (c) => {
 
 app.get('/workspace/commit', async (c) => {
   c.header('Cache-Control', 'no-store')
-  const repoPath = workspaceRepoFromQuery(c.req.query('repo'))
+  const repoPath = resolveWorkspaceRepo(c.req.query('repo'))
   const sha = c.req.query('sha') ?? ''
   if (!repoPath || !/^[a-f0-9]{7,40}$/i.test(sha)) {
     return c.html(
@@ -641,7 +641,7 @@ app.get('/workspace/commit', async (c) => {
 
 app.get('/workspace/commit/file', async (c) => {
   c.header('Cache-Control', 'no-store')
-  const repoPath = workspaceRepoFromQuery(c.req.query('repo'))
+  const repoPath = resolveWorkspaceRepo(c.req.query('repo'))
   const sha = c.req.query('sha') ?? ''
   const filePath = c.req.query('path') ?? ''
   if (
@@ -684,7 +684,7 @@ app.get('/workspace/commit/file', async (c) => {
 
 app.get('/workspace/worktree', async (c) => {
   c.header('Cache-Control', 'no-store')
-  const repoPath = workspaceRepoFromQuery(c.req.query('repo'))
+  const repoPath = resolveWorkspaceRepo(c.req.query('repo'))
   if (!repoPath) {
     return c.html(
       <WorkspaceCommitInspector
@@ -707,7 +707,7 @@ app.get('/workspace/worktree', async (c) => {
 
 app.get('/workspace/worktree/file', async (c) => {
   c.header('Cache-Control', 'no-store')
-  const repoPath = workspaceRepoFromQuery(c.req.query('repo'))
+  const repoPath = resolveWorkspaceRepo(c.req.query('repo'))
   const kind = c.req.query('kind')
   const filePath = c.req.query('path') ?? ''
   if (
@@ -735,7 +735,16 @@ app.get('/workspace/worktree/file', async (c) => {
 })
 
 async function requireActiveRepo(c: Context<AppEnv>, next: Next) {
-  const repoPath = workspaceRepoFromQuery(c.req.query('repo'), {
+  let rawRepo = c.req.query('repo')
+  if (!rawRepo && c.req.method === 'POST') {
+    try {
+      const body = await c.req.parseBody()
+      if (typeof body.repo === 'string') rawRepo = body.repo
+    } catch {
+      // Invalid request bodies fail through the normal missing-repository path.
+    }
+  }
+  const repoPath = resolveWorkspaceRepo(rawRepo, {
     requireActive: true,
   })
   if (!repoPath) return c.text('missing, inactive, or unknown repository', 400)
