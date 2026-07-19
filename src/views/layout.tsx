@@ -1657,14 +1657,6 @@ body.workspace-reordering {
   align-items: center;
   gap: 8px;
 }
-.workspace-inspector-label {
-  color: #92969c !important;
-  font-size: 8px !important;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  line-height: 1.4;
-  text-transform: uppercase;
-}
 .workspace-inspector-context strong {
   color: var(--fg);
   font-size: 11px;
@@ -1672,6 +1664,35 @@ body.workspace-reordering {
 .workspace-inspector-context span {
   color: var(--muted);
   font-size: 10px;
+}
+.workspace-inspector-collapse {
+  width: 36px;
+  height: 24px;
+  padding: 0;
+  position: absolute;
+  top: 4px;
+  left: 50%;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: #797c80;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transform: translateX(-50%);
+}
+.workspace-inspector-collapse:hover {
+  border-color: #4a4c50;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--fg);
+}
+.workspace-inspector-collapse:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: -2px;
+}
+.workspace-inspector-collapse:active {
+  transform: translateX(-50%) scale(0.97);
 }
 .workspace-inspector-close {
   min-width: 64px;
@@ -1992,7 +2013,9 @@ document.body.addEventListener('htmx:historyRestore', function () {
 });
 
 document.addEventListener('click', function (e) {
-  var close = e.target && e.target.closest && e.target.closest('.workspace-inspector-close');
+  var close = e.target && e.target.closest && e.target.closest(
+    '.workspace-inspector-close, .workspace-inspector-collapse'
+  );
   if (!close) return;
   e.preventDefault();
   closeWorkspaceInspector();
