@@ -1,21 +1,17 @@
 #!/usr/bin/env bun
 import { spawn, spawnSync } from 'node:child_process'
-import {
-  closeSync,
-  mkdirSync,
-  openSync,
-  realpathSync,
-} from 'node:fs'
-import net from 'node:net'
+import { closeSync, mkdirSync, openSync, realpathSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { rememberRepo } from '../src/history'
+import {
+  readRepoHistory,
+  rememberRepo,
+  setRepoActive,
+} from '../src/history'
 
 const LISTEN_HOST = '127.0.0.1'
-const PORT_LO = 7777
-const PORT_HI = 7900
-
+const PORT = 7777
 const scriptPath = realpathSync(fileURLToPath(import.meta.url))
 const appRoot = path.resolve(path.dirname(scriptPath), '..')
 const logPath = path.join(os.homedir(), 'Library', 'Logs', 'dumbgit.log')
@@ -23,6 +19,7 @@ const logPath = path.join(os.homedir(), 'Library', 'Logs', 'dumbgit.log')
 function usage(code = 0) {
   const text = `usage: dumbgit [dir]
        dumbgit workspace
+       dumbgit start [dir]
        dumbgit list
        dumbgit stop [id|dir]
        dumbgit stop --all
@@ -32,29 +29,29 @@ function usage(code = 0) {
   process.exit(code)
 }
 
-function die(msg) {
-  console.error(`dumbgit: ${msg}`)
+function die(message) {
+  console.error(`dumbgit: ${message}`)
   usage(2)
 }
 
-function expandUser(p) {
-  if (p === '~') return os.homedir()
-  if (p.startsWith('~/')) return path.join(os.homedir(), p.slice(2))
-  return p
+function expandUser(value) {
+  if (value === '~') return os.homedir()
+  if (value.startsWith('~/')) return path.join(os.homedir(), value.slice(2))
+  return value
 }
 
 function tryRepoRoot(raw) {
   const dir = path.resolve(expandUser(raw))
-  const r = spawnSync('git', ['-C', dir, 'rev-parse', '--show-toplevel'], {
+  const result = spawnSync('git', ['-C', dir, 'rev-parse', '--show-toplevel'], {
     encoding: 'utf8',
   })
-  if (r.status !== 0) {
+  if (result.status !== 0) {
     return {
       ok: false,
-      error: String(r.stderr ?? '').trim() || `not a git repo: ${dir}`,
+      error: String(result.stderr ?? '').trim() || `not a git repo: ${dir}`,
     }
   }
-  return { ok: true, repo: realpathSync(r.stdout.trim()) }
+  return { ok: true, repo: realpathSync(result.stdout.trim()) }
 }
 
 function repoRoot(raw) {
@@ -64,74 +61,34 @@ function repoRoot(raw) {
   process.exit(1)
 }
 
-function sameRepo(a, b) {
-  try {
-    return realpathSync(a) === realpathSync(b)
-  } catch {
-    return false
-  }
-}
-
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-/** True if TCP bind succeeds (port not in use locally). */
-function portLooksFree(port) {
-  return new Promise((resolve) => {
-    const s = net.createServer()
-    s.once('error', () => resolve(false))
-    s.listen(port, LISTEN_HOST, () => {
-      s.close(() => resolve(true))
-    })
-  })
-}
-
-async function allocatePort() {
-  for (let p = PORT_LO; p <= PORT_HI; p++) {
-    if (await portLooksFree(p)) return p
-  }
-  return undefined
-}
-
-async function fetchInstance(port) {
+async function fetchController() {
   const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), 450)
+  const timer = setTimeout(() => controller.abort(), 500)
   try {
-    const r = await fetch(`http://${LISTEN_HOST}:${port}/healthz.json`, {
-      signal: controller.signal,
-    })
-    if (!r.ok) return null
-    const j = await r.json()
-    if (!j || j.ok !== true || j.name !== 'dumbgit') return null
+    const response = await fetch(
+      `http://${LISTEN_HOST}:${PORT}/healthz.json`,
+      { signal: controller.signal },
+    )
+    if (!response.ok) return null
+    const data = await response.json()
     if (
-      typeof j.pid !== 'number' ||
-      typeof j.port !== 'number'
+      data?.ok !== true ||
+      data?.name !== 'dumbgit' ||
+      data?.kind !== 'workspace' ||
+      data?.port !== PORT ||
+      typeof data?.pid !== 'number'
     ) {
       return null
     }
-    if (j.port !== port) return null
-    if (j.kind === 'workspace') {
-      return {
-        kind: 'workspace',
-        pid: j.pid,
-        port: j.port,
-        url: `http://${LISTEN_HOST}:${port}`,
-      }
-    }
-    if (typeof j.repo !== 'string') return null
-    let repoAbs
-    try {
-      repoAbs = realpathSync(j.repo)
-    } catch {
-      return null
-    }
     return {
-      kind: 'repo',
-      repo: repoAbs,
-      pid: j.pid,
-      port: j.port,
-      url: `http://${LISTEN_HOST}:${port}`,
+      kind: data.kind,
+      pid: data.pid,
+      port: PORT,
+      url: `http://${LISTEN_HOST}:${PORT}`,
     }
   } catch {
     return null
@@ -140,199 +97,37 @@ async function fetchInstance(port) {
   }
 }
 
-async function scanInstances() {
-  const out = []
-  for (let p = PORT_LO; p <= PORT_HI; p++) {
-    const inst = await fetchInstance(p)
-    if (inst) out.push(inst)
-  }
-  return out
-}
-
-function listeningPidsOnPort(port) {
-  const r = spawnSync('lsof', ['-ti', `tcp:${port}`, '-sTCP:LISTEN'], {
+function listeningPids() {
+  const result = spawnSync('lsof', ['-ti', `tcp:${PORT}`, '-sTCP:LISTEN'], {
     encoding: 'utf8',
   })
-  return [...new Set(r.stdout.split(/\s+/).filter(Boolean))]
+  return [...new Set(result.stdout.split(/\s+/).filter(Boolean))]
 }
 
-async function stopPorts(ports) {
-  const seen = new Set()
-  let stopped = false
-  for (const port of ports) {
-    const inst = await fetchInstance(port)
-    if (!inst) continue
-    const pids = listeningPidsOnPort(port)
-    for (const pid of pids) {
-      if (seen.has(pid)) continue
-      seen.add(pid)
-      stopped = true
-      try {
-        process.kill(Number(pid), 'SIGTERM')
-      } catch {
-        /* ignore */
-      }
+async function stopController() {
+  const instance = await fetchController()
+  if (!instance) return false
+  for (const pid of listeningPids()) {
+    try {
+      process.kill(Number(pid), 'SIGTERM')
+    } catch {
+      // The process may already have exited.
     }
   }
-
-  await sleep(200)
-
-  seen.clear()
-  for (const port of ports) {
-    const inst = await fetchInstance(port)
-    if (!inst) continue
-    const pids = listeningPidsOnPort(port)
-    for (const pid of pids) {
-      if (seen.has(pid)) continue
-      seen.add(pid)
-      try {
-        process.kill(Number(pid), 'SIGKILL')
-      } catch {
-        /* ignore */
-      }
-    }
-  }
-
-  return stopped
-}
-
-async function portsMatching(pred) {
-  const ports = []
-  for (let p = PORT_LO; p <= PORT_HI; p++) {
-    const inst = await fetchInstance(p)
-    if (!inst) continue
-    if (pred(inst)) ports.push(p)
-  }
-  return ports
-}
-
-async function cmdStopAll() {
-  const ports = await portsMatching(() => true)
-  if (ports.length === 0) {
-    console.log('dumbgit: no dumbgit listeners running')
-    return
-  }
-  const stopped = await stopPorts(ports)
-  if (!stopped) {
-    console.error('dumbgit: found listeners, but no process was stopped')
-    process.exit(1)
-  }
-  console.log('dumbgit: stopped all listeners')
-}
-
-async function cmdStop(repoAbs) {
-  const ports = await portsMatching(
-    (inst) => inst.kind === 'repo' && sameRepo(inst.repo, repoAbs),
-  )
-  if (ports.length === 0) {
-    console.log(`dumbgit: no dumbgit running for ${repoAbs}`)
-    return
-  }
-  const stopped = await stopPorts(ports)
-  if (!stopped) {
-    console.error(`dumbgit: found ${repoAbs}, but no process was stopped`)
-    process.exit(1)
-  }
-  console.log(`dumbgit: stopped ${repoAbs}`)
-}
-
-async function cmdStopId(rawId) {
-  const id = Number(rawId)
-  if (!Number.isSafeInteger(id) || id < 1) {
-    console.error(`dumbgit: invalid instance id: ${rawId}`)
-    process.exit(1)
-  }
-
-  const inst = await scanInstances()
-  const hit = inst[id - 1]
-  if (!hit) {
-    console.error(`dumbgit: no dumbgit instance with id ${id}`)
-    process.exit(1)
-  }
-
-  const stopped = await stopPorts([hit.port])
-  const label = hit.kind === 'workspace' ? 'workspace' : hit.repo
-  if (!stopped) {
-    console.error(`dumbgit: found ${label}, but no process was stopped`)
-    process.exit(1)
-  }
-  console.log(`dumbgit: stopped ${label}`)
-}
-
-async function cmdList() {
-  const inst = await scanInstances()
-  if (inst.length === 0) {
-    console.log('dumbgit: no instances running')
-    return
-  }
-  for (const [index, i] of inst.entries()) {
-    const label = i.kind === 'workspace' ? '[workspace]' : i.repo
-    console.log(`${index + 1}\t${label}\t${i.url}`)
-  }
-}
-
-/** Wait until nothing is listening on `port` (post-stop). */
-async function waitPortFree(port, msTotal = 5000) {
-  const deadline = Date.now() + msTotal
+  const deadline = Date.now() + 5000
   while (Date.now() < deadline) {
-    if (await portLooksFree(port)) return true
+    if (!(await fetchController())) return true
     await sleep(50)
   }
   return false
 }
 
-/**
- * Stop every running instance and start each again on the same port.
- * Reloads server code after `bun link` / source edits without reshuffling ports.
- */
-async function cmdRestart() {
-  const inst = await scanInstances()
-  if (inst.length === 0) {
-    console.log('dumbgit: no instances running')
-    return
-  }
-
-  const targets = inst.map((i) => ({
-    kind: i.kind,
-    repo: i.kind === 'repo' ? i.repo : undefined,
-    port: i.port,
-    url: i.url,
-  }))
-  const stopped = await stopPorts(targets.map((t) => t.port))
-  if (!stopped) {
-    console.error('dumbgit: found listeners, but no process was stopped')
-    process.exit(1)
-  }
-
-  for (const t of targets) {
-    if (!(await waitPortFree(t.port))) {
-      console.error(
-        `dumbgit: port ${t.port} still busy after stop (${t.repo ?? 'workspace'})`,
-      )
-      process.exit(1)
-    }
-    startServer(t.repo, t.port, t.kind === 'workspace')
-    const ok = await waitForHealthy(t.port)
-    if (!ok) {
-      console.error(
-        `dumbgit: failed to restart ${t.repo ?? 'workspace'}; see ${logPath}`,
-      )
-      process.exit(1)
-    }
-    console.log(`${t.repo ?? '[workspace]'}\t${t.url}`)
-  }
-  console.log(`dumbgit: restarted ${targets.length}`)
-}
-
-function startServer(repo, port, workspace = false) {
+function startController() {
   mkdirSync(path.dirname(logPath), { recursive: true })
   const log = openSync(logPath, 'a')
-  const args = ['run', 'src/index.tsx', '--port', String(port)]
-  if (workspace) args.push('--workspace')
-  else args.push(repo)
   const child = spawn(
     process.execPath,
-    args,
+    ['run', 'src/index.tsx', '--port', String(PORT), '--workspace'],
     {
       cwd: appRoot,
       detached: true,
@@ -343,141 +138,151 @@ function startServer(repo, port, workspace = false) {
   closeSync(log)
 }
 
-async function waitForHealthy(port, msTotal = 10000) {
+async function waitForController(msTotal = 10000) {
   const deadline = Date.now() + msTotal
   while (Date.now() < deadline) {
-    const inst = await fetchInstance(port)
-    if (inst) return true
+    const instance = await fetchController()
+    if (instance) return instance
     await sleep(100)
   }
-  return false
+  return null
 }
 
-function openBrowserAt(port, pathname = '') {
-  const url = `http://${LISTEN_HOST}:${port}${pathname}`
-  const r = spawnSync('open', [url], {
-    stdio: 'ignore',
-  })
-  if (r.status !== 0) console.log(`dumbgit: open ${url}`)
+function openBrowser(pathname = '/') {
+  const url = `http://${LISTEN_HOST}:${PORT}${pathname}`
+  const result = spawnSync('open', [url], { stdio: 'ignore' })
+  if (result.status !== 0) console.log(`dumbgit: open ${url}`)
 }
 
-async function cmdStart(rawDir, open = true) {
-  const repo = repoRoot(rawDir)
-  rememberRepo(repo)
-  const existing = await scanInstances()
-  const hit = existing.find(
-    (i) => i.kind === 'repo' && sameRepo(i.repo, repo),
-  )
-  if (hit) {
-    if (open) openBrowserAt(hit.port)
-    console.log(`dumbgit: ${repo}`)
-    console.log(hit.url)
-    return
+async function ensureWorkspace(open = true, focusRepo) {
+  let instance = await fetchController()
+  if (!instance) {
+    startController()
+    instance = await waitForController()
   }
-
-  const port = await allocatePort()
-  if (port === undefined) {
-    console.error(`dumbgit: no free TCP port ${PORT_LO}-${PORT_HI}`)
+  if (!instance) {
+    console.error(`dumbgit: workspace did not start on port ${PORT}; see ${logPath}`)
     process.exit(1)
   }
-
-  startServer(repo, port)
-  const ok = await waitForHealthy(port)
-  if (!ok) {
-    console.error(`dumbgit: server did not start; see ${logPath}`)
-    process.exit(1)
-  }
-
-  if (open) openBrowserAt(port)
-  const url = `http://${LISTEN_HOST}:${port}`
-  console.log(`dumbgit: ${repo}`)
-  console.log(url)
-}
-
-async function cmdWorkspace(open = true) {
-  const existing = await scanInstances()
-  const hit = existing.find((instance) => instance.kind === 'workspace')
-  if (hit) {
-    if (open) openBrowserAt(hit.port, '/workspace')
-    console.log('dumbgit: workspace')
-    console.log(`${hit.url}/workspace`)
-    return
-  }
-
-  const port = await allocatePort()
-  if (port === undefined) {
-    console.error(`dumbgit: no free TCP port ${PORT_LO}-${PORT_HI}`)
-    process.exit(1)
-  }
-
-  startServer(undefined, port, true)
-  const ok = await waitForHealthy(port)
-  if (!ok) {
-    console.error(`dumbgit: workspace did not start; see ${logPath}`)
-    process.exit(1)
-  }
-  if (open) openBrowserAt(port, '/workspace')
-  const url = `http://${LISTEN_HOST}:${port}/workspace`
+  const pathname = focusRepo
+    ? `/?repo=${encodeURIComponent(focusRepo)}`
+    : '/'
+  if (open) openBrowser(pathname)
   console.log('dumbgit: workspace')
-  console.log(url)
+  console.log(`${instance.url}${pathname}`)
+}
+
+async function activateRepo(rawDir, open = true) {
+  const repo = repoRoot(rawDir)
+  rememberRepo(repo, true)
+  await ensureWorkspace(open, repo)
+}
+
+function deactivateRepo(rawDir) {
+  const repo = repoRoot(rawDir)
+  if (!setRepoActive(repo, false)) {
+    console.error(`dumbgit: repository is not in Workspace: ${repo}`)
+    process.exit(1)
+  }
+  console.log(`dumbgit: stopped monitoring ${repo}`)
+}
+
+function deactivateRepoId(rawId) {
+  const id = Number(rawId)
+  const repos = readRepoHistory()
+  const entry = Number.isSafeInteger(id) && id > 0 ? repos[id - 1] : undefined
+  if (!entry || !setRepoActive(entry.repoPath, false)) {
+    console.error(`dumbgit: no Workspace repository with id ${rawId}`)
+    process.exit(1)
+  }
+  console.log(`dumbgit: stopped monitoring ${entry.repoPath}`)
+}
+
+async function cmdList() {
+  const instance = await fetchController()
+  console.log(
+    instance
+      ? `workspace\trunning\t${instance.url}`
+      : 'workspace\tstopped',
+  )
+  for (const [index, entry] of readRepoHistory().entries()) {
+    console.log(`${index + 1}\t${entry.active ? 'active' : 'inactive'}\t${entry.repoPath}`)
+  }
+}
+
+async function cmdRestart(open = false) {
+  await stopController()
+  startController()
+  const instance = await waitForController()
+  if (!instance) {
+    console.error(`dumbgit: workspace did not restart; see ${logPath}`)
+    process.exit(1)
+  }
+  if (open) openBrowser('/')
+  console.log(`dumbgit: restarted\t${instance.url}`)
 }
 
 const rawArgv = process.argv.slice(2)
 const noOpen = rawArgv.includes('--no-open')
 const argv = rawArgv.filter((arg) => arg !== '--no-open')
 
-if (argv.length === 1 && (argv[0] === '-h' || argv[0] === '--help')) {
-  usage(0)
-}
+if (argv.length === 1 && (argv[0] === '-h' || argv[0] === '--help')) usage(0)
 
-if (argv.length >= 1 && argv[0] === 'workspace') {
+if (argv[0] === 'workspace') {
   if (argv.length !== 1) die('too many arguments')
-  await cmdWorkspace(!noOpen)
+  await ensureWorkspace(!noOpen)
   process.exit(0)
 }
 
-if (argv.length >= 1 && argv[0] === 'list') {
+if (argv[0] === 'start') {
+  if (argv.length > 2) die('too many arguments')
+  await activateRepo(argv[1] ?? process.cwd(), !noOpen)
+  process.exit(0)
+}
+
+if (argv[0] === 'list') {
   if (argv.length !== 1) die('too many arguments')
   await cmdList()
   process.exit(0)
 }
 
-if (argv.length >= 1 && argv[0] === 'restart') {
+if (argv[0] === 'restart') {
   if (argv.length !== 1) die('too many arguments')
-  await cmdRestart()
+  await cmdRestart(false)
   process.exit(0)
 }
 
-if (argv.length >= 1 && argv[0] === 'stop') {
+if (argv[0] === 'stop') {
   const rest = argv.slice(1)
-  if (rest.length === 0) {
-    await cmdStop(repoRoot(process.cwd()))
+  if (rest.length === 1 && rest[0] === '--all') {
+    const stopped = await stopController()
+    console.log(stopped ? 'dumbgit: stopped workspace' : 'dumbgit: workspace is not running')
     process.exit(0)
   }
-  if (rest.length === 1 && rest[0] === '--all') {
-    await cmdStopAll()
+  if (rest.length === 0) {
+    deactivateRepo(process.cwd())
     process.exit(0)
   }
   if (rest.length === 1 && /^\d+$/.test(rest[0])) {
-    await cmdStopId(rest[0])
+    deactivateRepoId(rest[0])
     process.exit(0)
   }
   if (rest.length === 1 && !rest[0].startsWith('-')) {
-    await cmdStop(repoRoot(rest[0]))
+    deactivateRepo(rest[0])
     process.exit(0)
   }
   die('invalid stop usage')
 }
 
-for (const a of argv) {
-  if (a.startsWith('-')) die(`unknown option: ${a}`)
+for (const arg of argv) {
+  if (arg.startsWith('-')) die(`unknown option: ${arg}`)
 }
 if (argv.length > 1) die('too many arguments')
 
 if (argv[0]) {
-  await cmdStart(argv[0], !noOpen)
+  await activateRepo(argv[0], !noOpen)
 } else {
   const cwdRepo = tryRepoRoot(process.cwd())
-  if (cwdRepo.ok) await cmdStart(cwdRepo.repo, !noOpen)
-  else await cmdWorkspace(!noOpen)
+  if (cwdRepo.ok) await activateRepo(cwdRepo.repo, !noOpen)
+  else await ensureWorkspace(!noOpen)
 }

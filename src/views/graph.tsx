@@ -970,7 +970,7 @@ export function GraphFragment(props: GraphFragmentProps) {
           <span class="graph-repo-name" title={props.repoPath}>
             {path.basename(props.repoPath)}
           </span>
-          <a class="workspace-entry" href="/workspace">
+          <a class="workspace-entry" href="/">
             workspace
           </a>
         </div>
@@ -1014,7 +1014,7 @@ export function GraphFragment(props: GraphFragmentProps) {
               ← back to {head.previousBranch}
             </button>
           ) : null}
-          <a class="workspace-entry" href="/workspace">
+          <a class="workspace-entry" href="/">
             workspace
           </a>
         </div>

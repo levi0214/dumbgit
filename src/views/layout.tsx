@@ -1832,6 +1832,13 @@ const EMPTY_DIFF_HTML =
 const KEY_SCRIPT =
   `const EMPTY_DIFF = ${JSON.stringify(EMPTY_DIFF_HTML)};` +
   `
+document.body.addEventListener('htmx:configRequest', function (event) {
+  var repo = document.body.dataset ? document.body.dataset.repo : '';
+  if (repo && event.detail && event.detail.parameters) {
+    event.detail.parameters.repo = repo;
+  }
+});
+
 function syncViewingHighlight() {
   var inp = document.getElementById('viewing-sha');
   var sha = inp && inp.value ? String(inp.value).trim().toLowerCase() : '';
@@ -1942,6 +1949,13 @@ document.addEventListener('DOMContentLoaded', function () {
   syncWorktreeFileSelection();
   syncWorkspaceSelection();
   syncWorkspaceControls();
+  var focusRepo = new URLSearchParams(location.search).get('repo');
+  if (focusRepo) {
+    var card = Array.from(document.querySelectorAll('[data-workspace-repo]')).find(function (item) {
+      return item.dataset && item.dataset.workspaceRepo === focusRepo;
+    });
+    if (card) card.scrollIntoView({ block: 'nearest', inline: 'center' });
+  }
 });
 
 document.addEventListener('click', function (e) {
@@ -2115,27 +2129,26 @@ document.addEventListener('click', function (e) {
 const REPO_SYNC_SCRIPT = `
 function localServerIdentity() {
   var g = document.getElementById('graph');
-  if (g && g.dataset && g.dataset.repo) {
-    return {
-      repo: g.dataset.repo,
-      pid: g.dataset.serverPid ? Number(g.dataset.serverPid) : undefined,
-    };
+  if (g && g.dataset && g.dataset.serverPid) {
+    return { pid: Number(g.dataset.serverPid) };
   }
   return null;
 }
 
 function resyncPage() {
-  location.replace((location.pathname || '/') + '?_=' + Date.now());
+  var url = new URL(location.href);
+  url.searchParams.set('_', String(Date.now()));
+  location.replace(url.toString());
 }
 
 async function ensureRepoSync() {
   var local = localServerIdentity();
-  if (!local || !local.repo || local.pid === undefined) return false;
+  if (!local || local.pid === undefined) return false;
   try {
     var r = await fetch('/healthz.json', { cache: 'no-store' });
     if (!r.ok) return false;
     var j = await r.json();
-    if (j.repo !== local.repo || String(j.pid) !== String(local.pid)) {
+    if (String(j.pid) !== String(local.pid)) {
       resyncPage();
       return true;
     }
@@ -2388,7 +2401,11 @@ const WORKSPACE_REORDER_SCRIPT = `
 })();
 `
 
-export function Layout(props: { children: unknown; title?: string }) {
+export function Layout(props: {
+  children: unknown
+  title?: string
+  repoPath?: string
+}) {
   return (
     <html lang="en">
       <head>
@@ -2401,7 +2418,7 @@ export function Layout(props: { children: unknown; title?: string }) {
         ></script>
         <style>{raw(CSS)}</style>
       </head>
-      <body>
+      <body data-repo={props.repoPath}>
         <div
           id="sse-disconnect-overlay"
           class="sse-disconnect-overlay"

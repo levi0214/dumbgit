@@ -1,11 +1,9 @@
 /** @jsxImportSource hono/jsx */
 import { Fragment } from 'hono/jsx'
-import { Hono } from 'hono'
+import { Hono, type Context, type Next } from 'hono'
 import { streamSSE } from 'hono/streaming'
 import { spawnSync } from 'node:child_process'
 import { realpathSync } from 'node:fs'
-import net from 'node:net'
-import os from 'node:os'
 import path from 'node:path'
 import {
   GitError,
@@ -16,10 +14,8 @@ import {
   commitSummary,
   createBranchAt,
   dropPreviewStash,
-  getCurrentRepo,
   gitDir,
   headInfo,
-  initRepo,
   logGraphRows,
   previewStashUiState,
   push,
@@ -35,8 +31,8 @@ import {
 import { createIdleExit } from './idle-exit'
 import {
   readRepoHistory,
-  rememberRepo,
   reorderRepoHistory,
+  setRepoActive,
 } from './history'
 import { watchGitRefs } from './watch'
 import {
@@ -64,10 +60,8 @@ const LISTEN_HOST = '127.0.0.1'
 /** Plain-text probe body for humans / curl. */
 const HEALTH_BODY = 'dumbgit ok'
 
-/** Same scan range as `bin/dumbgit` allocatePort (implicit port only). */
-const PORT_PROBE_LO = 7777
-const PORT_PROBE_HI = 7900
-const WORKSPACE_FULL_PORT_SCAN_MS = 30_000
+/** The single Workspace controller always owns one stable local port. */
+const DEFAULT_PORT = 7777
 
 /** Initial / expanded `git log -n` depth (ASCII graph needs full re-fetch each time). */
 const GRAPH_COMMIT_DEFAULT = 50
@@ -75,8 +69,6 @@ const GRAPH_COMMIT_STEP = 50
 const GRAPH_COMMIT_MAX = 500
 const WORKSPACE_COMMIT_DEFAULT = 5
 const WORKSPACE_COMMIT_MAX = 10
-const APP_ROOT = path.resolve(import.meta.dir, '..')
-const LAUNCHER_PATH = path.join(APP_ROOT, 'bin', 'dumbgit')
 
 /** After last `/events` client leaves (or boot with none), exit. */
 const IDLE_EXIT_GRACE_MS_DEFAULT = 20 * 60_000
@@ -87,27 +79,17 @@ function clampGraphCommitLimit(n: number): number {
   return Math.min(GRAPH_COMMIT_MAX, Math.max(10, floored))
 }
 
-function expandUser(p: string): string {
-  if (p.startsWith('~/')) return path.join(os.homedir(), p.slice(2))
-  if (p === '~') return os.homedir()
-  return p
-}
-
 function parseServerArgv(): {
-  /** null = scan PORT_PROBE_LO..HI; number = pin to that port. */
+  /** null = use the single default port; number = explicit development override. */
   port: number | null
   open: boolean
   idleExit: boolean
   idleGraceMs: number
-  workspace: boolean
-  repoAbs: string
 } {
   let port: number | null = null
   let open = false
   let idleExit = true
   let idleGraceMs = IDLE_EXIT_GRACE_MS_DEFAULT
-  let workspace = false
-  const pos: string[] = []
   for (let i = 2; i < process.argv.length; i++) {
     const a = process.argv[i]
     if (a === '--open') {
@@ -119,7 +101,6 @@ function parseServerArgv(): {
       continue
     }
     if (a === '--workspace') {
-      workspace = true
       continue
     }
     if (a === '--idle-grace-ms') {
@@ -141,64 +122,54 @@ function parseServerArgv(): {
       continue
     }
     if (!a || a.startsWith('-')) continue
-    pos.push(a)
   }
-  const raw = pos[0]
-  const repoAbs = raw ? path.resolve(expandUser(raw)) : path.resolve(process.cwd())
-  return { port, open, idleExit, idleGraceMs, workspace, repoAbs }
-}
-
-function portLooksFree(p: number): Promise<boolean> {
-  return new Promise((resolve) => {
-    const s = net.createServer()
-    s.once('error', () => resolve(false))
-    s.listen(p, LISTEN_HOST, () => {
-      s.close(() => resolve(true))
-    })
-  })
+  return { port, open, idleExit, idleGraceMs }
 }
 
 const BOOT = parseServerArgv()
 
-async function loadGraph(limit?: number): Promise<GraphFragmentProps> {
+async function loadGraph(
+  repoPath: string,
+  limit?: number,
+): Promise<GraphFragmentProps> {
   const graphCommitLimit = clampGraphCommitLimit(limit ?? GRAPH_COMMIT_DEFAULT)
   try {
-    const head = await headInfo()
-    const rows = await logGraphRows(graphCommitLimit)
-    const worktree = await workTreeSummary()
-    const previewStash = await previewStashUiState()
+    const [head, rows, worktree, previewStash] = await Promise.all([
+      headInfo(repoPath),
+      logGraphRows(graphCommitLimit, repoPath),
+      workTreeSummary(repoPath),
+      previewStashUiState(repoPath),
+    ])
     const commitRows = rows.length
     const graphNextLimit = Math.min(
       graphCommitLimit + GRAPH_COMMIT_STEP,
       GRAPH_COMMIT_MAX,
     )
-    const showLoadMore =
-      commitRows >= graphCommitLimit &&
-      commitRows > 0 &&
-      graphCommitLimit < GRAPH_COMMIT_MAX
     return {
       ok: true,
       head,
       rows,
       worktree,
       previewStash,
-      repoPath: getCurrentRepo(),
+      repoPath,
       serverPid: process.pid,
       graphCommitLimit,
       graphNextLimit,
-      showLoadMore,
+      showLoadMore:
+        commitRows >= graphCommitLimit &&
+        commitRows > 0 &&
+        graphCommitLimit < GRAPH_COMMIT_MAX,
     }
   } catch (e) {
-    const stderr =
-      e instanceof GitError
-        ? e.message
-        : e instanceof Error
-          ? e.message
-          : String(e)
     return {
       ok: false,
-      stderr,
-      repoPath: getCurrentRepo(),
+      stderr:
+        e instanceof GitError
+          ? e.message
+          : e instanceof Error
+            ? e.message
+            : String(e),
+      repoPath,
       serverPid: process.pid,
     }
   }
@@ -208,7 +179,6 @@ type WorkspaceRepoSource = {
   repoPath: string
   running: boolean
   isHost: boolean
-  port?: number
   url?: string
   revision?: number
 }
@@ -219,129 +189,57 @@ function clampWorkspaceCommitLimit(raw?: string): number {
     : WORKSPACE_COMMIT_DEFAULT
 }
 
-async function probeWorkspaceInstance(
-  port: number,
-): Promise<WorkspaceRepoSource | null> {
-  const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), 300)
-  try {
-    const response = await fetch(
-      `http://${LISTEN_HOST}:${port}/healthz.json`,
-      {
-        cache: 'no-store',
-        signal: controller.signal,
-      },
-    )
-    if (!response.ok) return null
-    const data = (await response.json()) as {
-      ok?: unknown
-      name?: unknown
-      repo?: unknown
-      port?: unknown
-      revision?: unknown
-    }
-    if (
-      data.ok !== true ||
-      data.name !== 'dumbgit' ||
-      typeof data.repo !== 'string' ||
-      data.port !== port
-    ) {
-      return null
-    }
-    return {
-      repoPath: realpathSync(data.repo),
-      running: true,
-      isHost: port === state.listenPort,
-      port,
-      url: `http://${LISTEN_HOST}:${port}`,
-      revision:
-        typeof data.revision === 'number' &&
-        Number.isFinite(data.revision)
-          ? data.revision
-          : undefined,
-    }
-  } catch {
-    return null
-  } finally {
-    clearTimeout(timer)
+async function syncRepoWatchers(): Promise<void> {
+  const active = new Set(
+    readRepoHistory()
+      .filter((entry) => entry.active)
+      .map((entry) => entry.repoPath),
+  )
+  for (const [repoPath, close] of state.repoWatchers) {
+    if (active.has(repoPath)) continue
+    close()
+    state.repoWatchers.delete(repoPath)
   }
+  await Promise.all(
+    [...active].map(async (repoPath) => {
+      if (state.repoWatchers.has(repoPath)) return
+      try {
+        const watchedDir = await gitDir(repoPath)
+        state.repoWatchers.set(
+          repoPath,
+          watchGitRefs(watchedDir, () => bumpGitChange(repoPath)),
+        )
+      } catch {
+        // The card's normal Git read reports unavailable repositories.
+      }
+    }),
+  )
 }
 
-async function discoverWorkspaceRepos(
-  options: { forceFullScan?: boolean } = {},
-): Promise<WorkspaceRepoSource[]> {
-  const now = Date.now()
-  const shouldFullScan =
-    options.forceFullScan ||
-    state.workspaceLastFullScanAt === undefined ||
-    now - state.workspaceLastFullScanAt >= WORKSPACE_FULL_PORT_SCAN_MS
-  const ports = shouldFullScan
-    ? Array.from(
-        { length: PORT_PROBE_HI - PORT_PROBE_LO + 1 },
-        (_, index) => PORT_PROBE_LO + index,
-      )
-    : [
-        ...new Set(
-          [...state.workspaceRepos.values()]
-            .filter((source) => source.port !== undefined)
-            .map((source) => source.port as number),
-        ),
-      ]
-  const live = (await Promise.all(ports.map(probeWorkspaceInstance))).filter(
-    (repo): repo is WorkspaceRepoSource => repo !== null,
-  )
-  if (shouldFullScan) state.workspaceLastFullScanAt = now
-  const history = readRepoHistory()
-  const rememberedPaths = new Set(history.map((entry) => entry.repoPath))
-  const byPath = new Map<string, WorkspaceRepoSource>()
-  for (const entry of history) {
-    const previous = state.workspaceRepos.get(entry.repoPath)
-    byPath.set(entry.repoPath, {
-      repoPath: entry.repoPath,
-      running: false,
-      isHost: false,
-      // Retry a known port after a transient health miss. A full scan clears
-      // stale ports, so stopped instances do not accumulate probes forever.
-      port: shouldFullScan ? undefined : previous?.port,
-    })
-  }
-  for (const repo of live) {
-    byPath.set(repo.repoPath, repo)
-    if (!rememberedPaths.has(repo.repoPath)) rememberRepo(repo.repoPath)
-  }
-
-  const currentPort = state.listenPort
-  if (!BOOT.workspace && currentPort !== undefined) {
-    const repoPath = getCurrentRepo()
-    byPath.set(repoPath, {
-      repoPath,
-      running: true,
-      isHost: true,
-      port: currentPort,
-      url: `http://${LISTEN_HOST}:${currentPort}`,
-      revision: state.lastChange,
-    })
-  }
-
+async function discoverWorkspaceRepos(): Promise<WorkspaceRepoSource[]> {
+  const repos = readRepoHistory().map((entry) => ({
+    repoPath: entry.repoPath,
+    running: entry.active,
+    isHost: false,
+    url: entry.active
+      ? `/repo?repo=${encodeURIComponent(entry.repoPath)}`
+      : undefined,
+    revision: state.repoRevisions.get(entry.repoPath),
+  }))
   state.workspaceRepos.clear()
-  for (const source of byPath.values()) {
-    state.workspaceRepos.set(source.repoPath, source)
-  }
-
-  return [...byPath.values()]
+  for (const source of repos) state.workspaceRepos.set(source.repoPath, source)
+  await syncRepoWatchers()
+  return repos
 }
 
 async function loadWorkspace(
   limit: number,
   options: {
     refreshStopped?: boolean
-    forceDiscovery?: boolean
     forceRefresh?: boolean
   } = {},
 ): Promise<WorkspaceRepoSnapshot[]> {
-  const repos = await discoverWorkspaceRepos({
-    forceFullScan: options.forceDiscovery,
-  })
+  const repos = await discoverWorkspaceRepos()
   return Promise.all(
     repos.map(async (source): Promise<WorkspaceRepoSnapshot> => {
       const cached = state.workspaceSnapshots.get(source.repoPath)
@@ -355,7 +253,7 @@ async function loadWorkspace(
           repoPath: source.repoPath,
           url: source.url,
           running: false,
-          isHost: source.isHost,
+          isHost: false,
         }
       }
 
@@ -370,7 +268,6 @@ async function loadWorkspace(
       if (
         source.running &&
         !options.forceRefresh &&
-        source.revision !== undefined &&
         cached?.limit === limit &&
         cached.revision === source.revision &&
         cached.fingerprint === fingerprint &&
@@ -381,7 +278,7 @@ async function loadWorkspace(
           repoPath: source.repoPath,
           url: source.url,
           running: true,
-          isHost: source.isHost,
+          isHost: false,
         }
       }
 
@@ -392,22 +289,15 @@ async function loadWorkspace(
           logGraphRows(limit, source.repoPath),
           workTreeSummary(source.repoPath),
         ])
-        snapshot = {
-          ok: true,
-          ...source,
-          head,
-          rows,
-          worktree,
-        }
+        snapshot = { ok: true, ...source, head, rows, worktree }
       } catch (error) {
         snapshot = {
           ok: false,
           repoPath: source.repoPath,
           running: source.running,
-          isHost: source.isHost,
+          isHost: false,
           url: source.url,
-          stderr:
-            error instanceof Error ? error.message : String(error),
+          stderr: error instanceof Error ? error.message : String(error),
         }
       }
       state.workspaceSnapshots.set(source.repoPath, {
@@ -419,31 +309,6 @@ async function loadWorkspace(
       return snapshot
     }),
   )
-}
-
-async function runDumbgitLauncher(
-  args: string[],
-): Promise<
-  { ok: true; stdout: string } | { ok: false; stderr: string }
-> {
-  const child = Bun.spawn([process.execPath, LAUNCHER_PATH, ...args], {
-    cwd: APP_ROOT,
-    stdout: 'pipe',
-    stderr: 'pipe',
-  })
-  const [stdout, stderr, code] = await Promise.all([
-    new Response(child.stdout).text(),
-    new Response(child.stderr).text(),
-    child.exited,
-  ])
-  if (code === 0) return { ok: true, stdout: stdout.trim() }
-  return {
-    ok: false,
-    stderr:
-      stderr.trim() ||
-      stdout.trim() ||
-      `dumbgit launcher exited with status ${code}`,
-  }
 }
 
 /**
@@ -466,8 +331,8 @@ type DumbgitState = {
       fingerprint?: string
     }
   >
-  workspaceLastFullScanAt?: number
-  closeWatch?: () => void
+  repoWatchers: Map<string, () => void>
+  repoRevisions: Map<string, number>
   server?: ReturnType<typeof Bun.serve>
   repoInitialized?: boolean
   listenPort?: number
@@ -479,16 +344,21 @@ if (!G.__dumbgit) {
     changeWaiters: new Set(),
     workspaceRepos: new Map(),
     workspaceSnapshots: new Map(),
+    repoWatchers: new Map(),
+    repoRevisions: new Map(),
   }
 }
 const state = G.__dumbgit
 if (!state.changeWaiters) state.changeWaiters = new Set()
 if (!state.workspaceRepos) state.workspaceRepos = new Map()
 if (!state.workspaceSnapshots) state.workspaceSnapshots = new Map()
+if (!state.repoWatchers) state.repoWatchers = new Map()
+if (!state.repoRevisions) state.repoRevisions = new Map()
 
 /** Record a refs change and wake every idle `/events` stream. */
-function bumpGitChange() {
+function bumpGitChange(repoPath?: string) {
   state.lastChange = Date.now()
+  if (repoPath) state.repoRevisions.set(repoPath, state.lastChange)
   for (const wake of state.changeWaiters) wake()
 }
 
@@ -530,37 +400,10 @@ function waitForGitChange(
 /** Cached on state to survive `bun --watch` reloads. */
 async function listenPort(): Promise<number> {
   if (state.listenPort !== undefined) return state.listenPort
-  if (BOOT.port !== null) return (state.listenPort = BOOT.port)
-  for (let p = PORT_PROBE_LO; p <= PORT_PROBE_HI; p++) {
-    if (await portLooksFree(p)) return (state.listenPort = p)
-  }
-  console.error(`dumbgit: no free TCP port ${PORT_PROBE_LO}-${PORT_PROBE_HI}`)
-  process.exit(1)
+  return (state.listenPort = BOOT.port ?? DEFAULT_PORT)
 }
 
-if (!BOOT.workspace && !state.repoInitialized) {
-  try {
-    await initRepo(BOOT.repoAbs)
-    rememberRepo(getCurrentRepo())
-    state.repoInitialized = true
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e)
-    console.error(`dumbgit: ${msg}`)
-    console.error(`run dumbgit from inside a git working tree`)
-    process.exit(1)
-  }
-}
-
-async function attachWatcher() {
-  state.closeWatch?.()
-  state.closeWatch = undefined
-  const watchedDir = await gitDir()
-  state.closeWatch = watchGitRefs(watchedDir, () => {
-    bumpGitChange()
-  })
-}
-
-if (!BOOT.workspace) await attachWatcher()
+await syncRepoWatchers()
 
 const idle = BOOT.idleExit
   ? createIdleExit({
@@ -583,35 +426,58 @@ app.get('/healthz.json', (c) => {
   if (port === undefined) {
     return c.json({ ok: false, error: 'not_ready' }, 503)
   }
-  return c.json(
-    BOOT.workspace
-      ? {
-          ok: true,
-          name: 'dumbgit',
-          kind: 'workspace',
-          pid: process.pid,
-          port,
-        }
-      : {
-          ok: true,
-          name: 'dumbgit',
-          kind: 'repo',
-          repo: getCurrentRepo(),
-          pid: process.pid,
-          port,
-          revision: state.lastChange,
-        },
-    200,
-  )
+  return c.json({
+    ok: true,
+    name: 'dumbgit',
+    kind: 'workspace',
+    pid: process.pid,
+    port,
+  })
 })
 
-app.get('/', async (c) => {
-  if (BOOT.workspace) return c.redirect('/workspace')
+function workspaceRepoFromQuery(
+  raw?: string,
+  options: { requireActive?: boolean } = {},
+): string | null {
+  if (!raw) return null
+  try {
+    const repoPath = realpathSync(raw)
+    const entry = readRepoHistory().find(
+      (candidate) => candidate.repoPath === repoPath,
+    )
+    if (!entry || (options.requireActive && !entry.active)) return null
+    return repoPath
+  } catch {
+    return null
+  }
+}
+
+async function renderWorkspace(c: Context) {
   c.header('Cache-Control', 'no-store')
-  const graph = await loadGraph()
-  const tabTitle = `dumbgit: ${path.basename(graph.repoPath)}`
+  const limit = clampWorkspaceCommitLimit(c.req.query('limit'))
+  const repos = await loadWorkspace(limit, {
+    refreshStopped: true,
+    forceRefresh: true,
+  })
   return c.html(
-    <Layout title={tabTitle}>
+    <Layout title="dumbgit: Workspace">
+      <WorkspaceView repos={repos} currentRepo="" limit={limit} />
+    </Layout>,
+    200,
+  )
+}
+
+app.get('/', renderWorkspace)
+
+app.get('/repo', async (c) => {
+  c.header('Cache-Control', 'no-store')
+  const repoPath = workspaceRepoFromQuery(c.req.query('repo'), {
+    requireActive: true,
+  })
+  if (!repoPath) return c.redirect('/')
+  const graph = await loadGraph(repoPath)
+  return c.html(
+    <Layout title={`dumbgit: ${path.basename(repoPath)}`} repoPath={repoPath}>
       <div class="page">
         <div id="status" class="status-slot"></div>
         <div class="main-grid">
@@ -630,49 +496,9 @@ app.get('/', async (c) => {
   )
 })
 
-function workspaceRepoFromQuery(raw?: string): string | null {
-  if (!raw) return null
-  try {
-    const repoPath = realpathSync(raw)
-    if (
-      (!BOOT.workspace && repoPath === getCurrentRepo()) ||
-      state.workspaceRepos.has(repoPath)
-    ) {
-      return repoPath
-    }
-  } catch {
-    // Invalid or no longer available path.
-  }
-  return null
-}
-
-app.get('/workspace', async (c) => {
-  c.header('Cache-Control', 'no-store')
-  if (!BOOT.workspace) {
-    const result = await runDumbgitLauncher(['workspace', '--no-open'])
-    if (!result.ok) return c.text(result.stderr, 500)
-    const url = result.stdout
-      .split(/\s+/)
-      .find((value) => /^http:\/\/127\.0\.0\.1:\d+\/workspace$/.test(value))
-    if (!url) return c.text('dumbgit: workspace URL not found', 500)
-    return c.redirect(url)
-  }
-  const limit = clampWorkspaceCommitLimit(c.req.query('limit'))
-  const repos = await loadWorkspace(limit, {
-    refreshStopped: true,
-    forceDiscovery: true,
-    forceRefresh: true,
-  })
-  return c.html(
-    <Layout title="dumbgit: Workspace">
-      <WorkspaceView
-        repos={repos}
-        currentRepo={BOOT.workspace ? '' : getCurrentRepo()}
-        limit={limit}
-      />
-    </Layout>,
-    200,
-  )
+app.get('/workspace', (c) => {
+  const query = c.req.url.split('?')[1]
+  return c.redirect(query ? `/?${query}` : '/')
 })
 
 app.get('/fragment/workspace', async (c) => {
@@ -682,7 +508,7 @@ app.get('/fragment/workspace', async (c) => {
   return c.html(
     <WorkspaceBoard
       repos={repos}
-      currentRepo={BOOT.workspace ? '' : getCurrentRepo()}
+      currentRepo=""
       limit={limit}
     />,
     200,
@@ -722,24 +548,16 @@ app.post('/workspace/repo/start', async (c) => {
   c.header('Cache-Control', 'no-store')
   const limit = clampWorkspaceCommitLimit(c.req.query('limit'))
   const repoPath = workspaceRepoFromQuery(c.req.query('repo'))
-  let controlError: string | undefined
-  if (!repoPath) {
-    controlError = 'Repository is not in Workspace history.'
-  } else {
-    const source = state.workspaceRepos.get(repoPath)
-    if (!source?.running) {
-      const result = await runDumbgitLauncher([
-        '--no-open',
-        repoPath,
-      ])
-      if (!result.ok) controlError = result.stderr
-    }
-  }
-  const repos = await loadWorkspace(limit, { forceDiscovery: true })
+  const controlError =
+    repoPath && setRepoActive(repoPath, true)
+      ? undefined
+      : 'Repository is not in Workspace history.'
+  await syncRepoWatchers()
+  const repos = await loadWorkspace(limit, { forceRefresh: true })
   return c.html(
     <WorkspaceBoard
       repos={repos}
-      currentRepo={BOOT.workspace ? '' : getCurrentRepo()}
+      currentRepo=""
       limit={limit}
       controlError={controlError}
     />,
@@ -751,24 +569,16 @@ app.post('/workspace/repo/stop', async (c) => {
   c.header('Cache-Control', 'no-store')
   const limit = clampWorkspaceCommitLimit(c.req.query('limit'))
   const repoPath = workspaceRepoFromQuery(c.req.query('repo'))
-  let controlError: string | undefined
-  if (!repoPath) {
-    controlError = 'Repository is not in Workspace history.'
-  } else {
-    const source = state.workspaceRepos.get(repoPath)
-    if (source?.isHost) {
-      controlError =
-        'This repository is hosting the current Workspace. Run `dumbgit workspace` to use the independent controller.'
-    } else if (source?.running) {
-      const result = await runDumbgitLauncher(['stop', repoPath])
-      if (!result.ok) controlError = result.stderr
-    }
-  }
-  const repos = await loadWorkspace(limit, { forceDiscovery: true })
+  const controlError =
+    repoPath && setRepoActive(repoPath, false)
+      ? undefined
+      : 'Repository is not in Workspace history.'
+  await syncRepoWatchers()
+  const repos = await loadWorkspace(limit)
   return c.html(
     <WorkspaceBoard
       repos={repos}
-      currentRepo={BOOT.workspace ? '' : getCurrentRepo()}
+      currentRepo=""
       limit={limit}
       controlError={controlError}
     />,
@@ -783,7 +593,7 @@ app.get('/workspace/commit', async (c) => {
   if (!repoPath || !/^[a-f0-9]{7,40}$/i.test(sha)) {
     return c.html(
       <WorkspaceCommitInspector
-        repoPath={repoPath ?? getCurrentRepo()}
+        repoPath={repoPath ?? c.req.query('repo') ?? 'unknown'}
         sha={sha || 'invalid'}
         summary={{ ok: false, stderr: 'missing or invalid repo/commit' }}
       />,
@@ -854,7 +664,7 @@ app.get('/workspace/worktree', async (c) => {
   if (!repoPath) {
     return c.html(
       <WorkspaceCommitInspector
-        repoPath={getCurrentRepo()}
+        repoPath={c.req.query('repo') ?? 'unknown'}
         sha="worktree"
         summary={{ ok: false, stderr: 'missing or invalid repository' }}
       />,
@@ -900,17 +710,33 @@ app.get('/workspace/worktree/file', async (c) => {
   return c.html(<WorkspacePatch patch={patch.patch} />, 200)
 })
 
+async function requireActiveRepo(c: Context, next: Next) {
+  const repoPath = workspaceRepoFromQuery(c.req.query('repo'), {
+    requireActive: true,
+  })
+  if (!repoPath) return c.text('missing, inactive, or unknown repository', 400)
+  await next()
+}
+
+app.use('/fragment/graph', requireActiveRepo)
+app.use('/fragment/graph/*', requireActiveRepo)
+app.use('/fragment/worktree', requireActiveRepo)
+app.use('/api/*', requireActiveRepo)
+
 app.get('/fragment/graph', async (c) => {
+  const repoPath = workspaceRepoFromQuery(c.req.query('repo'), { requireActive: true })!
   c.header('Cache-Control', 'no-store')
   const q = c.req.query('limit')
   const parsed = q !== undefined ? Number.parseInt(q, 10) : NaN
   const graph = await loadGraph(
+    repoPath,
     Number.isFinite(parsed) ? parsed : undefined,
   )
   return c.html(<GraphFragment {...graph} />, 200)
 })
 
 app.get('/fragment/graph/tail', async (c) => {
+  const repoPath = workspaceRepoFromQuery(c.req.query('repo'), { requireActive: true })!
   c.header('Cache-Control', 'no-store')
   const offset = Math.max(
     0,
@@ -920,9 +746,9 @@ app.get('/fragment/graph/tail', async (c) => {
   const graphCommitLimit = clampGraphCommitLimit(parsedLimit)
   const priorGutter = Number.parseInt(c.req.query('gutter') ?? '', 10)
   try {
-    const head = await headInfo()
-    const rows = await logGraphRows(graphCommitLimit)
-    const previewStash = await previewStashUiState()
+    const head = await headInfo(repoPath)
+    const rows = await logGraphRows(graphCommitLimit, repoPath)
+    const previewStash = await previewStashUiState(repoPath)
     const commitRows = rows.length
     const graphNextLimit = Math.min(
       graphCommitLimit + GRAPH_COMMIT_STEP,
@@ -966,22 +792,24 @@ app.get('/fragment/graph/tail', async (c) => {
 })
 
 app.get('/fragment/worktree', async (c) => {
+  const repoPath = workspaceRepoFromQuery(c.req.query('repo'), { requireActive: true })!
   c.header('Cache-Control', 'no-store')
-  const wt = await workTreeSummary()
-  const head = await headInfo()
-  const previewStash = await previewStashUiState()
+  const wt = await workTreeSummary(repoPath)
+  const head = await headInfo(repoPath)
+  const previewStash = await previewStashUiState(repoPath)
   return c.html(
     <WorkTreeFragment
       {...wt}
       currentSha={head.sha}
       previewStash={previewStash}
-      repoPath={getCurrentRepo()}
+      repoPath={repoPath}
     />,
     200,
   )
 })
 
 app.get('/api/worktree/file', async (c) => {
+  const repoPath = workspaceRepoFromQuery(c.req.query('repo'), { requireActive: true })!
   c.header('Cache-Control', 'no-store')
   const kind = c.req.query('kind')
   const filePath = c.req.query('path') ?? ''
@@ -994,7 +822,7 @@ app.get('/api/worktree/file', async (c) => {
       200,
     )
   }
-  const r = await workTreeFilePatch(kind, filePath)
+  const r = await workTreeFilePatch(kind, filePath, repoPath)
   if (!r.ok) {
     return c.html(<WorkTreeDiffPanel ok={false} stderr={r.stderr} />, 200)
   }
@@ -1010,6 +838,7 @@ app.get('/api/worktree/file', async (c) => {
 })
 
 app.post('/api/worktree/action', async (c) => {
+  const repoPath = workspaceRepoFromQuery(c.req.query('repo'), { requireActive: true })!
   const kind = c.req.query('kind')
   const op = c.req.query('op')
   const filePath = c.req.query('path') ?? ''
@@ -1021,12 +850,12 @@ app.post('/api/worktree/action', async (c) => {
     return c.html(<StatusOob error="missing or invalid worktree action" />, 200)
   }
 
-  const r = await applyWorkTreeAction(kind, op, filePath)
+  const r = await applyWorkTreeAction(kind, op, filePath, repoPath)
   if (!r.ok) {
     return c.html(<StatusOob error={r.stderr} />, 200)
   }
 
-  const next = await loadGraph()
+  const next = await loadGraph(repoPath)
   return c.html(
     <Fragment>
       <GraphFragment {...next} swapOob />
@@ -1038,6 +867,7 @@ app.post('/api/worktree/action', async (c) => {
 })
 
 app.post('/api/worktree/open', async (c) => {
+  const repoPath = workspaceRepoFromQuery(c.req.query('repo'), { requireActive: true })!
   const kind = c.req.query('kind')
   const filePath = c.req.query('path') ?? ''
   if (
@@ -1047,7 +877,7 @@ app.post('/api/worktree/open', async (c) => {
     return c.html(<StatusOob error="missing or invalid worktree file" />, 200)
   }
 
-  const file = await workTreeFileAbsolutePath(kind, filePath)
+  const file = await workTreeFileAbsolutePath(kind, filePath, repoPath)
   if (!file.ok) {
     return c.html(<StatusOob error={file.stderr} />, 200)
   }
@@ -1069,8 +899,9 @@ app.post('/api/worktree/open', async (c) => {
 })
 
 app.post('/api/worktree/stash-toggle', async (c) => {
-  const r = await togglePreviewStash()
-  const next = await loadGraph()
+  const repoPath = workspaceRepoFromQuery(c.req.query('repo'), { requireActive: true })!
+  const r = await togglePreviewStash(repoPath)
+  const next = await loadGraph(repoPath)
   if (!next.ok) {
     return c.html(
       <Fragment>
@@ -1091,8 +922,9 @@ app.post('/api/worktree/stash-toggle', async (c) => {
 })
 
 app.post('/api/worktree/stash-restore', async (c) => {
-  const r = await restorePreviewStash(c.req.query('ref'))
-  const next = await loadGraph()
+  const repoPath = workspaceRepoFromQuery(c.req.query('repo'), { requireActive: true })!
+  const r = await restorePreviewStash(c.req.query('ref'), repoPath)
+  const next = await loadGraph(repoPath)
   return c.html(
     <Fragment>
       <GraphFragment {...next} />
@@ -1104,8 +936,9 @@ app.post('/api/worktree/stash-restore', async (c) => {
 })
 
 app.post('/api/worktree/stash-drop', async (c) => {
-  const r = await dropPreviewStash(c.req.query('ref'))
-  const next = await loadGraph()
+  const repoPath = workspaceRepoFromQuery(c.req.query('repo'), { requireActive: true })!
+  const r = await dropPreviewStash(c.req.query('ref'), repoPath)
+  const next = await loadGraph(repoPath)
   return c.html(
     <Fragment>
       <GraphFragment {...next} />
@@ -1117,9 +950,10 @@ app.post('/api/worktree/stash-drop', async (c) => {
 })
 
 app.post('/api/checkout/branch', async (c) => {
+  const repoPath = workspaceRepoFromQuery(c.req.query('repo'), { requireActive: true })!
   const name = c.req.query('name')
   if (!name) {
-    const graph = await loadGraph()
+    const graph = await loadGraph(repoPath)
     return c.html(
       <Fragment>
         <GraphFragment {...graph} />
@@ -1128,8 +962,8 @@ app.post('/api/checkout/branch', async (c) => {
       200,
     )
   }
-  const r = await checkoutBranch(name)
-  const next = await loadGraph()
+  const r = await checkoutBranch(name, repoPath)
+  const next = await loadGraph(repoPath)
   return c.html(
     <Fragment>
       <GraphFragment {...next} />
@@ -1140,9 +974,10 @@ app.post('/api/checkout/branch', async (c) => {
 })
 
 app.post('/api/checkout/commit', async (c) => {
+  const repoPath = workspaceRepoFromQuery(c.req.query('repo'), { requireActive: true })!
   const sha = c.req.query('sha')
   if (!sha) {
-    const graph = await loadGraph()
+    const graph = await loadGraph(repoPath)
     return c.html(
       <Fragment>
         <GraphFragment {...graph} />
@@ -1151,8 +986,8 @@ app.post('/api/checkout/commit', async (c) => {
       200,
     )
   }
-  const r = await checkoutCommit(sha)
-  const next = await loadGraph()
+  const r = await checkoutCommit(sha, repoPath)
+  const next = await loadGraph(repoPath)
   return c.html(
     <Fragment>
       <GraphFragment {...next} />
@@ -1163,8 +998,9 @@ app.post('/api/checkout/commit', async (c) => {
 })
 
 app.get('/api/commit/:sha', async (c) => {
+  const repoPath = workspaceRepoFromQuery(c.req.query('repo'), { requireActive: true })!
   const sha = c.req.param('sha')
-  const r = await commitSummary(sha, { includeTags: true })
+  const r = await commitSummary(sha, { includeTags: true }, repoPath)
   if (!r.ok) {
     return c.html(<DiffPanel state="error" sha={sha} stderr={r.stderr} />, 200)
   }
@@ -1172,6 +1008,7 @@ app.get('/api/commit/:sha', async (c) => {
 })
 
 app.get('/api/commit/:sha/file', async (c) => {
+  const repoPath = workspaceRepoFromQuery(c.req.query('repo'), { requireActive: true })!
   c.header('Cache-Control', 'no-store')
   const sha = c.req.param('sha')
   const filePath = c.req.query('path') ?? ''
@@ -1181,7 +1018,7 @@ app.get('/api/commit/:sha/file', async (c) => {
       200,
     )
   }
-  const summary = await commitSummary(sha)
+  const summary = await commitSummary(sha, {}, repoPath)
   if (!summary.ok) {
     return c.html(
       <pre class="diff-body diff-patch-error">{summary.stderr}</pre>,
@@ -1195,7 +1032,7 @@ app.get('/api/commit/:sha/file', async (c) => {
       200,
     )
   }
-  const r = await commitFilePatch(sha, filePath, summary.value.files)
+  const r = await commitFilePatch(sha, filePath, summary.value.files, repoPath)
   if (!r.ok) {
     return c.html(
       <pre class="diff-body diff-patch-error">{r.stderr}</pre>,
@@ -1212,11 +1049,12 @@ app.get('/api/commit/:sha/file', async (c) => {
 })
 
 app.get('/api/stash', async (c) => {
+  const repoPath = workspaceRepoFromQuery(c.req.query('repo'), { requireActive: true })!
   const ref = c.req.query('ref') ?? ''
   if (!ref) {
     return c.html(<DiffPanel state="error" sha="stash" stderr="missing stash ref" />, 200)
   }
-  const r = await stashSummary(ref)
+  const r = await stashSummary(ref, repoPath)
   if (!r.ok) {
     return c.html(<DiffPanel state="error" sha={ref} stderr={r.stderr} />, 200)
   }
@@ -1232,6 +1070,7 @@ app.get('/api/stash', async (c) => {
 })
 
 app.get('/api/stash/file', async (c) => {
+  const repoPath = workspaceRepoFromQuery(c.req.query('repo'), { requireActive: true })!
   c.header('Cache-Control', 'no-store')
   const ref = c.req.query('ref') ?? ''
   const filePath = c.req.query('path') ?? ''
@@ -1241,14 +1080,14 @@ app.get('/api/stash/file', async (c) => {
       200,
     )
   }
-  const summary = await stashSummary(ref)
+  const summary = await stashSummary(ref, repoPath)
   if (!summary.ok) {
     return c.html(
       <pre class="diff-body diff-patch-error">{summary.stderr}</pre>,
       200,
     )
   }
-  const r = await stashFilePatch(ref, filePath, summary.value.files)
+  const r = await stashFilePatch(ref, filePath, summary.value.files, repoPath)
   if (!r.ok) {
     return c.html(<pre class="diff-body diff-patch-error">{r.stderr}</pre>, 200)
   }
@@ -1256,6 +1095,7 @@ app.get('/api/stash/file', async (c) => {
 })
 
 app.post('/api/branch/create', async (c) => {
+  const repoPath = workspaceRepoFromQuery(c.req.query('repo'), { requireActive: true })!
   const sha = c.req.query('sha') ?? ''
   const body = await c.req.parseBody()
   let name = typeof body.name === 'string' ? body.name.trim() : ''
@@ -1264,7 +1104,7 @@ app.post('/api/branch/create', async (c) => {
       (c.req.header('HX-Prompt') ?? c.req.header('hx-prompt') ?? '').trim()
   }
   if (!sha || !name) {
-    const next = await loadGraph()
+    const next = await loadGraph(repoPath)
     return c.html(
       <Fragment>
         <GraphFragment {...next} />
@@ -1273,8 +1113,8 @@ app.post('/api/branch/create', async (c) => {
       200,
     )
   }
-  const r = await createBranchAt(sha, name)
-  const next = await loadGraph()
+  const r = await createBranchAt(sha, name, repoPath)
+  const next = await loadGraph(repoPath)
   return c.html(
     <Fragment>
       <GraphFragment {...next} />
@@ -1285,8 +1125,9 @@ app.post('/api/branch/create', async (c) => {
 })
 
 app.post('/api/push', async (c) => {
-  const r = await push()
-  const next = await loadGraph()
+  const repoPath = workspaceRepoFromQuery(c.req.query('repo'), { requireActive: true })!
+  const r = await push(repoPath)
+  const next = await loadGraph(repoPath)
   return c.html(
     <Fragment>
       <GraphFragment {...next} />
@@ -1354,11 +1195,7 @@ if (state.server) {
     idleTimeout: 0,
   })
   const base = `http://${LISTEN_HOST}:${port}`
-  console.log(
-    BOOT.workspace
-      ? `dumbgit workspace on ${base}/workspace`
-      : `dumbgit on ${base}  (repo: ${getCurrentRepo()})`,
-  )
+  console.log(`dumbgit workspace on ${base}/`)
   if (idle) {
     idle.start()
     console.log(
@@ -1369,7 +1206,7 @@ if (state.server) {
   }
   if (BOOT.open) {
     setTimeout(() => {
-      Bun.spawn(['open', BOOT.workspace ? `${base}/workspace` : base])
+      Bun.spawn(['open', base])
     }, 200)
   }
 }

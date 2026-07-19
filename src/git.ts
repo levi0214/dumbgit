@@ -123,8 +123,8 @@ export async function workspaceRepoFingerprint(
   return `${status.stdout}\x1e${stats.join('\x1e')}`
 }
 
-async function gitOrThrow(args: string[]): Promise<string> {
-  const { code, stdout, stderr } = await spawnGit(args)
+async function gitOrThrow(args: string[], cwd = repoRoot): Promise<string> {
+  const { code, stdout, stderr } = await spawnGit(args, cwd)
   if (code !== 0) {
     throw new GitError(stderr.trim() || `git exited with status ${code}`, code)
   }
@@ -261,8 +261,9 @@ export async function logGraphRows(
 // Branch, checkout, and push actions.
 export async function checkoutBranch(
   name: string,
+  cwd = repoRoot,
 ): Promise<{ ok: true } | { ok: false; stderr: string }> {
-  const { code, stderr } = await spawnGit(['switch', name])
+  const { code, stderr } = await spawnGit(['switch', name], cwd)
   if (code === 0) return { ok: true }
   return {
     ok: false,
@@ -272,8 +273,9 @@ export async function checkoutBranch(
 
 export async function checkoutCommit(
   sha: string,
+  cwd = repoRoot,
 ): Promise<{ ok: true } | { ok: false; stderr: string }> {
-  const { code, stderr } = await spawnGit(['switch', '--detach', sha])
+  const { code, stderr } = await spawnGit(['switch', '--detach', sha], cwd)
   if (code === 0) return { ok: true }
   return {
     ok: false,
@@ -285,8 +287,9 @@ export async function checkoutCommit(
 export async function createBranchAt(
   sha: string,
   name: string,
+  cwd = repoRoot,
 ): Promise<{ ok: true } | { ok: false; stderr: string }> {
-  const { code, stderr } = await spawnGit(['branch', name, sha])
+  const { code, stderr } = await spawnGit(['branch', name, sha], cwd)
   if (code === 0) return { ok: true }
   return {
     ok: false,
@@ -529,18 +532,18 @@ export async function commitFilePatch(
   return { ok: true, patch: patch.stdout.trimEnd() }
 }
 
-export async function push(): Promise<
+export async function push(cwd = repoRoot): Promise<
   { ok: true } | { ok: false; stderr: string }
 > {
   // Auto set upstream on first push of a branch; no-op when upstream exists.
-  const { code, stdout, stderr } = await spawnGit(['-c', 'push.autoSetupRemote=true', 'push'])
+  const { code, stdout, stderr } = await spawnGit(['-c', 'push.autoSetupRemote=true', 'push'], cwd)
   if (code === 0) return { ok: true }
   return { ok: false, stderr: stderr.trim() || stdout.trim() || `git push failed (${code})` }
 }
 
-/** Absolute path to the .git directory for the current cwd. */
-export async function gitDir(): Promise<string> {
-  const out = await gitOrThrow(['rev-parse', '--absolute-git-dir'])
+/** Absolute path to the .git directory for a repository. */
+export async function gitDir(cwd = repoRoot): Promise<string> {
+  const out = await gitOrThrow(['rev-parse', '--absolute-git-dir'], cwd)
   return out.trim()
 }
 
@@ -575,8 +578,8 @@ export type PreviewStashUi = {
   stashes: PreviewStashEntry[]
 }
 
-async function dumbgitPreviewStashes(): Promise<PreviewStashEntry[]> {
-  const r = await spawnGit(['stash', 'list', '--format=%gd%x1f%gs%x1f%cr'])
+async function dumbgitPreviewStashes(cwd = repoRoot): Promise<PreviewStashEntry[]> {
+  const r = await spawnGit(['stash', 'list', '--format=%gd%x1f%gs%x1f%cr'], cwd)
   if (r.code !== 0) return []
   const marker = DUMBGIT_PREVIEW_STASH_MSG
   const out: PreviewStashEntry[] = []
@@ -585,7 +588,7 @@ async function dumbgitPreviewStashes(): Promise<PreviewStashEntry[]> {
     if (!t) continue
     const [ref = '', subject = '', age = ''] = t.split('\x1f')
     if (!ref || !subject.includes(marker)) continue
-    const base = await spawnGit(['rev-parse', `${ref}^1`])
+    const base = await spawnGit(['rev-parse', `${ref}^1`], cwd)
     if (base.code !== 0) continue
     out.push({ ref, baseSha: base.stdout.trim(), subject, age })
   }
@@ -594,21 +597,23 @@ async function dumbgitPreviewStashes(): Promise<PreviewStashEntry[]> {
 
 async function findDumbgitPreviewStash(
   ref?: string,
+  cwd = repoRoot,
 ): Promise<PreviewStashEntry | null> {
-  const stashes = await dumbgitPreviewStashes()
+  const stashes = await dumbgitPreviewStashes(cwd)
   if (!ref) return stashes[0] ?? null
   return stashes.find((s) => s.ref === ref) ?? null
 }
 
 /** Whether a dumbgit preview stash exists (`git stash list`). */
-export async function previewStashUiState(): Promise<PreviewStashUi> {
-  return { stashes: await dumbgitPreviewStashes() }
+export async function previewStashUiState(cwd = repoRoot): Promise<PreviewStashUi> {
+  return { stashes: await dumbgitPreviewStashes(cwd) }
 }
 
 async function applyAndDropPreviewStash(
   stash: PreviewStashEntry,
+  cwd = repoRoot,
 ): Promise<{ ok: true } | { ok: false; stderr: string }> {
-  const applied = await spawnGit(['stash', 'apply', '--index', stash.ref])
+  const applied = await spawnGit(['stash', 'apply', '--index', stash.ref], cwd)
   if (applied.code !== 0) {
     return {
       ok: false,
@@ -618,7 +623,7 @@ async function applyAndDropPreviewStash(
         `git stash apply failed (${applied.code})`,
     }
   }
-  const dropped = await spawnGit(['stash', 'drop', stash.ref])
+  const dropped = await spawnGit(['stash', 'drop', stash.ref], cwd)
   if (dropped.code !== 0) {
     return {
       ok: false,
@@ -633,10 +638,10 @@ async function applyAndDropPreviewStash(
 /**
  * Toggle: stash WIP (+ untracked) behind app marker, or apply+drop latest matching stash when clean.
  */
-export async function togglePreviewStash(): Promise<
+export async function togglePreviewStash(cwd = repoRoot): Promise<
   { ok: true } | { ok: false; stderr: string }
 > {
-  const wt = await workTreeSummary()
+  const wt = await workTreeSummary(cwd)
   const dirty =
     wt.staged.length > 0 ||
     wt.unstaged.length > 0 ||
@@ -649,7 +654,7 @@ export async function togglePreviewStash(): Promise<
       '-u',
       '-m',
       DUMBGIT_PREVIEW_STASH_MSG,
-    ])
+    ], cwd)
     if (r.code !== 0) {
       return {
         ok: false,
@@ -659,26 +664,26 @@ export async function togglePreviewStash(): Promise<
     return { ok: true }
   }
 
-  const stash = await findDumbgitPreviewStash()
-  if (stash) return applyAndDropPreviewStash(stash)
+  const stash = await findDumbgitPreviewStash(undefined, cwd)
+  if (stash) return applyAndDropPreviewStash(stash, cwd)
 
   return { ok: false, stderr: 'nothing to stash or restore' }
 }
 
-export async function restorePreviewStash(ref?: string): Promise<
+export async function restorePreviewStash(ref?: string, cwd = repoRoot): Promise<
   { ok: true } | { ok: false; stderr: string }
 > {
-  const stash = await findDumbgitPreviewStash(ref)
+  const stash = await findDumbgitPreviewStash(ref, cwd)
   if (!stash) return { ok: false, stderr: 'no dumbgit preview stash to restore' }
-  return applyAndDropPreviewStash(stash)
+  return applyAndDropPreviewStash(stash, cwd)
 }
 
-export async function dropPreviewStash(ref?: string): Promise<
+export async function dropPreviewStash(ref?: string, cwd = repoRoot): Promise<
   { ok: true } | { ok: false; stderr: string }
 > {
-  const stash = await findDumbgitPreviewStash(ref)
+  const stash = await findDumbgitPreviewStash(ref, cwd)
   if (!stash) return { ok: false, stderr: 'no dumbgit preview stash to drop' }
-  const r = await spawnGit(['stash', 'drop', stash.ref])
+  const r = await spawnGit(['stash', 'drop', stash.ref], cwd)
   if (r.code !== 0) {
     return {
       ok: false,
@@ -690,10 +695,11 @@ export async function dropPreviewStash(ref?: string): Promise<
 
 export async function stashSummary(
   ref: string,
+  cwd = repoRoot,
 ): Promise<{ ok: true; value: CommitSummary } | { ok: false; stderr: string }> {
-  const stash = await findDumbgitPreviewStash(ref)
+  const stash = await findDumbgitPreviewStash(ref, cwd)
   if (!stash) return { ok: false, stderr: 'stash not found' }
-  const meta = await spawnGit(['log', '-1', '--format=%an%n%aI', stash.ref])
+  const meta = await spawnGit(['log', '-1', '--format=%an%n%aI', stash.ref], cwd)
   if (meta.code !== 0) {
     return { ok: false, stderr: meta.stderr.trim() || `git log failed (${meta.code})` }
   }
@@ -704,7 +710,7 @@ export async function stashSummary(
     '--format=',
     '--no-color',
     stash.ref,
-  ])
+  ], cwd)
   if (fileShow.code !== 0) {
     return {
       ok: false,
@@ -712,7 +718,7 @@ export async function stashSummary(
         fileShow.stderr.trim() || `git show --name-status failed (${fileShow.code})`,
     }
   }
-  const numstat = await spawnGit(['show', '--numstat', '--format=', stash.ref])
+  const numstat = await spawnGit(['show', '--numstat', '--format=', stash.ref], cwd)
   let files = parseShowNameStatus(fileShow.stdout)
   if (numstat.code === 0) {
     files = mergeNumstat(files, parseNumstat(numstat.stdout))
@@ -734,10 +740,11 @@ export async function stashFilePatch(
   ref: string,
   displayPath: string,
   files?: CommitFile[],
+  cwd = repoRoot,
 ): Promise<{ ok: true; patch: string } | { ok: false; stderr: string }> {
-  const stash = await findDumbgitPreviewStash(ref)
+  const stash = await findDumbgitPreviewStash(ref, cwd)
   if (!stash) return { ok: false, stderr: 'stash not found' }
-  return commitFilePatch(stash.ref, displayPath, files)
+  return commitFilePatch(stash.ref, displayPath, files, cwd)
 }
 
 // Worktree status and file actions.
@@ -884,8 +891,9 @@ export async function workTreeFilePatch(
 export async function workTreeFileAbsolutePath(
   kind: WorkTreeChangeKind,
   displayPath: string,
+  cwd = repoRoot,
 ): Promise<{ ok: true; path: string } | { ok: false; stderr: string }> {
-  const wt = await workTreeSummary()
+  const wt = await workTreeSummary(cwd)
   const bucket =
     kind === 'staged' ? wt.staged : kind === 'unstaged' ? wt.unstaged : wt.untracked
   if (!bucket.some((e) => e.path === displayPath)) {
@@ -898,10 +906,10 @@ export async function workTreeFileAbsolutePath(
   const raw = gitDiffPath(displayPath)
   if (!raw) return { ok: false, stderr: 'invalid path' }
 
-  const rel = await strictRepoRelative(raw)
+  const rel = await strictRepoRelative(raw, cwd)
   if (!rel) return { ok: false, stderr: 'invalid path' }
 
-  const abs = path.resolve(repoRoot, rel)
+  const abs = path.resolve(cwd, rel)
   if (!existsSync(abs)) {
     return { ok: false, stderr: `${displayPath} does not exist in the working tree` }
   }
@@ -914,8 +922,9 @@ export async function applyWorkTreeAction(
   kind: WorkTreeChangeKind,
   op: WorkTreeActionOp,
   displayPath: string,
+  cwd = repoRoot,
 ): Promise<{ ok: true } | { ok: false; stderr: string }> {
-  const wt = await workTreeSummary()
+  const wt = await workTreeSummary(cwd)
   const bucket =
     kind === 'staged' ? wt.staged : kind === 'unstaged' ? wt.unstaged : wt.untracked
   if (!bucket.some((e) => e.path === displayPath)) {
@@ -928,7 +937,7 @@ export async function applyWorkTreeAction(
   const raw = gitDiffPath(displayPath)
   if (!raw) return { ok: false, stderr: 'invalid path' }
 
-  const rel = await strictRepoRelative(raw)
+  const rel = await strictRepoRelative(raw, cwd)
   if (!rel) return { ok: false, stderr: 'invalid path' }
 
   if (op === 'stage' && kind === 'staged') {
@@ -950,7 +959,7 @@ export async function applyWorkTreeAction(
           ? ['restore', '--worktree', '--', rel]
           : ['clean', '-f', '--', rel]
 
-  const r = await spawnGit(args)
+  const r = await spawnGit(args, cwd)
   if (r.code !== 0) {
     return {
       ok: false,

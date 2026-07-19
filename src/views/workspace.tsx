@@ -157,7 +157,7 @@ function WorkspaceCardActions(props: {
         title={
           props.isHost
             ? 'This repository is hosting the current Workspace'
-            : `${props.running ? 'Stop' : 'Start'} ${name}`
+            : `${props.running ? 'Stop monitoring' : 'Start monitoring'} ${name}`
         }
         hx-post={controlUrl}
         hx-target="#workspace-board"
@@ -198,7 +198,7 @@ function WorkspaceDepthToggle(props: { limit: number }) {
       hx-get={`/fragment/workspace?limit=${nextLimit}`}
       hx-target="#workspace-board"
       hx-swap="outerHTML"
-      hx-push-url={`/workspace?limit=${nextLimit}`}
+      hx-push-url={`/?limit=${nextLimit}`}
       hx-disabled-elt="this"
     >
       <svg
@@ -378,7 +378,7 @@ export function WorkspaceView(props: {
           </div>
         </div>
         <div class="workspace-toolbar-actions">
-          <a class="workspace-refresh" href={`/workspace?limit=${props.limit}`}>
+          <a class="workspace-refresh" href={`/?limit=${props.limit}`}>
             Refresh
           </a>
         </div>

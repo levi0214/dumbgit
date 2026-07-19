@@ -25,42 +25,41 @@ Built and used on macOS.
 ```bash
 dumbgit [dir]
 dumbgit workspace
+dumbgit start [dir]
 dumbgit list
 dumbgit stop [id|dir]
 dumbgit stop --all
 dumbgit restart
 ```
 
-`dir` defaults to the current repo. Outside a Git working tree, plain `dumbgit`
-opens the independent Workspace controller instead. `list` prints `id`, repo,
-and URL; pass the id to `stop` to stop that server. `restart` stops every
-running instance and starts each again on the same port (picks up source
-changes after `bun link`).
+Workspace is the main interface. One controller serves every repository on
+`127.0.0.1:7777`; repository views live under the same server instead of
+starting one process and port per repo.
 
-Each repo gets its own server. Starting the same repo again reopens it. Ports
-come from `7777` to `7900`.
+Inside a Git working tree, `dumbgit` (or `dumbgit <dir>`) remembers and activates
+the repository, reuses the controller, opens Workspace, and focuses its card.
+Outside a Git working tree, plain `dumbgit` just opens Workspace. `dumbgit
+workspace` remains as an explicit alias, and `dumbgit start [dir]` performs the
+same add-or-activate operation.
 
-Open **workspace** from any repository view, or run `dumbgit workspace`
-anywhere, to see every remembered repo together. Workspace keeps a compact
-5- or 10-commit timeline for each repo, uses one shared inspector for commit
-and working-tree diffs, and starts or stops each repo directly. Repository
-views automatically hand off to an independent Workspace controller, so every
-repo instance can be stopped safely.
+Workspace keeps a compact 5- or 10-commit timeline for each remembered repo and
+uses one shared inspector for commit and working-tree diffs. Active repositories
+refresh automatically and can open the full repository view. Stop turns off a
+repository's watcher and automatic refresh without forgetting it; inactive
+cards stay dimmed at their last snapshot until a manual refresh or restart.
+`list` shows the controller plus every repository's active state. `stop --all`
+stops the controller, while `restart` replaces that one process in place.
 
-Opening a repository remembers it in
-`~/Library/Application Support/dumbgit/repos.json`, so stopped repositories
-remain available the next time Workspace opens. Active cards refresh
-automatically; inactive cards stay dimmed at their last snapshot until a manual
-refresh or restart. Drag a card by its handle to keep a custom order across
-Workspace restarts. Visible paths use `~` or a shortened suffix so screenshots
-do not expose the macOS username.
+Repository state and custom card order are stored in
+`~/Library/Application Support/dumbgit/repos.json`. Drag a card by its handle to
+keep a custom order across restarts. Visible paths use `~` or a shortened suffix
+so screenshots do not expose the macOS username.
 
-Servers exit on their own about 20 minutes after the last browser tab
+The controller exits on its own about 20 minutes after the last browser tab
 disconnects, or after starting with no browser connection (no SSE clients).
-`list` / `stop` / `restart` remain for stuck or stale processes.
 
-Use `bun run dev` when working on dumbgit itself. It disables idle exit and
-runs with `bun --watch`; if `7777` is busy, it picks the next free port.
+Use `bun run dev` when working on dumbgit itself. It disables idle exit and runs
+with `bun --watch` on the same default port.
 
 ## What It Does
 

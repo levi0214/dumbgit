@@ -1,4 +1,11 @@
-import { existsSync, readFileSync, watch, type FSWatcher } from 'node:fs'
+import {
+  existsSync,
+  readFileSync,
+  readdirSync,
+  statSync,
+  watch,
+  type FSWatcher,
+} from 'node:fs'
 import path from 'node:path'
 
 /**
@@ -33,6 +40,37 @@ export function watchGitRefs(
   }
 
   const watchers: FSWatcher[] = []
+  const pollRoots = new Set<string>()
+  let lastFingerprint = ''
+
+  const fingerprint = () => {
+    const rows: string[] = []
+    const addFile = (filePath: string) => {
+      try {
+        const stat = statSync(filePath)
+        rows.push(`${filePath}\x1f${stat.size}\x1f${stat.mtimeMs}\x1f${stat.ctimeMs}`)
+      } catch {
+        rows.push(`${filePath}\x1fmissing`)
+      }
+    }
+    const walk = (dir: string) => {
+      try {
+        for (const entry of readdirSync(dir, { withFileTypes: true })) {
+          const child = path.join(dir, entry.name)
+          if (entry.isDirectory()) walk(child)
+          else if (entry.isFile()) addFile(child)
+        }
+      } catch {
+        // A ref directory may disappear while Git rewrites it.
+      }
+    }
+    for (const root of pollRoots) {
+      addFile(path.join(root, 'HEAD'))
+      addFile(path.join(root, 'packed-refs'))
+      walk(path.join(root, 'refs'))
+    }
+    return rows.sort().join('\x1e')
+  }
   const onErr = (err: Error) => {
     console.error('dumbgit: git watcher error:', err)
   }
@@ -56,6 +94,7 @@ export function watchGitRefs(
   }
 
   const watchGitDir = (dir: string) => {
+    pollRoots.add(dir)
     watchFile(path.join(dir, 'HEAD'))
     watchFile(path.join(dir, 'packed-refs'))
     // packed-refs may appear later (first pack); catch create via non-recursive dir watch.
@@ -76,7 +115,16 @@ export function watchGitRefs(
     watchGitDir(commonDir)
   }
 
+  lastFingerprint = fingerprint()
+  const poll = setInterval(() => {
+    const next = fingerprint()
+    if (next === lastFingerprint) return
+    lastFingerprint = next
+    fire()
+  }, 150)
+
   return () => {
+    clearInterval(poll)
     if (timer) clearTimeout(timer)
     timer = null
     for (const w of watchers) {
