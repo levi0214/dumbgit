@@ -560,6 +560,20 @@ body.main-grid-dragging {
 .log-row-stash {
   color: var(--muted);
 }
+.stash-summary-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
 .log-row-stash .ref-pill-stash {
   color: var(--fg);
   background: rgba(255, 255, 255, 0.05);
@@ -573,7 +587,10 @@ body.main-grid-dragging {
   stroke-width: 1.5;
 }
 .log-row-stash .stash-msg {
-  cursor: default;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   color: var(--fg);
   opacity: 0.62;
 }
@@ -584,6 +601,20 @@ body.main-grid-dragging {
 .log-row-stash:hover .stash-msg,
 .log-row-stash:hover .msg-age {
   opacity: 0.85;
+}
+.stash-summary-btn:hover .ref-pill-stash,
+.stash-summary-btn:focus-visible .ref-pill-stash {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.stash-summary-btn:hover .stash-msg,
+.stash-summary-btn:focus-visible .stash-msg {
+  color: var(--accent);
+}
+.stash-summary-btn:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
 }
 .log-row-stash .stash-drop-btn:hover,
 .log-row-stash .stash-drop-btn.confirm-armed {

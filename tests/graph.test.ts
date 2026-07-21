@@ -135,6 +135,8 @@ describe('graphLaneLayout', () => {
     expect(stashSvg).toContain('stroke="#e653a8"')
     expect(html).toContain('class="ref-stash-ico"')
     expect(html).not.toContain('graph-stash-node')
+    expect(html).toContain('class="stash-summary-btn"')
+    expect(html).toContain('hx-get="/api/stash?ref=stash%40%7B0%7D"')
   })
 
   test('marks commit rows for a larger workspace click target', () => {

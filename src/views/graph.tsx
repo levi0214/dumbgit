@@ -774,35 +774,38 @@ function GraphStashLine(props: {
       <span class="graph-prefix">
         <StashLaneSpans layout={props.laneLayout} />
       </span>
-      <span class="ref-pill ref-pill-stash" title={`stash: ${props.stash.ref}`}>
-        <svg
-          class="ref-stash-ico"
-          width="10"
-          height="10"
-          viewBox="0 0 12 12"
-          fill="none"
-          aria-hidden="true"
-        >
-          <rect
-            x="3"
-            y="3"
-            width="6"
-            height="6"
-            rx="1"
-            transform="rotate(45 6 6)"
-          />
-        </svg>
-        {props.stash.ref}
-      </span>
       <button
         type="button"
-        class="msg-btn stash-msg"
-        title={props.stash.subject}
+        class="stash-summary-btn"
+        title={`View changes in ${props.stash.ref}`}
+        aria-label={`View changes in ${props.stash.ref}`}
         hx-get={summaryUrl}
         hx-target="#diff"
         hx-swap="outerHTML"
       >
-        {props.stash.subject}
+        <span class="ref-pill ref-pill-stash">
+          <svg
+            class="ref-stash-ico"
+            width="10"
+            height="10"
+            viewBox="0 0 12 12"
+            fill="none"
+            aria-hidden="true"
+          >
+            <rect
+              x="3"
+              y="3"
+              width="6"
+              height="6"
+              rx="1"
+              transform="rotate(45 6 6)"
+            />
+          </svg>
+          {props.stash.ref}
+        </span>
+        <span class="stash-msg">
+          {props.stash.subject}
+        </span>
       </button>
       <span class="row-end">
         <span class="msg-age" title={props.stash.subject}>
