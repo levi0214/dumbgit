@@ -228,7 +228,6 @@ export type GraphLaneLayoutRow = {
 
 export type GraphLaneLayout = {
   rows: GraphLaneLayoutRow[]
-  laneCount: number
 }
 
 function firstFreeLane(lanes: Array<string | null>, after = -1): number {
@@ -249,7 +248,6 @@ function firstFreeLane(lanes: Array<string | null>, after = -1): number {
 export function graphLaneLayout(rows: GraphRow[]): GraphLaneLayout {
   const lanes: Array<string | null> = []
   const layoutRows: GraphLaneLayoutRow[] = []
-  let laneCount = 1
 
   for (const item of rows) {
     const sha = item.row.shaFull.toLowerCase()
@@ -290,15 +288,21 @@ export function graphLaneLayout(rows: GraphRow[]): GraphLaneLayout {
       outgoing.push(parentLane)
     }
 
-    laneCount = Math.max(laneCount, lanes.length, lane + 1)
     layoutRows.push({ lane, incoming, outgoing, passThrough })
   }
 
-  return { rows: layoutRows, laneCount }
+  return { rows: layoutRows }
 }
 
-export function graphLaneGutterCols(laneCount: number): number {
-  return Math.max(1, laneCount * 2 - 1)
+/** Width needed by this row's node, curves, and pass-through lanes. */
+export function graphRowGutterCols(layout: GraphLaneLayoutRow): number {
+  const rightmostLane = Math.max(
+    layout.lane,
+    ...layout.incoming,
+    ...layout.outgoing,
+    ...layout.passThrough,
+  )
+  return rightmostLane * 2 + 1
 }
 
 /** Inline CSS vars so branch pills share the commit's lane color. */
@@ -323,14 +327,13 @@ export function physicalLaneColor(lane: number): string {
 /** One SVG row: paths may meet only at the commit dot in its center. */
 export function GraphLaneSpans(props: {
   layout: GraphLaneLayoutRow
-  gutterCols: number
   isHead: boolean
   isDetached: boolean
   rowHeight?: number
 }) {
   const height = props.rowHeight ?? GRAPH_ROW_HEIGHT
   const mid = height / 2
-  const width = props.gutterCols * GRAPH_COL_WIDTH
+  const width = graphRowGutterCols(props.layout) * GRAPH_COL_WIDTH
   const nodeX = physicalLaneX(props.layout.lane)
   const nodeColor = physicalLaneColor(props.layout.lane)
   const strokes = []
@@ -561,7 +564,6 @@ function GraphCommitLine(props: {
   detached: boolean
   currentBranch: string | null
   laneLayout: GraphLaneLayoutRow
-  gutterCols: number
   readonly?: boolean
   diffUrl?: string
   diffTarget?: string
@@ -605,7 +607,6 @@ function GraphCommitLine(props: {
       <span class="graph-prefix">
         <GraphLaneSpans
           layout={props.laneLayout}
-          gutterCols={props.gutterCols}
           isHead={isHead}
           isDetached={isHead && props.detached}
         />
@@ -728,11 +729,11 @@ function GraphCommitLine(props: {
   )
 }
 
-function StashLaneSpans(props: { lane: number; gutterCols: number }) {
-  const width = props.gutterCols * GRAPH_COL_WIDTH
+function StashLaneSpans(props: { layout: GraphLaneLayoutRow }) {
+  const width = graphRowGutterCols(props.layout) * GRAPH_COL_WIDTH
   const height = GRAPH_ROW_HEIGHT
   const mid = height / 2
-  const x = physicalLaneX(props.lane)
+  const x = physicalLaneX(props.layout.lane)
   const r = 3.4
   return (
     <svg
@@ -767,18 +768,14 @@ function StashLaneSpans(props: { lane: number; gutterCols: number }) {
 
 function GraphStashLine(props: {
   stash: PreviewStashEntry
-  lane: number
-  gutterCols: number
+  laneLayout: GraphLaneLayoutRow
 }) {
   const ref = encodeURIComponent(props.stash.ref)
   const summaryUrl = `/api/stash?ref=${ref}`
   return (
     <div class="log-row log-row-commit log-row-stash">
       <span class="graph-prefix">
-        <StashLaneSpans
-          lane={props.lane}
-          gutterCols={props.gutterCols}
-        />
+        <StashLaneSpans layout={props.laneLayout} />
       </span>
       <span class="ref-pill ref-pill-stash" title={`stash: ${props.stash.ref}`}>
         {props.stash.ref}
@@ -853,7 +850,6 @@ export function GraphRows(props: {
   currentBranch: string | null
   stashes: PreviewStashEntry[]
   laneLayoutByRow: GraphLaneLayoutRow[]
-  gutterCols: number
   readonly?: boolean
   workspaceRepoPath?: string
   diffUrlForSha?: (sha: string) => string
@@ -878,8 +874,7 @@ export function GraphRows(props: {
               <GraphStashLine
                 key={stash.ref}
                 stash={stash}
-                lane={laneLayout.lane}
-                gutterCols={props.gutterCols}
+                laneLayout={laneLayout}
               />
             ))}
             <GraphCommitLine
@@ -888,7 +883,6 @@ export function GraphRows(props: {
               detached={props.detached}
               currentBranch={props.currentBranch}
               laneLayout={laneLayout}
-              gutterCols={props.gutterCols}
               readonly={props.readonly}
               workspaceRepoPath={props.workspaceRepoPath}
               diffUrl={props.diffUrlForSha?.(r.row.shaFull)}
@@ -905,8 +899,6 @@ export function GraphLoadMore(props: {
   offset: number
   nextLimit: number
   show: boolean
-  /** Carried to tail loads so appended rows keep at least this gutter width. */
-  gutterCols: number
 }) {
   if (!props.show) return null
   return (
@@ -914,7 +906,7 @@ export function GraphLoadMore(props: {
       type="button"
       class="graph-load-more"
       title={`git log --date-order -n ${props.nextLimit}`}
-      hx-get={`/fragment/graph/tail?offset=${encodeURIComponent(String(props.offset))}&limit=${encodeURIComponent(String(props.nextLimit))}&gutter=${encodeURIComponent(String(props.gutterCols))}`}
+      hx-get={`/fragment/graph/tail?offset=${encodeURIComponent(String(props.offset))}&limit=${encodeURIComponent(String(props.nextLimit))}`}
       hx-target="this"
       hx-swap="outerHTML show:none"
       hx-trigger="click, intersect once root:#graph threshold:0.2"
@@ -930,7 +922,6 @@ export function GraphTailFragment(props: {
   currentBranch: string | null
   stashes: PreviewStashEntry[]
   laneLayoutByRow: GraphLaneLayoutRow[]
-  gutterCols: number
   offset: number
   nextLimit: number
   showLoadMore: boolean
@@ -943,13 +934,11 @@ export function GraphTailFragment(props: {
         currentBranch={props.currentBranch}
         stashes={props.stashes}
         laneLayoutByRow={props.laneLayoutByRow}
-        gutterCols={props.gutterCols}
       />
       <GraphLoadMore
         offset={props.offset}
         nextLimit={props.nextLimit}
         show={props.showLoadMore}
-        gutterCols={props.gutterCols}
       />
     </>
   )
@@ -983,7 +972,6 @@ export function GraphFragment(props: GraphFragmentProps) {
   const detached = head.kind === 'detached'
   const currentBranch = head.kind === 'branch' ? head.name : null
   const laneLayout = graphLaneLayout(rows)
-  const gutterCols = graphLaneGutterCols(laneLayout.laneCount)
 
   return (
     <div
@@ -1036,7 +1024,6 @@ export function GraphFragment(props: GraphFragmentProps) {
               currentBranch={currentBranch}
               stashes={props.previewStash.stashes}
               laneLayoutByRow={laneLayout.rows}
-              gutterCols={gutterCols}
               offset={rows.length}
               nextLimit={props.graphNextLimit}
               showLoadMore={props.showLoadMore}

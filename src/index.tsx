@@ -38,7 +38,6 @@ import { watchGitRefs } from './watch'
 import {
   GraphFragment,
   GraphTailFragment,
-  graphLaneGutterCols,
   graphLaneLayout,
 } from './views/graph'
 import type { GraphFragmentProps } from './views/graph'
@@ -778,7 +777,6 @@ app.get('/fragment/graph/tail', async (c) => {
   )
   const parsedLimit = Number.parseInt(c.req.query('limit') ?? '', 10)
   const graphCommitLimit = clampGraphCommitLimit(parsedLimit)
-  const priorGutter = Number.parseInt(c.req.query('gutter') ?? '', 10)
   try {
     const head = await headInfo(repoPath)
     const rows = await logGraphRows(graphCommitLimit, repoPath)
@@ -793,13 +791,7 @@ app.get('/fragment/graph/tail', async (c) => {
       commitRows > 0 &&
       graphCommitLimit < GRAPH_COMMIT_MAX
     const rowOffset = Math.min(offset, rows.length)
-    // Appended rows keep at least the gutter already on screen so the
-    // message column stays aligned across "load more" chunks.
     const laneLayout = graphLaneLayout(rows)
-    const gutterCols = Math.max(
-      graphLaneGutterCols(laneLayout.laneCount),
-      Number.isFinite(priorGutter) ? priorGutter : 0,
-    )
     return c.html(
       <GraphTailFragment
         rows={rows.slice(rowOffset)}
@@ -807,7 +799,6 @@ app.get('/fragment/graph/tail', async (c) => {
         currentBranch={head.kind === 'branch' ? head.name : null}
         stashes={previewStash.stashes}
         laneLayoutByRow={laneLayout.rows.slice(rowOffset)}
-        gutterCols={gutterCols}
         offset={rows.length}
         nextLimit={graphNextLimit}
         showLoadMore={showLoadMore}

@@ -11,7 +11,6 @@ import type {
 } from '../git'
 import {
   GraphRows,
-  graphLaneGutterCols,
   graphLaneLayout,
 } from './graph'
 import { DiffPanel, DiffPatchBody } from './diff'
@@ -276,7 +275,6 @@ function WorkspaceRepoCard(props: {
 
   const { repo } = props
   const laneLayout = graphLaneLayout(repo.rows)
-  const gutterCols = graphLaneGutterCols(laneLayout.laneCount)
   const totals = changeTotals(repo.worktree)
   const dirty = totals.files > 0
   const branch =
@@ -349,7 +347,6 @@ function WorkspaceRepoCard(props: {
               }
               stashes={[]}
               laneLayoutByRow={laneLayout.rows}
-              gutterCols={gutterCols}
               readonly
               workspaceRepoPath={repo.repoPath}
               diffTarget="#workspace-inspector"

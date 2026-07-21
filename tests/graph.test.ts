@@ -3,8 +3,8 @@ import { renderToString } from 'hono/jsx/dom/server'
 import type { GraphRow } from '../src/git'
 import {
   GraphRows,
-  graphLaneGutterCols,
   graphLaneLayout,
+  graphRowGutterCols,
 } from '../src/views/graph'
 
 function commit(sha: string, parents: string[]): GraphRow {
@@ -34,7 +34,6 @@ describe('graphLaneLayout', () => {
 
     const layout = graphLaneLayout(rows)
 
-    expect(layout.laneCount).toBe(2)
     expect(layout.rows[0]).toEqual({
       lane: 0,
       incoming: [],
@@ -59,6 +58,7 @@ describe('graphLaneLayout', () => {
       outgoing: [0],
       passThrough: [],
     })
+    expect(layout.rows.map(graphRowGutterCols)).toEqual([3, 3, 3, 3])
   })
 
   test('assigns disconnected tips to one stable physical lane each', () => {
@@ -72,7 +72,35 @@ describe('graphLaneLayout', () => {
     const layout = graphLaneLayout(rows)
 
     expect(layout.rows.map((row) => row.lane)).toEqual([0, 1, 0, 1])
-    expect(graphLaneGutterCols(layout.laneCount)).toBe(3)
+    expect(layout.rows.map(graphRowGutterCols)).toEqual([1, 3, 3, 3])
+  })
+
+  test('shrinks the gutter after lanes converge', () => {
+    const rows = [
+      commit('d', ['a', 'b']),
+      commit('a', ['c']),
+      commit('b', ['c']),
+      commit('c', ['e']),
+      commit('e', ['f']),
+    ]
+
+    const layout = graphLaneLayout(rows)
+
+    expect(layout.rows.map(graphRowGutterCols)).toEqual([3, 3, 3, 3, 1])
+
+    const html = renderToString(
+      GraphRows({
+        rows,
+        detached: false,
+        currentBranch: null,
+        stashes: [],
+        laneLayoutByRow: layout.rows,
+        readonly: true,
+      }),
+    )
+    const widths = [...html.matchAll(/class="graph-lanes-svg"[^>]*style="width:(\d+)px/g)]
+      .map((match) => Number(match[1]))
+    expect(widths).toEqual([24, 24, 24, 24, 8])
   })
 
   test('marks commit rows for a larger workspace click target', () => {
@@ -87,7 +115,6 @@ describe('graphLaneLayout', () => {
         currentBranch: 'feature/a-very-long-branch-name',
         stashes: [],
         laneLayoutByRow: layout.rows,
-        gutterCols: graphLaneGutterCols(layout.laneCount),
         readonly: true,
         workspaceRepoPath: '/tmp/example',
         diffUrlForSha: (sha) => `/workspace/commit?sha=${sha}`,
