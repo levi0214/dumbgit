@@ -451,12 +451,6 @@ body.main-grid-dragging {
 .graph-node {
   opacity: 1;
 }
-.graph-stash-node {
-  fill: #252526;
-  stroke: var(--graph-rail-muted);
-  stroke-width: 1.7;
-  opacity: 0.58;
-}
 .graph-lane-fallback {
   fill: var(--graph-rail-muted);
   font: 600 12px ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
@@ -571,6 +565,12 @@ body.main-grid-dragging {
   background: rgba(255, 255, 255, 0.05);
   border-color: rgba(255, 255, 255, 0.14);
   opacity: 0.72;
+}
+.ref-stash-ico {
+  flex: 0 0 auto;
+  overflow: visible;
+  stroke: currentColor;
+  stroke-width: 1.5;
 }
 .log-row-stash .stash-msg {
   cursor: default;

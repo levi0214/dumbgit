@@ -103,6 +103,40 @@ describe('graphLaneLayout', () => {
     expect(widths).toEqual([24, 24, 24, 24, 8])
   })
 
+  test('keeps every active lane continuous through an inserted stash row', () => {
+    const rows = [
+      commit('d', ['a', 'b']),
+      commit('a', ['c']),
+      commit('b', ['c']),
+      commit('c', ['e']),
+    ]
+    const layout = graphLaneLayout(rows)
+    const html = renderToString(
+      GraphRows({
+        rows,
+        detached: false,
+        currentBranch: null,
+        stashes: [
+          {
+            ref: 'stash@{0}',
+            baseSha: 'c'.repeat(40),
+            subject: 'On main: dumbgit-preview-stash',
+            age: 'just now',
+          },
+        ],
+        laneLayoutByRow: layout.rows,
+      }),
+    )
+
+    const stashSvg = html.match(
+      /<svg class="graph-lanes-svg graph-stash-lanes"[\s\S]*?<\/svg>/,
+    )?.[0]
+    expect(stashSvg).toContain('stroke="#169fe6"')
+    expect(stashSvg).toContain('stroke="#e653a8"')
+    expect(html).toContain('class="ref-stash-ico"')
+    expect(html).not.toContain('graph-stash-node')
+  })
+
   test('marks commit rows for a larger workspace click target', () => {
     const row = commit('a', [])
     if (row.kind !== 'commit') throw new Error('expected commit row')

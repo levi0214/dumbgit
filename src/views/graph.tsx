@@ -732,36 +732,33 @@ function GraphCommitLine(props: {
 function StashLaneSpans(props: { layout: GraphLaneLayoutRow }) {
   const width = graphRowGutterCols(props.layout) * GRAPH_COL_WIDTH
   const height = GRAPH_ROW_HEIGHT
-  const mid = height / 2
-  const x = physicalLaneX(props.layout.lane)
-  const r = 3.4
+  const lanes = [...new Set([
+    ...props.layout.incoming,
+    ...props.layout.passThrough,
+  ])].sort((a, b) => a - b)
   return (
     <svg
-      class="graph-lanes-svg"
+      class="graph-lanes-svg graph-stash-lanes"
       viewBox={`0 0 ${width} ${height}`}
       style={`width:${width}px;height:${height}px`}
       aria-hidden="true"
       focusable="false"
     >
-      <line
-        x1={x}
-        y1={-GRAPH_LINE_OVERLAP}
-        x2={x}
-        y2={height + GRAPH_LINE_OVERLAP}
-        stroke="var(--graph-rail-muted)"
-        stroke-width="1.8"
-        stroke-linecap="round"
-        opacity="0.55"
-      />
-      <rect
-        class="graph-stash-node"
-        x={x - r}
-        y={mid - r}
-        width={r * 2}
-        height={r * 2}
-        rx="1.2"
-        transform={`rotate(45 ${x} ${mid})`}
-      />
+      {lanes.map((lane) => {
+        const x = physicalLaneX(lane)
+        return (
+          <line
+            key={lane}
+            x1={x}
+            y1={-GRAPH_LINE_OVERLAP}
+            x2={x}
+            y2={height + GRAPH_LINE_OVERLAP}
+            stroke={physicalLaneColor(lane)}
+            stroke-width="1.8"
+            stroke-linecap="round"
+          />
+        )
+      })}
     </svg>
   )
 }
@@ -778,6 +775,23 @@ function GraphStashLine(props: {
         <StashLaneSpans layout={props.laneLayout} />
       </span>
       <span class="ref-pill ref-pill-stash" title={`stash: ${props.stash.ref}`}>
+        <svg
+          class="ref-stash-ico"
+          width="10"
+          height="10"
+          viewBox="0 0 12 12"
+          fill="none"
+          aria-hidden="true"
+        >
+          <rect
+            x="3"
+            y="3"
+            width="6"
+            height="6"
+            rx="1"
+            transform="rotate(45 6 6)"
+          />
+        </svg>
         {props.stash.ref}
       </span>
       <button
