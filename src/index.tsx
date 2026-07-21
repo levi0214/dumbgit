@@ -83,7 +83,7 @@ end run
 `
 
 /** After last `/events` client leaves (or boot with none), exit. */
-const IDLE_EXIT_GRACE_MS_DEFAULT = 20 * 60_000
+const IDLE_EXIT_GRACE_MS_DEFAULT = 8 * 60 * 60_000
 
 function clampGraphCommitLimit(n: number): number {
   if (!Number.isFinite(n)) return GRAPH_COMMIT_DEFAULT

@@ -55,7 +55,7 @@ Repository state and custom card order are stored in
 keep a custom order across restarts. Visible paths use `~` or a shortened suffix
 so screenshots do not expose the macOS username.
 
-The controller exits on its own about 20 minutes after the last browser tab
+The controller exits on its own about 8 hours after the last browser tab
 disconnects, or after starting with no browser connection (no SSE clients).
 
 Use `bun run dev` when working on dumbgit itself. It disables idle exit and runs
