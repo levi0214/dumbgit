@@ -5,9 +5,6 @@ back: branches, commits, local edits, and a few obvious actions, as a local
 web app served by Bun, with `git` as the source of truth. It stays on your
 machine.
 
-It's built to stay open. Views update in real time from Git's own ref changes
-(via macOS FSEvents), so a single idle Bun process costs almost nothing.
-
 ## Install
 
 ```bash
@@ -44,7 +41,6 @@ dumbgit restart     # restart the server
 - Click a commit to see its files; click a file to see the diff.
 - Stage, unstage, or discard changes from the diff panel.
 - Copy a branch name, switch branches, create a branch, or checkout a commit.
-- `P` pushes the current branch. `Esc` closes a panel.
 - `Save aside` tucks all local edits into a stash; restore or drop it later.
 - Refreshes on its own when things change. Quits after ~8h of no browser.
 
@@ -55,6 +51,9 @@ those, run `git` yourself or let your agent do it. It stays dumb on purpose.
 
 ## Notes
 
+- It's built to stay open. Views update in real time from Git's own ref
+  changes (via macOS FSEvents), so a single idle Bun process costs almost
+  nothing.
 - Open-file uses the system default app; open-terminal uses Terminal.app.
   Override with env vars (macOS app names):
 
@@ -63,8 +62,6 @@ those, run `git` yourself or let your agent do it. It stays dumb on purpose.
   export DUMBGIT_TERMINAL="Ghostty"
   ```
 
-- When no browser tab is connected, it shuts itself down after a while
-  (about 8 hours by default).
 - State lives in `~/Library/Application Support/dumbgit/repos.json`.
 - Hacking on dumbgit itself: `bun run dev`.
 
