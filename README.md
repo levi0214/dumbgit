@@ -51,9 +51,14 @@ those, run `git` yourself or let your agent do it. It stays dumb on purpose.
 
 ## Notes
 
-- Two buttons assume apps you may not have: "open file" uses Sublime Text and
-  "open terminal" uses Ghostty. Without them, those two buttons just fail;
-  everything else works.
+- Open-file uses the system default app; open-terminal uses Terminal.app.
+  Override with env vars (macOS app names):
+
+  ```bash
+  export DUMBGIT_EDITOR="Sublime Text"
+  export DUMBGIT_TERMINAL="Ghostty"
+  ```
+
 - State lives in `~/Library/Application Support/dumbgit/repos.json`.
 - Hacking on dumbgit itself: `bun run dev`.
 

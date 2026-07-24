@@ -2,7 +2,6 @@
 import { Fragment } from 'hono/jsx'
 import { Hono, type Context, type Next } from 'hono'
 import { streamSSE } from 'hono/streaming'
-import { spawnSync } from 'node:child_process'
 import { realpathSync } from 'node:fs'
 import path from 'node:path'
 import {
@@ -34,6 +33,7 @@ import {
   reorderRepoHistory,
   setRepoActive,
 } from './history'
+import { openInEditor, openInTerminal } from './open-local'
 import { watchGitRefs } from './watch'
 import {
   GraphFragment,
@@ -68,18 +68,6 @@ const GRAPH_COMMIT_STEP = 50
 const GRAPH_COMMIT_MAX = 500
 const WORKSPACE_COMMIT_DEFAULT = 5
 const WORKSPACE_COMMIT_MAX = 10
-
-const GHOSTTY_NEW_WINDOW_SCRIPT = `
-on run argv
-  tell application "Ghostty"
-    activate
-    set cfg to new surface configuration
-    set initial working directory of cfg to item 1 of argv
-    set win to new window with configuration cfg
-    focus (terminal 1 of selected tab of win)
-  end tell
-end run
-`
 
 /** After last `/events` client leaves (or boot with none), exit. */
 const IDLE_EXIT_GRACE_MS_DEFAULT = 8 * 60 * 60_000
@@ -587,23 +575,9 @@ app.post('/workspace/repo/terminal', (c) => {
     return c.text('Repository is not in Workspace history.', 404)
   }
 
-  const result = spawnSync(
-    'osascript',
-    [
-      '-e',
-      GHOSTTY_NEW_WINDOW_SCRIPT,
-      '--',
-      repoPath,
-    ],
-    { encoding: 'utf8' },
-  )
-  if (result.status !== 0) {
-    const stderr = String(result.stderr ?? '').trim()
-    return c.text(
-      stderr ||
-        `Failed to create Ghostty window (${result.status ?? 'unknown'}).`,
-      500,
-    )
+  const result = openInTerminal(repoPath)
+  if (!result.ok) {
+    return c.text(result.stderr, 500)
   }
 
   return c.body(null, 204)
@@ -907,17 +881,9 @@ app.post('/api/worktree/open', async (c) => {
     return c.html(<StatusOob error={file.stderr} />, 200)
   }
 
-  const r = spawnSync('open', ['-a', 'Sublime Text', file.path], {
-    encoding: 'utf8',
-  })
-  if (r.status !== 0) {
-    const stderr = String(r.stderr ?? '').trim()
-    return c.html(
-      <StatusOob
-        error={stderr || `open in Sublime failed (${r.status ?? 'unknown'})`}
-      />,
-      200,
-    )
+  const r = openInEditor(file.path)
+  if (!r.ok) {
+    return c.html(<StatusOob error={r.stderr} />, 200)
   }
 
   return c.html(<StatusOob />, 200)

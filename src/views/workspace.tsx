@@ -160,8 +160,8 @@ function WorkspaceCardActions(props: {
       <button
         type="button"
         class="workspace-icon-action workspace-open-terminal"
-        title={`Open ${name} in Ghostty`}
-        aria-label={`Open ${name} in Ghostty`}
+        title={`Open terminal for ${name}`}
+        aria-label={`Open terminal for ${name}`}
         hx-post={terminalUrl}
         hx-swap="none"
         hx-disabled-elt="this"

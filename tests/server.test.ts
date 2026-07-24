@@ -51,7 +51,7 @@ test('Workspace owns repository activation and repository routing', async () => 
     expect(workspacePage).toContain(
       `/workspace/repo/terminal?repo=${encodeURIComponent(repo)}`,
     )
-    expect(workspacePage).toContain(`Open example in Ghostty`)
+    expect(workspacePage).toContain(`Open terminal for example`)
     expect(
       (
         await app.request(

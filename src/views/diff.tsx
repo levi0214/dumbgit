@@ -261,8 +261,8 @@ export function WorkTreeDiffPanel(props: WorkTreeDiffPanelProps) {
           <button
             type="button"
             class="diff-subject-open"
-            title={`Open ${props.displayPath} in Sublime`}
-            aria-label={`Open ${props.displayPath} in Sublime`}
+            title={`Open ${props.displayPath}`}
+            aria-label={`Open ${props.displayPath}`}
             hx-post={openUrl}
             hx-swap="none"
           >
