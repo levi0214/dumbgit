@@ -861,6 +861,24 @@ function HeadLine(props: { head: HeadInfo }) {
   )
 }
 
+/** Workspace ← repo wayfinding; `?repo=` restores card focus on the board. */
+function GraphCrumb(props: { repoPath: string }) {
+  const backHref = `/?repo=${encodeURIComponent(props.repoPath)}`
+  return (
+    <nav class="graph-crumb" aria-label="Location">
+      <a class="graph-crumb-back" href={backHref} title="Back to workspace">
+        ← workspace
+      </a>
+      <span class="graph-crumb-sep" aria-hidden="true">
+        /
+      </span>
+      <span class="graph-repo-name" title={props.repoPath}>
+        {path.basename(props.repoPath)}
+      </span>
+    </nav>
+  )
+}
+
 export function GraphRows(props: {
   rows: GraphRow[]
   detached: boolean
@@ -973,12 +991,7 @@ export function GraphFragment(props: GraphFragmentProps) {
         {...oob}
       >
         <div class="graph-error-head">
-          <span class="graph-repo-name" title={props.repoPath}>
-            {path.basename(props.repoPath)}
-          </span>
-          <a class="workspace-entry" href="/">
-            workspace
-          </a>
+          <GraphCrumb repoPath={props.repoPath} />
         </div>
         <p class="msg">{props.stderr}</p>
       </div>
@@ -1000,14 +1013,12 @@ export function GraphFragment(props: GraphFragmentProps) {
       {...oob}
     >
       <div class={`graph-head${detached ? ' graph-head-detached' : ''}`}>
-        <span class="graph-repo-name" title={props.repoPath}>
-          {path.basename(props.repoPath)}
-        </span>
+        <GraphCrumb repoPath={props.repoPath} />
         <div class="graph-head-line">
           <HeadLine head={head} />
         </div>
-        <div class="graph-head-actions">
-          {head.kind === 'detached' && head.previousBranch ? (
+        {head.kind === 'detached' && head.previousBranch ? (
+          <div class="graph-head-actions">
             <button
               type="button"
               class="head-back-btn"
@@ -1016,13 +1027,10 @@ export function GraphFragment(props: GraphFragmentProps) {
               hx-target="#graph"
               hx-swap="outerHTML"
             >
-              ← back to {head.previousBranch}
+              Switch to {head.previousBranch}
             </button>
-          ) : null}
-          <a class="workspace-entry" href="/">
-            workspace
-          </a>
-        </div>
+          </div>
+        ) : null}
       </div>
       <WorkTreeFragment
         {...worktree}

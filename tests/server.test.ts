@@ -84,6 +84,9 @@ test('Workspace owns repository activation and repository routing', async () => 
     const page = await activeRepo.text()
     expect(page).toContain(`data-repo="${repo}"`)
     expect(page).toContain('hx-vals=')
+    expect(page).toContain('class="graph-crumb"')
+    expect(page).toContain(`href="/?repo=${encodeURIComponent(repo)}"`)
+    expect(page).toContain('Back to workspace')
 
     expect((await app.request('/fragment/graph')).status).toBe(400)
     expect((await app.request(`/fragment/graph?${query}`)).status).toBe(200)
