@@ -37,6 +37,7 @@ dumbgit restart     # restart the server
 
 ## What it does
 
+- See every repo's activity at once.
 - Shows the repo graph: branches, remotes, tags, stashes, recent commits.
 - Click a commit to see its files; click a file to see the diff.
 - Stage, unstage, or discard changes from the diff panel.
