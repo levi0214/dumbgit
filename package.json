@@ -1,5 +1,17 @@
 {
   "name": "dumbgit",
+  "version": "0.1.0",
+  "description": "A tiny Git GUI for one person on one Mac.",
+  "license": "MIT",
+  "author": "Luyao",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/levi0214/dumbgit.git"
+  },
+  "homepage": "https://github.com/levi0214/dumbgit",
+  "bugs": {
+    "url": "https://github.com/levi0214/dumbgit/issues"
+  },
   "module": "src/index.tsx",
   "type": "module",
   "bin": {
