@@ -1,8 +1,12 @@
 # dumbgit
 
 A tiny Git GUI for one person on one Mac. It gives you the Git Graph view
-back: branches, commits, local edits, and a few obvious actions, all as a
-local web app. No build, no accounts, no cloud. Just Bun and `git`.
+back: branches, commits, local edits, and a few obvious actions, as a local
+web app served by Bun, with `git` as the source of truth. It stays on your
+machine.
+
+It's built to stay open. Views update in real time from Git's own ref changes
+(via macOS FSEvents), so a single idle Bun process costs almost nothing.
 
 ## Install
 
@@ -59,6 +63,8 @@ those, run `git` yourself or let your agent do it. It stays dumb on purpose.
   export DUMBGIT_TERMINAL="Ghostty"
   ```
 
+- When no browser tab is connected, it shuts itself down after a while
+  (about 8 hours by default).
 - State lives in `~/Library/Application Support/dumbgit/repos.json`.
 - Hacking on dumbgit itself: `bun run dev`.
 
