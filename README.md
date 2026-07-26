@@ -9,8 +9,6 @@ bun install
 bun link
 ```
 
-Requires Bun and `git`.
-
 ## Run
 
 ```bash
@@ -26,7 +24,8 @@ Run it in each repo you want to add.
 - Opens diffs and stages, unstages, or discards changes.
 - Switches and creates branches, checks out commits, and pushes.
 - Saves local edits aside and restores them later.
-- Refreshes on its own when things change. Quits after ~8h of no browser.
+- Refreshes on its own when things change. Quits after ~8h of no browser, or
+  with `dg --stop`.
 
 ## What it won't do
 
@@ -36,7 +35,6 @@ or a coding agent. It stays dumb on purpose.
 ## Notes
 
 - Everything stays on your machine at `127.0.0.1:7777`.
-- Stop the server with `dg --stop`.
 - You can also add a repo from anywhere with `dg <dir>`.
 - State lives in `~/Library/Application Support/dumbgit/repos.json`.
 - Open-file uses the default app; open-terminal uses Terminal.app. Override them
