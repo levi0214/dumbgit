@@ -18,7 +18,7 @@ dg
 ```
 
 `dg` starts the server and opens the Workspace, adding the current repo if
-there is one. It updates when Git changes.
+there is one.
 
 ## What it does
 
@@ -27,6 +27,7 @@ there is one. It updates when Git changes.
 - Opens diffs and stages, unstages, or discards changes.
 - Switches and creates branches, checks out commits, and pushes.
 - Saves local edits aside and restores them later.
+- Refreshes on its own when things change. Quits after ~8h of no browser.
 
 ## What it won't do
 
@@ -36,6 +37,7 @@ or a coding agent. It stays dumb on purpose.
 ## Notes
 
 - Everything stays on your machine at `127.0.0.1:7777`.
+- Stop the server with `dg --stop`.
 - To add another repo, run `dg` in that repo. You can also run `dg <dir>`
   from anywhere.
 - State lives in `~/Library/Application Support/dumbgit/repos.json`.
