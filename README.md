@@ -1,9 +1,6 @@
 # dumbgit
 
-A tiny Git GUI for one person on one Mac. It gives you the Git Graph view
-back: branches, commits, local edits, and a few obvious actions, as a local
-web app served by Bun, with `git` as the source of truth. It stays on your
-machine.
+A tiny local Git GUI for macOS.
 
 ## Install
 
@@ -12,7 +9,7 @@ bun install
 bun link
 ```
 
-Needs Bun, `git`, and Bun's global bin on your `PATH`. macOS only.
+Requires Bun and `git`.
 
 ## Run
 
@@ -20,42 +17,31 @@ Needs Bun, `git`, and Bun's global bin on your `PATH`. macOS only.
 dg
 ```
 
-Run it from a Git repo to add or reactivate that repo and open the Workspace.
-Run it anywhere else to open the Workspace with the repos already there. The
-first run starts a small local server on `127.0.0.1:7777` and opens your
-browser. After that, start and stop repos from the page.
+`dg` starts the server and opens the Workspace, adding the current repo if
+there is one. It updates when Git changes.
 
 ## What it does
 
-- See every repo's activity at once.
-- Shows the repo graph: branches, remotes, tags, stashes, recent commits.
-- Click a commit to see its files; click a file to see the diff.
-- Stage, unstage, or discard changes from the diff panel.
-- Copy a branch name, switch branches, create a branch, or checkout a commit.
-- `Save aside` tucks all local edits into a stash; restore or drop it later.
-- Refreshes on its own when things change. Quits after ~8h of no browser.
+- Shows all your repos in one page.
+- Shows branches, remotes, tags, stashes, commits, and local edits.
+- Opens diffs and stages, unstages, or discards changes.
+- Switches and creates branches, checks out commits, and pushes.
+- Saves local edits aside and restores them later.
 
 ## What it won't do
 
-No rebase, merge, cherry-pick, conflict resolution, settings, or themes. For
-those, run `git` yourself or let your agent do it. It stays dumb on purpose.
+No rebase, merge, cherry-pick, conflict resolution. For those, just use `git`
+or a coding agent. It stays dumb on purpose.
 
 ## Notes
 
-- It's built to stay open. Views update in real time from Git's own ref
-  changes (via macOS FSEvents), so a single idle Bun process costs almost
-  nothing.
-- Open-file uses the system default app; open-terminal uses Terminal.app.
-  Override with env vars (macOS app names):
-
-  ```bash
-  export DUMBGIT_EDITOR="Sublime Text"
-  export DUMBGIT_TERMINAL="Ghostty"
-  ```
-
-- To add a repo without changing directories, run `dg <dir>`.
+- Everything stays on your machine at `127.0.0.1:7777`.
+- To add another repo, run `dg` in that repo. You can also run `dg <dir>`
+  from anywhere.
 - State lives in `~/Library/Application Support/dumbgit/repos.json`.
-- Hacking on dumbgit itself: `bun run dev`.
+- Open-file uses the default app; open-terminal uses Terminal.app. Override them
+  with `DUMBGIT_EDITOR` and `DUMBGIT_TERMINAL`.
+- Hacking on dumbgit: `bun run dev`.
 
 ## License
 
