@@ -1,0 +1,152 @@
+#!/usr/bin/env bun
+import { spawn, spawnSync } from 'node:child_process'
+import { closeSync, mkdirSync, openSync, realpathSync } from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { rememberRepo } from '../src/history'
+
+const LISTEN_HOST = '127.0.0.1'
+const PORT = 7777
+const scriptPath = realpathSync(fileURLToPath(import.meta.url))
+const appRoot = path.resolve(path.dirname(scriptPath), '..')
+const logPath = path.join(os.homedir(), 'Library', 'Logs', 'dumbgit.log')
+
+function usage(code = 0) {
+  const text = 'usage: dg [dir]'
+  if (code === 0) console.log(text)
+  else console.error(text)
+  process.exit(code)
+}
+
+function die(message) {
+  console.error(`dg: ${message}`)
+  usage(2)
+}
+
+function expandUser(value) {
+  if (value === '~') return os.homedir()
+  if (value.startsWith('~/')) return path.join(os.homedir(), value.slice(2))
+  return value
+}
+
+function tryRepoRoot(raw) {
+  const dir = path.resolve(expandUser(raw))
+  const result = spawnSync('git', ['-C', dir, 'rev-parse', '--show-toplevel'], {
+    encoding: 'utf8',
+  })
+  if (result.status !== 0) {
+    return {
+      ok: false,
+      error: String(result.stderr ?? '').trim() || `not a git repo: ${dir}`,
+    }
+  }
+  return { ok: true, repo: realpathSync(result.stdout.trim()) }
+}
+
+function repoRoot(raw) {
+  const result = tryRepoRoot(raw)
+  if (result.ok) return result.repo
+  console.error(`dg: ${result.error}`)
+  process.exit(1)
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+async function fetchController() {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), 500)
+  try {
+    const response = await fetch(
+      `http://${LISTEN_HOST}:${PORT}/healthz.json`,
+      { signal: controller.signal },
+    )
+    if (!response.ok) return null
+    const data = await response.json()
+    if (
+      data?.ok !== true ||
+      data?.name !== 'dumbgit' ||
+      data?.kind !== 'workspace' ||
+      data?.port !== PORT
+    ) {
+      return null
+    }
+    return `http://${LISTEN_HOST}:${PORT}`
+  } catch {
+    return null
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+function startController() {
+  mkdirSync(path.dirname(logPath), { recursive: true })
+  const log = openSync(logPath, 'a')
+  const child = spawn(
+    process.execPath,
+    ['run', 'src/index.tsx', '--port', String(PORT)],
+    {
+      cwd: appRoot,
+      detached: true,
+      stdio: ['ignore', log, log],
+    },
+  )
+  child.unref()
+  closeSync(log)
+}
+
+async function waitForController(msTotal = 10000) {
+  const deadline = Date.now() + msTotal
+  while (Date.now() < deadline) {
+    const instance = await fetchController()
+    if (instance) return instance
+    await sleep(100)
+  }
+  return null
+}
+
+function openBrowser(url) {
+  spawnSync('open', [url], { stdio: 'ignore' })
+}
+
+async function ensureWorkspace(focusRepo) {
+  let instance = await fetchController()
+  if (!instance) {
+    startController()
+    instance = await waitForController()
+  }
+  if (!instance) {
+    console.error(`dg: workspace did not start on port ${PORT}; see ${logPath}`)
+    process.exit(1)
+  }
+  const pathname = focusRepo
+    ? `/?repo=${encodeURIComponent(focusRepo)}`
+    : '/'
+  const url = `${instance}${pathname}`
+  openBrowser(url)
+  console.log(url)
+}
+
+async function activateRepo(rawDir) {
+  const repo = repoRoot(rawDir)
+  rememberRepo(repo, true)
+  await ensureWorkspace(repo)
+}
+
+const argv = process.argv.slice(2)
+
+if (argv.length === 1 && (argv[0] === '-h' || argv[0] === '--help')) usage(0)
+for (const arg of argv) {
+  if (arg.startsWith('-')) die(`unknown option: ${arg}`)
+}
+if (argv.length > 1) die('too many arguments')
+
+if (argv[0]) {
+  await activateRepo(argv[0])
+} else {
+  const cwdRepo = tryRepoRoot(process.cwd())
+  if (cwdRepo.ok) await activateRepo(cwdRepo.repo)
+  else await ensureWorkspace()
+}

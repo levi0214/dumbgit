@@ -15,11 +15,11 @@
   "module": "src/index.tsx",
   "type": "module",
   "bin": {
-    "dumbgit": "./bin/dumbgit"
+    "dg": "./bin/dg"
   },
   "scripts": {
     "dev": "bun --watch src/index.tsx --no-idle-exit",
-    "dumbgit": "bun run src/index.tsx --open",
+    "start": "bun run src/index.tsx --open",
     "test": "bun test"
   },
   "devDependencies": {

@@ -17,23 +17,13 @@ Needs Bun, `git`, and Bun's global bin on your `PATH`. macOS only.
 ## Run
 
 ```bash
-dumbgit          # open the repo in the current folder
-dumbgit <dir>    # open a specific repo
-dumbgit          # (outside a repo) open the Workspace with all your repos
+dg
 ```
 
-The first run starts a small local server on `127.0.0.1:7777` and opens your
-browser. Every repo you open is served by that one server and remembered
-between runs.
-
-Other commands:
-
-```bash
-dumbgit list        # show what's running and which repos are active
-dumbgit stop <dir>  # stop watching one repo
-dumbgit stop --all  # stop the server
-dumbgit restart     # restart the server
-```
+Run it from a Git repo to add or reactivate that repo and open the Workspace.
+Run it anywhere else to open the Workspace with the repos already there. The
+first run starts a small local server on `127.0.0.1:7777` and opens your
+browser. After that, start and stop repos from the page.
 
 ## What it does
 
@@ -63,6 +53,7 @@ those, run `git` yourself or let your agent do it. It stays dumb on purpose.
   export DUMBGIT_TERMINAL="Ghostty"
   ```
 
+- To add a repo without changing directories, run `dg <dir>`.
 - State lives in `~/Library/Application Support/dumbgit/repos.json`.
 - Hacking on dumbgit itself: `bun run dev`.
 

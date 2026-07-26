@@ -1195,7 +1195,7 @@ if (import.meta.main) {
         `exits after ${Math.round(BOOT.idleGraceMs / 1000)}s with no browser`,
       )
     } else {
-      console.log('ctrl-c to quit, or `dumbgit stop --all`')
+      console.log('ctrl-c to quit')
     }
     if (BOOT.open) {
       setTimeout(() => {
