@@ -13,7 +13,8 @@ const appRoot = path.resolve(path.dirname(scriptPath), '..')
 const logPath = path.join(os.homedir(), 'Library', 'Logs', 'dumbgit.log')
 
 function usage(code = 0) {
-  const text = 'usage: dg [dir]'
+  const text = `usage: dg [dir]
+       dg --stop`
   if (code === 0) console.log(text)
   else console.error(text)
   process.exit(code)
@@ -73,12 +74,32 @@ async function fetchController() {
     ) {
       return null
     }
-    return `http://${LISTEN_HOST}:${PORT}`
+    if (typeof data?.pid !== 'number') return null
+    return {
+      pid: data.pid,
+      url: `http://${LISTEN_HOST}:${PORT}`,
+    }
   } catch {
     return null
   } finally {
     clearTimeout(timer)
   }
+}
+
+async function stopController() {
+  const instance = await fetchController()
+  if (!instance) return 'not-running'
+  try {
+    process.kill(instance.pid, 'SIGTERM')
+  } catch {
+    // It may have exited between the health check and the signal.
+  }
+  const deadline = Date.now() + 5000
+  while (Date.now() < deadline) {
+    if (!(await fetchController())) return 'stopped'
+    await sleep(50)
+  }
+  return 'timed-out'
 }
 
 function startController() {
@@ -124,7 +145,7 @@ async function ensureWorkspace(focusRepo) {
   const pathname = focusRepo
     ? `/?repo=${encodeURIComponent(focusRepo)}`
     : '/'
-  const url = `${instance}${pathname}`
+  const url = `${instance.url}${pathname}`
   openBrowser(url)
   console.log(url)
 }
@@ -138,6 +159,14 @@ async function activateRepo(rawDir) {
 const argv = process.argv.slice(2)
 
 if (argv.length === 1 && (argv[0] === '-h' || argv[0] === '--help')) usage(0)
+
+if (argv.length === 1 && argv[0] === '--stop') {
+  const result = await stopController()
+  if (result === 'timed-out') die('server did not stop')
+  console.log(result === 'stopped' ? 'dg: stopped' : 'dg: not running')
+  process.exit(0)
+}
+
 for (const arg of argv) {
   if (arg.startsWith('-')) die(`unknown option: ${arg}`)
 }
