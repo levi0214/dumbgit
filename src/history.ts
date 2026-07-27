@@ -89,6 +89,29 @@ export function setRepoActive(repoPath: string, active: boolean): boolean {
   }
 }
 
+/** Drop a bookmark. Returns the stored path, or null if it was not in history. */
+export function forgetRepo(repoPath: string): string | null {
+  try {
+    const repos = readRepoHistory()
+    let match = repoPath
+    try {
+      match = realpathSync(repoPath)
+    } catch {
+      // Missing on disk is fine — still forget the stored bookmark.
+    }
+    const existing = repos.find(
+      (entry) => entry.repoPath === match || entry.repoPath === repoPath,
+    )
+    if (!existing) return null
+    writeRepoHistory(
+      repos.filter((entry) => entry.repoPath !== existing.repoPath),
+    )
+    return existing.repoPath
+  } catch {
+    return null
+  }
+}
+
 export function reorderRepoHistory(repoPaths: string[]): void {
   try {
     const repos = readRepoHistory()

@@ -42,6 +42,7 @@ or a coding agent. It stays dumb on purpose.
 - Stop the server with `dg --stop`. With no browser open, it quits on its own
   after ~8h.
 - You can also add a repo from anywhere with `dg <dir>`.
+- Remove a repo from the Workspace with `dg forget` or `dg forget <dir>`.
 - State lives in `~/Library/Application Support/dumbgit/repos.json`.
 - Check the installed version with `dg --version`.
 - Uninstall the standalone binary with `dg --stop && rm ~/.local/bin/dg`.

@@ -9,6 +9,7 @@ import {
 import os from 'node:os'
 import path from 'node:path'
 import {
+  forgetRepo,
   readRepoHistory,
   rememberRepo,
   reorderRepoHistory,
@@ -60,6 +61,13 @@ test('remembers and reorders canonical repository paths', () => {
         { repoPath: realpathSync(first), active: true },
       ],
     })
+
+    expect(forgetRepo(first)).toBe(realpathSync(first))
+    expect(readRepoHistory().map((entry) => entry.repoPath)).toEqual([
+      realpathSync(second),
+    ])
+    expect(forgetRepo(first)).toBeNull()
+    expect(forgetRepo('/no/such/repo')).toBeNull()
   } finally {
     if (previous === undefined) delete process.env.DUMBGIT_HISTORY_FILE
     else process.env.DUMBGIT_HISTORY_FILE = previous

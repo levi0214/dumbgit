@@ -3,7 +3,7 @@ import { spawn, spawnSync } from 'node:child_process'
 import { closeSync, mkdirSync, openSync, realpathSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { rememberRepo } from '../src/history'
+import { forgetRepo, rememberRepo } from '../src/history'
 import { startServer } from '../src/index'
 import { VERSION } from '../src/version'
 
@@ -14,6 +14,7 @@ const logPath = path.join(os.homedir(), 'Library', 'Logs', 'dumbgit.log')
 
 function usage(code = 0) {
   const text = `usage: dg [dir]
+       dg forget [dir]
        dg --stop
        dg --version`
   if (code === 0) console.log(text)
@@ -159,6 +160,20 @@ async function activateRepo(rawDir) {
   await ensureWorkspace(repo)
 }
 
+function forgetWorkspaceRepo(rawDir) {
+  const raw = rawDir ?? process.cwd()
+  const resolved = tryRepoRoot(raw)
+  const candidate = resolved.ok
+    ? resolved.repo
+    : path.resolve(expandUser(raw))
+  const forgotten = forgetRepo(candidate)
+  if (!forgotten) {
+    console.error(`dg: not in workspace: ${candidate}`)
+    process.exit(1)
+  }
+  console.log(`forgot ${forgotten}`)
+}
+
 const argv = process.argv.slice(2)
 
 if (argv[0] === INTERNAL_SERVER_ARG) {
@@ -175,6 +190,12 @@ if (argv[0] === INTERNAL_SERVER_ARG) {
   if (result === 'timed-out') die('server did not stop')
   console.log(result === 'stopped' ? 'dg: stopped' : 'dg: not running')
   process.exit(0)
+} else if (argv[0] === 'forget') {
+  for (const arg of argv.slice(1)) {
+    if (arg.startsWith('-')) die(`unknown option: ${arg}`)
+  }
+  if (argv.length > 2) die('too many arguments')
+  forgetWorkspaceRepo(argv[1])
 } else {
   for (const arg of argv) {
     if (arg.startsWith('-')) die(`unknown option: ${arg}`)
