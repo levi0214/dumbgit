@@ -17,6 +17,10 @@ export type HeadInfo =
   | { kind: 'branch'; name: string; sha: string }
   | { kind: 'detached'; sha: string; previousBranch?: string }
 
+export function isCommitOid(value: string): boolean {
+  return /^[a-f0-9]{7,40}$/i.test(value)
+}
+
 /** Working tree all git commands run in. `initRepo` sets this once per process. */
 let repoRoot = process.cwd()
 const lastBranchByRepo = new Map<string, string>()
@@ -263,7 +267,7 @@ export async function checkoutBranch(
   name: string,
   cwd = repoRoot,
 ): Promise<{ ok: true } | { ok: false; stderr: string }> {
-  const { code, stderr } = await spawnGit(['switch', name], cwd)
+  const { code, stderr } = await spawnGit(['switch', '--', name], cwd)
   if (code === 0) return { ok: true }
   return {
     ok: false,
@@ -275,7 +279,11 @@ export async function checkoutCommit(
   sha: string,
   cwd = repoRoot,
 ): Promise<{ ok: true } | { ok: false; stderr: string }> {
-  const { code, stderr } = await spawnGit(['switch', '--detach', sha], cwd)
+  if (!isCommitOid(sha)) return { ok: false, stderr: 'invalid commit sha' }
+  const { code, stderr } = await spawnGit(
+    ['switch', '--detach', '--', sha],
+    cwd,
+  )
   if (code === 0) return { ok: true }
   return {
     ok: false,
@@ -289,7 +297,15 @@ export async function createBranchAt(
   name: string,
   cwd = repoRoot,
 ): Promise<{ ok: true } | { ok: false; stderr: string }> {
-  const { code, stderr } = await spawnGit(['branch', name, sha], cwd)
+  if (!isCommitOid(sha)) return { ok: false, stderr: 'invalid commit sha' }
+  const validName = await spawnGit(
+    ['check-ref-format', `refs/heads/${name}`],
+    cwd,
+  )
+  if (validName.code !== 0) {
+    return { ok: false, stderr: 'invalid branch name' }
+  }
+  const { code, stderr } = await spawnGit(['branch', '--', name, sha], cwd)
   if (code === 0) return { ok: true }
   return {
     ok: false,
@@ -438,8 +454,17 @@ export async function commitSummary(
   opts: { includeTags?: boolean } = {},
   cwd = repoRoot,
 ): Promise<{ ok: true; value: CommitSummary } | { ok: false; stderr: string }> {
+  if (!isCommitOid(sha)) {
+    return { ok: false, stderr: 'invalid commit sha' }
+  }
   const meta = await spawnGit(
-    ['log', '-1', '--format=%s%x00%b%x00%an%x00%aI', sha],
+    [
+      'log',
+      '-1',
+      '--format=%s%x00%b%x00%an%x00%aI',
+      '--end-of-options',
+      sha,
+    ],
     cwd,
   )
   if (meta.code !== 0) {
@@ -461,6 +486,7 @@ export async function commitSummary(
     '--name-status',
     '--format=',
     '--no-color',
+    '--end-of-options',
     sha,
   ], cwd)
   if (fileShow.code !== 0) {
@@ -471,7 +497,7 @@ export async function commitSummary(
   }
 
   const numstat = await spawnGit(
-    ['show', '--numstat', '--format=', sha],
+    ['show', '--numstat', '--format=', '--end-of-options', sha],
     cwd,
   )
   let files = parseShowNameStatus(fileShow.stdout)
@@ -519,6 +545,7 @@ export async function commitFilePatch(
     'show',
     '--format=',
     '--no-color',
+    '--end-of-options',
     sha,
     '--',
     raw,

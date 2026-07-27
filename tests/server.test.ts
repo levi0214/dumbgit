@@ -164,6 +164,25 @@ test('Workspace owns repository activation and repository routing', async () => 
     ).resolves.toBe(false)
 
     const head = git(repo, ['rev-parse', 'HEAD'])
+    const outputProbe = path.join(root, 'git-output-probe')
+    const injectedCommit = encodeURIComponent(`--output=${outputProbe}`)
+    const injectedResponse = await request(
+      `/api/commit/${injectedCommit}?${query}`,
+    )
+    expect(injectedResponse.status).toBe(200)
+    expect(await injectedResponse.text()).toContain('invalid commit sha')
+    expect(Bun.file(outputProbe).exists()).resolves.toBe(false)
+
+    await post('/api/checkout/branch?name=--detach')
+    await post('/api/checkout/commit?sha=--orphan')
+    expect(git(repo, ['symbolic-ref', '--short', 'HEAD'])).toBe('main')
+
+    await post(`/api/branch/create?sha=${head}`, { name: '--help' })
+    await post('/api/branch/create?sha=--help', {
+      name: 'injected-start-point',
+    })
+    expect(git(repo, ['branch', '--list', 'injected-start-point'])).toBe('')
+
     expect(
       (
         await post(`/api/branch/create?sha=${head}`, {
