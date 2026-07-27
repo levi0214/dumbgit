@@ -11,6 +11,7 @@ import {
   type WorkTreeSummary,
 } from '../git'
 import { decorationTokens, type DecorationToken } from '../decorations'
+import { CopyButton } from './copy'
 import { WorkTreeFragment } from './worktree'
 
 export type GraphFragmentProps =
@@ -39,25 +40,6 @@ export type GraphFragmentProps =
       swapOob?: boolean
     }
 
-const COPY_ICO = raw(
-  `<svg class="copy-ico" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`,
-)
-const CHECK_ICO = raw(
-  `<svg class="check-ico" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>`,
-)
-function CopyBtn(props: { dataCopy?: string; title?: string }) {
-  return (
-    <button
-      type="button"
-      class="copy-btn"
-      data-copy={props.dataCopy}
-      title={props.title ?? 'copy'}
-    >
-      {COPY_ICO}
-      {CHECK_ICO}
-    </button>
-  )
-}
 const TAG_ICO = raw(
   `<svg class="tag-ico" xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>`,
 )
@@ -506,7 +488,7 @@ function RefPills(props: {
                 <span class="ref-peer">{peer}</span>
               </>
             ) : null}
-            <CopyBtn title="copy name" />
+            <CopyButton title="copy name" />
             {props.readonly ? null : ref === props.currentBranch ? (
               peer ? null : (
                 <button
@@ -630,7 +612,7 @@ function GraphCommitLine(props: {
               <span class="ref-peer">{branchPrefixPeer}</span>
             </>
           ) : null}
-          <CopyBtn title="copy name" />
+          <CopyButton title="copy name" />
           {props.readonly ? null : branchPrefix === props.currentBranch ? (
             branchPrefixPeer ? null : (
               <button
@@ -722,7 +704,7 @@ function GraphCommitLine(props: {
           <code class="hash-peek" title={shaFull}>
             {shaShort}
           </code>
-          <CopyBtn dataCopy={shaFull} title="copy full hash" />
+          <CopyButton value={shaFull} title="copy full hash" />
         </span>
       </span>
     </div>
