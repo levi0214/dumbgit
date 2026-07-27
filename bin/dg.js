@@ -146,7 +146,11 @@ async function ensureWorkspace(focusRepo) {
     : '/'
   const url = `${instance.url}${pathname}`
   openBrowser(url)
-  console.log(url)
+  console.log(
+    focusRepo
+      ? `opened dumbgit workspace for ${path.basename(focusRepo)}`
+      : 'opened dumbgit workspace',
+  )
 }
 
 async function activateRepo(rawDir) {
