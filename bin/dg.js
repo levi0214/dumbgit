@@ -14,7 +14,7 @@ const logPath = path.join(os.homedir(), 'Library', 'Logs', 'dumbgit.log')
 
 function usage(code = 0) {
   const text = `usage: dg [dir]
-       dg forget [dir]
+       dg --forget [dir]
        dg --stop
        dg --version`
   if (code === 0) console.log(text)
@@ -190,7 +190,7 @@ if (argv[0] === INTERNAL_SERVER_ARG) {
   if (result === 'timed-out') die('server did not stop')
   console.log(result === 'stopped' ? 'dg: stopped' : 'dg: not running')
   process.exit(0)
-} else if (argv[0] === 'forget') {
+} else if (argv[0] === '--forget') {
   for (const arg of argv.slice(1)) {
     if (arg.startsWith('-')) die(`unknown option: ${arg}`)
   }
