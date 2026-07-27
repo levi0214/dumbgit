@@ -33,6 +33,16 @@ Run it in each repo you want to add.
 - Saves local edits aside and restores them later.
 - Refreshes on its own when things change.
 
+## How I use it
+
+I often work across several projects in Cursor, Codex, or a terminal. I keep
+dumbgit open beside them—in a web panel when available, or in a browser tab—so
+I can keep an eye on my repos and handle small Git tasks in one place.
+
+I originally made it because I wanted a Git graph outside an IDE. As I started
+working across more projects, seeing them together became more useful than the
+graph itself. That is how dumbgit became what it is today.
+
 ## What it won't do
 
 No rebase, merge, cherry-pick, conflict resolution. For those, just use `git`
