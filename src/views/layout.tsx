@@ -2043,12 +2043,23 @@ document.addEventListener('DOMContentLoaded', function () {
   syncWorktreeFileSelection();
   syncWorkspaceSelection();
   syncWorkspaceControls();
-  var focusRepo = new URLSearchParams(location.search).get('repo');
-  if (focusRepo) {
-    var card = Array.from(document.querySelectorAll('[data-workspace-repo]')).find(function (item) {
+  var board = document.getElementById('workspace-board');
+  var focusParams = new URLSearchParams(location.search);
+  var focusRepo = focusParams.get('repo');
+  if (board && focusRepo) {
+    var card = Array.from(board.querySelectorAll('[data-workspace-repo]')).find(function (item) {
       return item.dataset && item.dataset.workspaceRepo === focusRepo;
     });
     if (card) card.scrollIntoView({ block: 'nearest', inline: 'center' });
+  }
+  if (board && focusParams.has('repo')) {
+    var cleanLocation = new URL(location.href);
+    cleanLocation.searchParams.delete('repo');
+    history.replaceState(
+      history.state,
+      '',
+      cleanLocation.pathname + cleanLocation.search + cleanLocation.hash
+    );
   }
 });
 
