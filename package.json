@@ -1,6 +1,6 @@
 {
   "name": "dumbgit",
-  "version": "0.1.0",
+  "private": true,
   "description": "A tiny Git GUI for one person on one Mac.",
   "license": "MIT",
   "author": "Luyao",
@@ -15,17 +15,16 @@
   "module": "src/index.tsx",
   "type": "module",
   "bin": {
-    "dg": "./bin/dg"
+    "dg": "./bin/dg.js"
   },
   "scripts": {
     "dev": "bun --watch src/index.tsx --no-idle-exit",
     "start": "bun run src/index.tsx --open",
+    "build": "bun build --compile --minify --no-compile-autoload-dotenv --no-compile-autoload-bunfig bin/dg.js --outfile dist/dg",
     "test": "bun test"
   },
   "devDependencies": {
-    "bun-types": "latest"
-  },
-  "peerDependencies": {
+    "bun-types": "latest",
     "typescript": "^5.9.3"
   },
   "dependencies": {

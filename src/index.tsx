@@ -1168,7 +1168,7 @@ app.get('/events', (c) => {
   })
 })
 
-if (import.meta.main) {
+export async function startServer(): Promise<void> {
   await syncRepoWatchers()
   const port = await listenPort()
 
@@ -1180,27 +1180,30 @@ if (import.meta.main) {
       // Long-lived /events streams; process lifetime is owned by idle-exit.
       idleTimeout: 0,
     })
+    return
+  }
+
+  state.server = Bun.serve({
+    hostname: LISTEN_HOST,
+    port,
+    fetch: app.fetch,
+    idleTimeout: 0,
+  })
+  const base = `http://${LISTEN_HOST}:${port}`
+  console.log(`dumbgit workspace on ${base}/`)
+  if (idle) {
+    idle.start()
+    console.log(
+      `exits after ${Math.round(BOOT.idleGraceMs / 1000)}s with no browser`,
+    )
   } else {
-    state.server = Bun.serve({
-      hostname: LISTEN_HOST,
-      port,
-      fetch: app.fetch,
-      idleTimeout: 0,
-    })
-    const base = `http://${LISTEN_HOST}:${port}`
-    console.log(`dumbgit workspace on ${base}/`)
-    if (idle) {
-      idle.start()
-      console.log(
-        `exits after ${Math.round(BOOT.idleGraceMs / 1000)}s with no browser`,
-      )
-    } else {
-      console.log('ctrl-c to quit')
-    }
-    if (BOOT.open) {
-      setTimeout(() => {
-        Bun.spawn(['open', base])
-      }, 200)
-    }
+    console.log('ctrl-c to quit')
+  }
+  if (BOOT.open) {
+    setTimeout(() => {
+      Bun.spawn(['open', base])
+    }, 200)
   }
 }
+
+if (import.meta.main) await startServer()

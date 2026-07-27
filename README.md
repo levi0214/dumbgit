@@ -4,9 +4,22 @@ A tiny local Git GUI for macOS.
 
 ## Install
 
+Requires macOS (Apple Silicon or Intel) and Git.
+
 ```bash
-bun install
-bun link
+curl -fsSL https://raw.githubusercontent.com/levi0214/dumbgit/main/install.sh | sh
+```
+
+The installer downloads a checksum-verified binary to `~/.local/bin`. If that
+is not on your `PATH`, it prints the command to add it. Re-run the installer to
+update dumbgit.
+
+To inspect the installer before running it:
+
+```bash
+curl -fsSLO https://raw.githubusercontent.com/levi0214/dumbgit/main/install.sh
+less install.sh
+sh install.sh
 ```
 
 ## Run
@@ -40,7 +53,10 @@ or a coding agent. It stays dumb on purpose.
 - State lives in `~/Library/Application Support/dumbgit/repos.json`.
 - Open-file uses the default app; open-terminal uses Terminal.app. Override them
   with `DUMBGIT_EDITOR` and `DUMBGIT_TERMINAL`.
-- Hacking on dumbgit: `bun run dev`.
+- Check the installed version with `dg --version`.
+- Uninstall with `dg --stop && rm ~/.local/bin/dg`.
+- Hacking on dumbgit: run `bun install`, `bun link`, then `bun run dev`.
+- Maintainers: see [RELEASING.md](RELEASING.md).
 
 ## License
 

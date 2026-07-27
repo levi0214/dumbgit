@@ -3,18 +3,19 @@ import { spawn, spawnSync } from 'node:child_process'
 import { closeSync, mkdirSync, openSync, realpathSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
 import { rememberRepo } from '../src/history'
+import { startServer } from '../src/index'
+import { VERSION } from '../src/version'
 
 const LISTEN_HOST = '127.0.0.1'
 const PORT = 7777
-const scriptPath = realpathSync(fileURLToPath(import.meta.url))
-const appRoot = path.resolve(path.dirname(scriptPath), '..')
+const INTERNAL_SERVER_ARG = '--internal-server'
 const logPath = path.join(os.homedir(), 'Library', 'Logs', 'dumbgit.log')
 
 function usage(code = 0) {
   const text = `usage: dg [dir]
-       dg --stop`
+       dg --stop
+       dg --version`
   if (code === 0) console.log(text)
   else console.error(text)
   process.exit(code)
@@ -105,15 +106,13 @@ async function stopController() {
 function startController() {
   mkdirSync(path.dirname(logPath), { recursive: true })
   const log = openSync(logPath, 'a')
-  const child = spawn(
-    process.execPath,
-    ['run', 'src/index.tsx', '--port', String(PORT)],
-    {
-      cwd: appRoot,
-      detached: true,
-      stdio: ['ignore', log, log],
-    },
-  )
+  const args = Bun.main.startsWith('/$bunfs/')
+    ? [INTERNAL_SERVER_ARG, '--port', String(PORT)]
+    : [Bun.main, INTERNAL_SERVER_ARG, '--port', String(PORT)]
+  const child = spawn(process.execPath, args, {
+    detached: true,
+    stdio: ['ignore', log, log],
+  })
   child.unref()
   closeSync(log)
 }
@@ -158,24 +157,31 @@ async function activateRepo(rawDir) {
 
 const argv = process.argv.slice(2)
 
-if (argv.length === 1 && (argv[0] === '-h' || argv[0] === '--help')) usage(0)
-
-if (argv.length === 1 && argv[0] === '--stop') {
+if (argv[0] === INTERNAL_SERVER_ARG) {
+  await startServer()
+} else if (
+  argv.length === 1 &&
+  (argv[0] === '-h' || argv[0] === '--help')
+) {
+  usage(0)
+} else if (argv.length === 1 && (argv[0] === '-v' || argv[0] === '--version')) {
+  console.log(`dg ${VERSION}`)
+} else if (argv.length === 1 && argv[0] === '--stop') {
   const result = await stopController()
   if (result === 'timed-out') die('server did not stop')
   console.log(result === 'stopped' ? 'dg: stopped' : 'dg: not running')
   process.exit(0)
-}
-
-for (const arg of argv) {
-  if (arg.startsWith('-')) die(`unknown option: ${arg}`)
-}
-if (argv.length > 1) die('too many arguments')
-
-if (argv[0]) {
-  await activateRepo(argv[0])
 } else {
-  const cwdRepo = tryRepoRoot(process.cwd())
-  if (cwdRepo.ok) await activateRepo(cwdRepo.repo)
-  else await ensureWorkspace()
+  for (const arg of argv) {
+    if (arg.startsWith('-')) die(`unknown option: ${arg}`)
+  }
+  if (argv.length > 1) die('too many arguments')
+
+  if (argv[0]) {
+    await activateRepo(argv[0])
+  } else {
+    const cwdRepo = tryRepoRoot(process.cwd())
+    if (cwdRepo.ok) await activateRepo(cwdRepo.repo)
+    else await ensureWorkspace()
+  }
 }
