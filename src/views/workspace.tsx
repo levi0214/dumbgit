@@ -9,11 +9,9 @@ import type {
   WorkTreeEntry,
   WorkTreeSummary,
 } from '../git'
-import {
-  GraphRows,
-  graphLaneLayout,
-} from './graph'
+import { CopyButton } from './copy'
 import { DiffPanel, DiffPatchBody } from './diff'
+import { GraphRows, graphLaneLayout } from './graph'
 
 export type WorkspaceRepoSnapshot =
   | {
@@ -119,6 +117,21 @@ function WorkspaceRepoName(props: {
   ) : (
     <span class="workspace-repo-name" title={name}>
       {name}
+    </span>
+  )
+}
+
+function WorkspaceRepoPath(props: { repoPath: string }) {
+  const name = path.basename(props.repoPath)
+  const parentLabel = workspaceRepoParentLabel(props.repoPath)
+  return (
+    <span
+      class="workspace-repo-path"
+      data-copy={props.repoPath}
+      title={props.repoPath}
+    >
+      <span class="workspace-repo-path-label">{parentLabel}</span>
+      <CopyButton title={`copy repository path for ${name}`} />
     </span>
   )
 }
@@ -242,7 +255,6 @@ function WorkspaceRepoCard(props: {
     const repoUrl = props.repo.active
       ? `/repo?repo=${repoQuery(props.repo.repoPath)}`
       : undefined
-    const parentLabel = workspaceRepoParentLabel(props.repo.repoPath)
     return (
       <article
         class={`workspace-repo-card workspace-repo-error${props.repo.active ? '' : ' workspace-repo-stopped'}`}
@@ -254,9 +266,7 @@ function WorkspaceRepoCard(props: {
               repoPath={props.repo.repoPath}
               repoUrl={repoUrl}
             />
-            <div class="workspace-repo-path" title={parentLabel}>
-              {parentLabel}
-            </div>
+            <WorkspaceRepoPath repoPath={props.repo.repoPath} />
           </div>
           <WorkspaceCardActions
             repoPath={props.repo.repoPath}
@@ -284,7 +294,6 @@ function WorkspaceRepoCard(props: {
   const repoUrl = repo.active
     ? `/repo?repo=${repoQuery(repo.repoPath)}`
     : undefined
-  const parentLabel = workspaceRepoParentLabel(repo.repoPath)
   const worktreeUrl = `/workspace/worktree?repo=${repoQuery(repo.repoPath)}`
 
   return (
@@ -298,9 +307,7 @@ function WorkspaceRepoCard(props: {
           <span class="workspace-branch" title={branch}>
             {branch}
           </span>
-          <div class="workspace-repo-path" title={parentLabel}>
-            {parentLabel}
-          </div>
+          <WorkspaceRepoPath repoPath={repo.repoPath} />
         </div>
         <WorkspaceCardActions
           repoPath={repo.repoPath}

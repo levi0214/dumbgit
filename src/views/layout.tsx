@@ -1392,12 +1392,34 @@ a.workspace-repo-name:hover {
 }
 .workspace-repo-path {
   grid-column: 1 / -1;
+  justify-self: start;
+  width: fit-content;
+  max-width: 100%;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--muted);
+  font-size: 9px;
+  cursor: pointer;
+}
+.workspace-repo-path-label {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--muted);
-  font-size: 9px;
+}
+.workspace-repo-path .copy-btn {
+  flex: 0 0 auto;
+  visibility: hidden;
+}
+.workspace-repo-path .copy-btn:hover {
+  opacity: 0.7;
+  background: transparent;
+}
+.workspace-repo-path:hover .copy-btn,
+.workspace-repo-path:focus-within .copy-btn {
+  visibility: visible;
 }
 .workspace-icon-action {
   width: 26px;
