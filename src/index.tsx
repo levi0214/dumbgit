@@ -33,7 +33,7 @@ import {
   reorderRepoHistory,
   setRepoActive,
 } from './history'
-import { openInEditor, openInTerminal } from './open-local'
+import { openInEditor } from './open-local'
 import { watchGitRefs } from './watch'
 import {
   GraphFragment,
@@ -567,20 +567,6 @@ app.post('/workspace/repo/stop', async (c) => {
     />,
     200,
   )
-})
-
-app.post('/workspace/repo/terminal', (c) => {
-  const repoPath = resolveWorkspaceRepo(c.req.query('repo'))
-  if (!repoPath) {
-    return c.text('Repository is not in Workspace history.', 404)
-  }
-
-  const result = openInTerminal(repoPath)
-  if (!result.ok) {
-    return c.text(result.stderr, 500)
-  }
-
-  return c.body(null, 204)
 })
 
 app.get('/workspace/commit', async (c) => {

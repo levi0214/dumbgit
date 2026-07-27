@@ -13,15 +13,6 @@ export function editorOpenArgs(
   return app ? ['open', '-a', app, filePath] : ['open', filePath]
 }
 
-/** macOS `open` argv for a repo directory. Override with DUMBGIT_TERMINAL (app name). */
-export function terminalOpenArgs(
-  dirPath: string,
-  env: NodeJS.ProcessEnv = process.env,
-): string[] {
-  const app = env.DUMBGIT_TERMINAL?.trim() || 'Terminal'
-  return ['open', '-a', app, dirPath]
-}
-
 function runOpen(argv: string[]): OpenLocalResult {
   const [cmd, ...args] = argv
   const result = spawnSync(cmd, args, { encoding: 'utf8' })
@@ -35,8 +26,4 @@ function runOpen(argv: string[]): OpenLocalResult {
 
 export function openInEditor(filePath: string): OpenLocalResult {
   return runOpen(editorOpenArgs(filePath))
-}
-
-export function openInTerminal(dirPath: string): OpenLocalResult {
-  return runOpen(terminalOpenArgs(dirPath))
 }

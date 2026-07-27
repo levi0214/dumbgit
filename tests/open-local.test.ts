@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { editorOpenArgs, terminalOpenArgs } from '../src/open-local'
+import { editorOpenArgs } from '../src/open-local'
 
 describe('editorOpenArgs', () => {
   test('uses the system default app when unset', () => {
@@ -17,22 +17,5 @@ describe('editorOpenArgs', () => {
       'open',
       '/tmp/a.ts',
     ])
-  })
-})
-
-describe('terminalOpenArgs', () => {
-  test('defaults to Terminal.app', () => {
-    expect(terminalOpenArgs('/tmp/repo', {})).toEqual([
-      'open',
-      '-a',
-      'Terminal',
-      '/tmp/repo',
-    ])
-  })
-
-  test('uses DUMBGIT_TERMINAL as an open -a app name', () => {
-    expect(
-      terminalOpenArgs('/tmp/repo', { DUMBGIT_TERMINAL: 'Ghostty' }),
-    ).toEqual(['open', '-a', 'Ghostty', '/tmp/repo'])
   })
 })

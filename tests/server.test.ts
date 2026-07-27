@@ -50,18 +50,7 @@ test('Workspace owns repository activation and repository routing', async () => 
     expect(workspacePage).toContain('1 repository · 1 active')
     expect(workspacePage).toContain(`data-copy="${repo}"`)
     expect(workspacePage).toContain('copy repository path for example')
-    expect(workspacePage).toContain(
-      `/workspace/repo/terminal?repo=${encodeURIComponent(repo)}`,
-    )
-    expect(workspacePage).toContain(`Open terminal for example`)
-    expect(
-      (
-        await app.request(
-          '/workspace/repo/terminal?repo=/not/a/workspace/repo',
-          { method: 'POST' },
-        )
-      ).status,
-    ).toBe(404)
+    expect(workspacePage).not.toContain('/workspace/repo/terminal')
 
     const stopped = await app.request(
       `/workspace/repo/stop?${query}&limit=5`,
