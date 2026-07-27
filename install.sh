@@ -27,7 +27,7 @@ else
     v*) TAG=$REQUESTED_VERSION ;;
     *) TAG="v$REQUESTED_VERSION" ;;
   esac
-  if ! printf '%s\n' "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.-]+)?$'; then
+  if ! printf '%s\n' "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z][0-9A-Za-z.-]*)?$'; then
     echo "dumbgit: invalid version: $REQUESTED_VERSION" >&2
     exit 1
   fi

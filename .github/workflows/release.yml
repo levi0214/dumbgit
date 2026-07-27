@@ -1,4 +1,4 @@
-name: Release binaries
+name: Release
 
 on:
   release:
@@ -6,6 +6,7 @@ on:
 
 permissions:
   contents: write
+  id-token: write
 
 jobs:
   build:
@@ -17,12 +18,18 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.3.14
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
       - run: bun install --frozen-lockfile
       - run: bun test
-      - name: Build release archives
+      - name: Build release artifacts
         env:
           RELEASE_TAG: ${{ github.event.release.tag_name }}
-        run: scripts/build-release.sh "$RELEASE_TAG"
+        run: |
+          scripts/build-release.sh "$RELEASE_TAG"
+          scripts/build-npm-package.sh "$RELEASE_TAG"
       - name: Smoke test native binary
         env:
           RELEASE_TAG: ${{ github.event.release.tag_name }}
@@ -36,6 +43,14 @@ jobs:
           trap 'rm -rf "$test_dir"' EXIT
           tar -xzf "$archive" -C "$test_dir"
           test "$("$test_dir/dg" --version)" = "dg ${RELEASE_TAG#v}"
+      - name: Smoke test npm package
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          test_dir=$(mktemp -d)
+          trap 'rm -rf "$test_dir"' EXIT
+          npm install --global --prefix "$test_dir" dist/npm/*.tgz
+          test "$("$test_dir/bin/dg" --version)" = "dg ${RELEASE_TAG#v}"
       - name: Upload release assets
         env:
           GH_TOKEN: ${{ github.token }}
@@ -46,3 +61,8 @@ jobs:
           dist/release/dumbgit-darwin-x64.tar.gz
           dist/release/checksums.txt
           --clobber
+      - name: Publish npm package
+        if: ${{ !github.event.release.prerelease }}
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish dist/npm/*.tgz --access public --provenance

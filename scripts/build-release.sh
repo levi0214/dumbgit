@@ -7,7 +7,7 @@ if [ "$#" -ne 1 ]; then
 fi
 
 TAG=$1
-if ! printf '%s\n' "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.-]+)?$'; then
+if ! printf '%s\n' "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z][0-9A-Za-z.-]*)?$'; then
   echo "build-release: invalid release tag: $TAG" >&2
   exit 2
 fi
