@@ -43,7 +43,6 @@ or a coding agent. It stays dumb on purpose.
   after ~8h.
 - You can also add a repo from anywhere with `dg <dir>`.
 - State lives in `~/Library/Application Support/dumbgit/repos.json`.
-- Open-file uses the default app. Override it with `DUMBGIT_EDITOR`.
 - Check the installed version with `dg --version`.
 - Uninstall the standalone binary with `dg --stop && rm ~/.local/bin/dg`.
   Package installs can use `bun remove --global dumbgit` or

@@ -22,7 +22,6 @@ import {
   stashFilePatch,
   stashSummary,
   togglePreviewStash,
-  workTreeFileAbsolutePath,
   workTreeFilePatch,
   workTreeSummary,
   workspaceRepoFingerprint,
@@ -33,7 +32,6 @@ import {
   reorderRepoHistory,
   setRepoActive,
 } from './history'
-import { openInEditor } from './open-local'
 import { watchGitRefs } from './watch'
 import {
   GraphFragment,
@@ -811,11 +809,18 @@ app.get('/api/worktree/file', async (c) => {
   if (!r.ok) {
     return c.html(<WorkTreeDiffPanel ok={false} stderr={r.stderr} />, 200)
   }
+  const rel =
+    filePath
+      .split(' → ')
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .at(-1) ?? filePath.trim()
   return c.html(
     <WorkTreeDiffPanel
       ok={true}
       kind={kind}
       displayPath={filePath}
+      absolutePath={path.resolve(repoPath, rel)}
       patch={r.patch}
     />,
     200,
@@ -849,30 +854,6 @@ app.post('/api/worktree/action', async (c) => {
     </Fragment>,
     200,
   )
-})
-
-app.post('/api/worktree/open', async (c) => {
-  const repoPath = c.get('repoPath')
-  const kind = c.req.query('kind')
-  const filePath = c.req.query('path') ?? ''
-  if (
-    (kind !== 'staged' && kind !== 'unstaged' && kind !== 'untracked') ||
-    !filePath
-  ) {
-    return c.html(<StatusOob error="missing or invalid worktree file" />, 200)
-  }
-
-  const file = await workTreeFileAbsolutePath(kind, filePath, repoPath)
-  if (!file.ok) {
-    return c.html(<StatusOob error={file.stderr} />, 200)
-  }
-
-  const r = openInEditor(file.path)
-  if (!r.ok) {
-    return c.html(<StatusOob error={r.stderr} />, 200)
-  }
-
-  return c.html(<StatusOob />, 200)
 })
 
 app.post('/api/worktree/stash-toggle', async (c) => {

@@ -974,44 +974,28 @@ body.main-grid-dragging {
 }
 .diff-worktree-file .diff-subject {
   display: inline-flex;
-  align-items: baseline;
-  gap: 8px;
+  align-items: center;
+  gap: 6px;
   min-width: 0;
   flex: 1;
   color: var(--fg);
   font-weight: 600;
-}
-.diff-subject-open {
-  font: inherit;
-  min-width: 0;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 0;
-  border: none;
-  background: transparent;
-  color: inherit;
   cursor: pointer;
-  text-align: left;
 }
-.diff-subject-open .diff-subject-path {
-  text-decoration: underline;
-  text-decoration-style: dotted;
-  text-decoration-color: rgba(255, 255, 255, 0.32);
-  text-underline-offset: 3px;
+.diff-worktree-file .diff-subject .copy-btn {
+  flex: 0 0 auto;
+  visibility: hidden;
 }
-.diff-subject-open .open-ico {
-  flex-shrink: 0;
-  color: var(--muted);
+.diff-worktree-file .diff-subject .copy-btn:hover {
+  opacity: 0.7;
+  background: transparent;
 }
-.diff-subject-open:hover .diff-subject-path,
-.diff-subject-open:focus-visible .diff-subject-path {
-  color: var(--accent);
-  text-decoration-style: solid;
-  text-decoration-color: var(--accent);
+.diff-worktree-file .diff-subject:hover .copy-btn,
+.diff-worktree-file .diff-subject:focus-within .copy-btn {
+  visibility: visible;
 }
-.diff-subject-open:hover .open-ico,
-.diff-subject-open:focus-visible .open-ico {
+.diff-worktree-file .diff-subject:hover .diff-subject-path,
+.diff-worktree-file .diff-subject:focus-within .diff-subject-path {
   color: var(--accent);
 }
 .worktree-head-actions {

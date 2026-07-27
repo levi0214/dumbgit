@@ -7,13 +7,10 @@ import type {
   WorkTreeActionOp,
   WorkTreeChangeKind,
 } from '../git'
+import { CopyButton } from './copy'
 
 const TAG_ICO = raw(
   `<svg class="tag-ico" xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>`,
-)
-
-const OPEN_ICO = raw(
-  `<svg class="open-ico" xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>`,
 )
 
 export type DiffPanelProps =
@@ -215,6 +212,7 @@ export type WorkTreeDiffPanelProps =
       ok: true
       kind: WorkTreeChangeKind
       displayPath: string
+      absolutePath: string
       patch: string
     }
   | { ok: false; stderr: string }
@@ -233,7 +231,6 @@ export function WorkTreeDiffPanel(props: WorkTreeDiffPanelProps) {
 
   const actionUrl = (op: WorkTreeActionOp) =>
     `/api/worktree/action?op=${op}&kind=${props.kind}&path=${encodeURIComponent(props.displayPath)}`
-  const openUrl = `/api/worktree/open?kind=${props.kind}&path=${encodeURIComponent(props.displayPath)}`
   const primary =
     props.kind === 'staged'
       ? {
@@ -257,18 +254,13 @@ export function WorkTreeDiffPanel(props: WorkTreeDiffPanelProps) {
       data-worktree-path={props.displayPath}
     >
       <div class="diff-head">
-        <div class="diff-subject" title={props.displayPath}>
-          <button
-            type="button"
-            class="diff-subject-open"
-            title={`Open ${props.displayPath}`}
-            aria-label={`Open ${props.displayPath}`}
-            hx-post={openUrl}
-            hx-swap="none"
-          >
-            <span class="diff-subject-path">{props.displayPath}</span>
-            {OPEN_ICO}
-          </button>
+        <div
+          class="diff-subject"
+          data-copy={props.absolutePath}
+          title={props.absolutePath}
+        >
+          <span class="diff-subject-path">{props.displayPath}</span>
+          <CopyButton title={`copy path for ${props.displayPath}`} />
         </div>
         <div class="worktree-head-actions">
           <button
