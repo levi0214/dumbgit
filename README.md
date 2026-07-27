@@ -2,6 +2,8 @@
 
 A tiny local Git GUI for macOS.
 
+![dumbgit workspace](docs/workspace.png)
+
 ## Install
 
 ```bash
