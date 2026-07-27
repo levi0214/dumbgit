@@ -403,6 +403,27 @@ type AppEnv = {
 
 export const app = new Hono<AppEnv>()
 
+/** Keep public pages from reaching the local controller via CSRF/DNS rebinding. */
+app.use('*', async (c, next) => {
+  const url = new URL(c.req.url)
+  const port = Number(url.port || 80)
+  const expectedPort = state.listenPort ?? BOOT.port ?? DEFAULT_PORT
+  if (
+    url.protocol !== 'http:' ||
+    (url.hostname !== LISTEN_HOST && url.hostname !== 'localhost') ||
+    port !== expectedPort
+  ) {
+    return c.text('invalid local host', 403)
+  }
+
+  const safeMethod = ['GET', 'HEAD', 'OPTIONS'].includes(c.req.method)
+  if (!safeMethod && c.req.header('origin') !== url.origin) {
+    return c.text('cross-origin request blocked', 403)
+  }
+
+  await next()
+})
+
 app.get('/healthz', (c) => c.text(`${HEALTH_BODY}\n`))
 
 /** Launcher finds the controller and its PID here. */

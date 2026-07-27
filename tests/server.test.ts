@@ -9,7 +9,17 @@ import {
 import os from 'node:os'
 import path from 'node:path'
 import { rememberRepo } from '../src/history'
-import { app } from '../src/index'
+import { app as honoApp } from '../src/index'
+
+const LOCAL_ORIGIN = 'http://127.0.0.1:7777'
+function request(input: string, init: RequestInit = {}) {
+  const method = (init.method ?? 'GET').toUpperCase()
+  const headers = new Headers(init.headers)
+  if (!['GET', 'HEAD', 'OPTIONS'].includes(method) && !headers.has('Origin')) {
+    headers.set('Origin', LOCAL_ORIGIN)
+  }
+  return honoApp.request(`${LOCAL_ORIGIN}${input}`, { ...init, headers })
+}
 
 function git(cwd: string, args: string[]): string {
   const result = Bun.spawnSync(['git', ...args], {
@@ -22,6 +32,34 @@ function git(cwd: string, args: string[]): string {
   }
   return result.stdout.toString().trim()
 }
+
+test('rejects non-local hosts and cross-origin mutations', async () => {
+  const rebound = await honoApp.request('http://evil.example:7777/healthz')
+  expect(rebound.status).toBe(403)
+
+  const crossOrigin = await honoApp.request(
+    `${LOCAL_ORIGIN}/workspace/repo/reorder`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Origin: 'https://evil.example',
+      },
+      body: JSON.stringify({ repos: [] }),
+    },
+  )
+  expect(crossOrigin.status).toBe(403)
+
+  const missingOrigin = await honoApp.request(
+    `${LOCAL_ORIGIN}/workspace/repo/reorder`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ repos: [] }),
+    },
+  )
+  expect(missingOrigin.status).toBe(403)
+})
 
 test('Workspace owns repository activation and repository routing', async () => {
   const root = mkdtempSync(path.join(os.tmpdir(), 'dumbgit-server-'))
@@ -42,7 +80,7 @@ test('Workspace owns repository activation and repository routing', async () => 
     rememberRepo(repo)
 
     const query = `repo=${encodeURIComponent(repo)}`
-    const workspace = await app.request('/')
+    const workspace = await request('/')
     expect(workspace.status).toBe(200)
     const workspacePage = await workspace.text()
     expect(workspacePage).toContain('<title>dumbgit</title>')
@@ -52,25 +90,25 @@ test('Workspace owns repository activation and repository routing', async () => 
     expect(workspacePage).toContain('copy repository path for example')
     expect(workspacePage).not.toContain('/workspace/repo/terminal')
 
-    const stopped = await app.request(
+    const stopped = await request(
       `/workspace/repo/stop?${query}&limit=5`,
       { method: 'POST' },
     )
     expect(stopped.status).toBe(200)
     expect(await stopped.text()).toContain('>Start</button>')
 
-    const inactiveRepo = await app.request(`/repo?${query}`)
+    const inactiveRepo = await request(`/repo?${query}`)
     expect(inactiveRepo.status).toBe(302)
     expect(inactiveRepo.headers.get('location')).toBe('/')
 
-    const started = await app.request(
+    const started = await request(
       `/workspace/repo/start?${query}&limit=5`,
       { method: 'POST' },
     )
     expect(started.status).toBe(200)
     expect(await started.text()).toContain('>Stop</button>')
 
-    const activeRepo = await app.request(`/repo?${query}`)
+    const activeRepo = await request(`/repo?${query}`)
     expect(activeRepo.status).toBe(200)
     const page = await activeRepo.text()
     expect(page).toContain(`data-repo="${repo}"`)
@@ -79,11 +117,11 @@ test('Workspace owns repository activation and repository routing', async () => 
     expect(page).toContain(`href="/?repo=${encodeURIComponent(repo)}"`)
     expect(page).toContain('Back to workspace')
 
-    expect((await app.request('/fragment/graph')).status).toBe(400)
-    expect((await app.request(`/fragment/graph?${query}`)).status).toBe(200)
+    expect((await request('/fragment/graph')).status).toBe(400)
+    expect((await request(`/fragment/graph?${query}`)).status).toBe(200)
 
     const post = (url: string, fields: Record<string, string> = {}) =>
-      app.request(url, {
+      request(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({ repo, ...fields }).toString(),
@@ -137,7 +175,7 @@ test('Workspace owns repository activation and repository routing', async () => 
       git(repo, ['rev-parse', '--verify', 'refs/heads/body-context']),
     ).toBe(head)
   } finally {
-    await app.request(
+    await request(
       `/workspace/repo/stop?repo=${encodeURIComponent(repo)}&limit=5`,
       { method: 'POST' },
     )
