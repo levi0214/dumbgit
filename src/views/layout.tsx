@@ -1262,32 +1262,6 @@ body.main-grid-dragging {
   color: var(--muted);
   font-size: 10px;
 }
-.workspace-refresh {
-  color: var(--muted);
-  text-decoration: none;
-  border: 1px solid var(--border);
-  background: #252526;
-}
-.workspace-toolbar-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.workspace-refresh {
-  min-height: 30px;
-  padding: 5px 10px;
-  border-radius: 4px;
-  display: inline-flex;
-  align-items: center;
-  font-size: 11px;
-}
-.workspace-refresh:hover {
-  color: var(--accent);
-  border-color: var(--accent);
-}
-.workspace-refresh:active {
-  transform: scale(0.97);
-}
 .workspace-board {
   min-height: 0;
   overflow: auto;
@@ -1961,15 +1935,6 @@ function syncWorkspaceSelection() {
 
 var workspaceBoardScrollTop = null;
 
-function syncWorkspaceControls() {
-  var board = document.getElementById('workspace-board');
-  var refresh = document.querySelector('.workspace-refresh');
-  var limit = board && board.dataset ? board.dataset.workspaceLimit : '';
-  if (refresh && limit) {
-    refresh.setAttribute('href', '/workspace?limit=' + encodeURIComponent(limit));
-  }
-}
-
 function revealWorkspaceInspectorRepo() {
   var board = document.getElementById('workspace-board');
   var inspector = document.getElementById('workspace-inspector');
@@ -2048,7 +2013,6 @@ document.addEventListener('DOMContentLoaded', function () {
   syncViewingHighlight();
   syncWorktreeFileSelection();
   syncWorkspaceSelection();
-  syncWorkspaceControls();
   var board = document.getElementById('workspace-board');
   var focusParams = new URLSearchParams(location.search);
   var focusRepo = focusParams.get('repo');
@@ -2110,7 +2074,6 @@ document.body.addEventListener('htmx:afterSwap', function (e) {
       board.scrollTop = workspaceBoardScrollTop;
     }
     workspaceBoardScrollTop = null;
-    syncWorkspaceControls();
   }
 });
 
@@ -2123,7 +2086,6 @@ document.body.addEventListener('htmx:beforeSwap', function (e) {
 
 document.body.addEventListener('htmx:historyRestore', function () {
   syncWorkspaceSelection();
-  syncWorkspaceControls();
 });
 
 document.addEventListener('click', function (e) {

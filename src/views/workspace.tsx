@@ -364,11 +364,6 @@ export function WorkspaceView(props: {
             </p>
           </div>
         </div>
-        <div class="workspace-toolbar-actions">
-          <a class="workspace-refresh" href={`/?limit=${props.limit}`}>
-            Refresh
-          </a>
-        </div>
       </header>
 
       <WorkspaceBoard {...props} />
