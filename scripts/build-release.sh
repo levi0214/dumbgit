@@ -44,6 +44,7 @@ for ARCH in arm64 x64; do
   cp "$ROOT/LICENSE" "$STAGE/LICENSE"
   cp "$ROOT/licenses/BUN-LICENSE.md" "$STAGE/LICENSES/BUN-LICENSE.md"
   cp "$ROOT/licenses/HONO-LICENSE" "$STAGE/LICENSES/HONO-LICENSE"
+  cp "$ROOT/licenses/HTMX-LICENSE" "$STAGE/LICENSES/HTMX-LICENSE"
 
   COPYFILE_DISABLE=1 tar -C "$STAGE" -czf \
     "$OUT/dumbgit-darwin-$ARCH.tar.gz" \

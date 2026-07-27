@@ -85,6 +85,8 @@ test('Workspace owns repository activation and repository routing', async () => 
     const workspacePage = await workspace.text()
     expect(workspacePage).toContain('<title>dumbgit</title>')
     expect(workspacePage).toContain('<h1>dumbgit</h1>')
+    expect(workspacePage).toContain('var htmx=function()')
+    expect(workspacePage).not.toContain('unpkg.com')
     expect(workspacePage).toContain('1 repository · 1 active')
     expect(workspacePage).toContain(`data-copy="${repo}"`)
     expect(workspacePage).toContain('copy repository path for example')

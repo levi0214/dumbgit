@@ -1,5 +1,6 @@
 /** @jsxImportSource hono/jsx */
 import { raw } from 'hono/html'
+import HTMX_SCRIPT from '../vendor/htmx-2.0.4.min.txt' with { type: 'text' }
 
 const CSS = `
 :root {
@@ -2489,10 +2490,7 @@ export function Layout(props: {
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <title>{props.title ?? 'dumbgit'}</title>
-        <script
-          src="https://unpkg.com/htmx.org@2.0.4/dist/htmx.min.js"
-          defer
-        ></script>
+        <script>{raw(HTMX_SCRIPT)}</script>
         <style>{raw(CSS)}</style>
       </head>
       <body
