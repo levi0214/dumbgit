@@ -4,31 +4,14 @@ A tiny local Git GUI for macOS.
 
 ## Install
 
-Requires macOS (Apple Silicon or Intel) and Git.
-
 ```bash
-curl --proto '=https' --tlsv1.2 -fsSL \
-  https://raw.githubusercontent.com/levi0214/dumbgit/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/levi0214/dumbgit/main/install.sh | sh
 ```
 
-The installer downloads a checksum-verified binary to `~/.local/bin`. If that
-is not on your `PATH`, it prints the command to add it. Re-run the installer to
-update dumbgit.
-
-Already have Bun? Install the small runtime bundle from npm instead:
+Or, if you already have Bun:
 
 ```bash
-bun add --global dumbgit
-# or: npm install --global dumbgit  # still requires Bun to run
-```
-
-To inspect the standalone installer before running it:
-
-```bash
-curl --proto '=https' --tlsv1.2 -fsSLO \
-  https://raw.githubusercontent.com/levi0214/dumbgit/main/install.sh
-less install.sh
-sh install.sh
+bun add -g dumbgit  # or: npm i -g dumbgit
 ```
 
 ## Run
