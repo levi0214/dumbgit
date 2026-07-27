@@ -63,6 +63,4 @@ jobs:
           --clobber
       - name: Publish npm package
         if: ${{ !github.event.release.prerelease }}
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: npm publish dist/npm/*.tgz --access public --provenance

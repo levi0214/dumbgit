@@ -18,9 +18,9 @@ tag by itself does not.
 
 ## One-time npm setup
 
-The `dumbgit` package name must belong to the maintainer's npm account. Add an
-npm automation token to the GitHub repository as the `NPM_TOKEN` Actions
-secret before publishing the first release.
+Publish the package once interactively, then configure npm Trusted Publishing
+for GitHub user `levi0214`, repository `dumbgit`, and workflow `release.yml`.
+The release workflow uses GitHub OIDC, so it needs no npm token.
 
 ## Publish a release
 
