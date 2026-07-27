@@ -47,16 +47,21 @@ trap cleanup EXIT HUP INT TERM
 download() {
   URL=$1
   DESTINATION=$2
-  if ! curl --proto '=https' --tlsv1.2 -fsSL --retry 3 \
-    -o "$DESTINATION" "$URL"; then
+  if [ "${3:-}" = progress ]; then
+    curl --proto '=https' --tlsv1.2 -fL --retry 3 --progress-bar \
+      -o "$DESTINATION" "$URL"
+  else
+    curl --proto '=https' --tlsv1.2 -fsSL --retry 3 \
+      -o "$DESTINATION" "$URL"
+  fi || {
     echo "dumbgit: could not download $URL" >&2
     exit 1
-  fi
+  }
 }
 
 echo "Downloading dumbgit $VERSION_LABEL for macOS $ARCH..."
 download "$RELEASE_URL/checksums.txt" "$TMP/checksums.txt"
-download "$RELEASE_URL/$ASSET" "$TMP/$ASSET"
+download "$RELEASE_URL/$ASSET" "$TMP/$ASSET" progress
 
 EXPECTED=$(awk -v asset="$ASSET" '$2 == asset { print $1; exit }' "$TMP/checksums.txt")
 if [ -z "$EXPECTED" ]; then
@@ -82,15 +87,17 @@ install -m 755 "$TMP/unpack/dg" "$CANDIDATE"
 mv -f "$CANDIDATE" "$INSTALL_DIR/dg"
 CANDIDATE=
 
-printf 'Installed %s to %s\n' "$("$INSTALL_DIR/dg" --version)" "$INSTALL_DIR/dg"
+INSTALLED_VERSION=$("$INSTALL_DIR/dg" --version)
+printf '\n✓ dumbgit %s is ready\n' "${INSTALLED_VERSION#dg }"
 case ":$PATH:" in
   *:"$INSTALL_DIR":*) ;;
   *)
-    printf '\nAdd dumbgit to your PATH:\n'
+    printf '\n  First add it to your PATH:\n'
     if [ "$INSTALL_DIR" = "$HOME/.local/bin" ]; then
-      printf '  export PATH="$HOME/.local/bin:$PATH"\n'
+      printf '    export PATH="$HOME/.local/bin:$PATH"\n'
     else
-      printf '  export PATH="%s:$PATH"\n' "$INSTALL_DIR"
+      printf '    export PATH="%s:$PATH"\n' "$INSTALL_DIR"
     fi
     ;;
 esac
+printf '\n  Run it in any Git repo:\n    dg\n'
