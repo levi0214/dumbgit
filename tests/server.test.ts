@@ -208,3 +208,81 @@ test('Workspace owns repository activation and repository routing', async () => 
     rmSync(root, { recursive: true, force: true })
   }
 })
+
+test('/api/pull is fast-forward only and surfaces errors', async () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), 'dumbgit-pull-'))
+  const repoDir = path.join(root, 'example')
+  const historyFile = path.join(root, 'repos.json')
+  const previousHistoryFile = process.env.DUMBGIT_HISTORY_FILE
+  let repo = repoDir
+  const post = (url: string, fields: Record<string, string> = {}) =>
+    request(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ repo, ...fields }).toString(),
+    })
+  try {
+    process.env.DUMBGIT_HISTORY_FILE = historyFile
+    git(root, ['init', '-b', 'main', repoDir])
+    repo = realpathSync(repoDir)
+    git(repo, ['config', 'user.email', 'server@example.test'])
+    git(repo, ['config', 'user.name', 'Server Test'])
+    writeFileSync(path.join(repo, 'a.txt'), 'a\n')
+    git(repo, ['add', 'a.txt'])
+    git(repo, ['commit', '-m', 'test: initialize'])
+    rememberRepo(repo)
+
+    const bare = path.join(root, 'remote.git')
+    git(root, ['init', '--bare', bare])
+    git(repo, ['remote', 'add', 'origin', bare])
+
+    // No upstream yet → clear refusal, working tree untouched.
+    const noUpstream = await post('/api/pull')
+    expect(noUpstream.status).toBe(200)
+    expect(await noUpstream.text()).toContain('no tracking information')
+
+    // Publish, advance the remote from a second clone, then pull it back.
+    git(repo, ['push', '-u', 'origin', 'main'])
+    const second = path.join(root, 'second')
+    git(root, ['clone', bare, second])
+    git(second, ['config', 'user.email', 'server@example.test'])
+    git(second, ['config', 'user.name', 'Server Test'])
+    writeFileSync(path.join(second, 'b.txt'), 'b\n')
+    git(second, ['add', 'b.txt'])
+    git(second, ['commit', '-m', 'feat: remote advance'])
+    git(second, ['push'])
+    const remoteHead = git(second, ['rev-parse', 'HEAD'])
+    expect(git(repo, ['rev-parse', 'HEAD'])).not.toBe(remoteHead)
+
+    const pulled = await post('/api/pull')
+    expect(pulled.status).toBe(200)
+    expect(await pulled.text()).toContain('class="graph-root"')
+    expect(git(repo, ['rev-parse', 'HEAD'])).toBe(remoteHead)
+
+    // Diverged: remote advances again, then a local commit forks the tip.
+    writeFileSync(path.join(second, 'd.txt'), 'd\n')
+    git(second, ['add', 'd.txt'])
+    git(second, ['commit', '-m', 'feat: second remote advance'])
+    git(second, ['push'])
+    const newRemoteHead = git(second, ['rev-parse', 'HEAD'])
+
+    writeFileSync(path.join(repo, 'c.txt'), 'c\n')
+    git(repo, ['add', 'c.txt'])
+    git(repo, ['commit', '-m', 'feat: local advance'])
+    const localHead = git(repo, ['rev-parse', 'HEAD'])
+    expect(localHead).not.toBe(newRemoteHead)
+
+    const diverged = await post('/api/pull')
+    expect(diverged.status).toBe(200)
+    expect(await diverged.text()).toContain('Not possible to fast-forward')
+    expect(git(repo, ['rev-parse', 'HEAD'])).toBe(localHead)
+  } finally {
+    await post('/workspace/repo/stop?limit=5')
+    if (previousHistoryFile === undefined) {
+      delete process.env.DUMBGIT_HISTORY_FILE
+    } else {
+      process.env.DUMBGIT_HISTORY_FILE = previousHistoryFile
+    }
+    rmSync(root, { recursive: true, force: true })
+  }
+})

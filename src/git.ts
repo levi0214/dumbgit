@@ -14,7 +14,7 @@ export class GitError extends Error {
 }
 
 export type HeadInfo =
-  | { kind: 'branch'; name: string; sha: string }
+  | { kind: 'branch'; name: string; sha: string; upstream?: string }
   | { kind: 'detached'; sha: string; previousBranch?: string }
 
 export function isCommitOid(value: string): boolean {
@@ -54,7 +54,7 @@ async function previousReflogBranch(cwd = repoRoot): Promise<string | undefined>
 /** Network ops (push/pull) can hang on auth prompts or unreachable remotes. */
 const NETWORK_GIT_TIMEOUT_MS = 45_000
 
-async function spawnGit(
+export async function spawnGit(
   args: string[],
   cwd: string = repoRoot,
   opts?: { timeoutMs?: number; name?: string },
@@ -63,26 +63,48 @@ async function spawnGit(
     stdout: 'pipe',
     stderr: 'pipe',
     cwd,
-    timeout: opts?.timeoutMs,
-    // Kills the whole git tree (incl. git-remote-https helpers), not just `git`.
-    killSignal: 'SIGKILL',
+    // Own process group: on timeout we kill the group, taking remote helpers
+    // (git-remote-https) with it — a bare kill only removes `git` itself.
+    detached: true,
     // GUI has no TTY — never block waiting for a password prompt.
     env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
   })
-  const [stdout, stderr, code] = await Promise.all([
-    new Response(proc.stdout).text(),
-    new Response(proc.stderr).text(),
-    proc.exited,
-  ])
-  if (proc.signalCode === 'SIGKILL') {
-    // Only our own timeout SIGKILLs git here — report it clearly.
-    return {
-      code,
-      stdout: '',
-      stderr: `git ${opts?.name ?? 'command'} timed out after ${Math.round((opts?.timeoutMs ?? 0) / 1000)}s`,
-    }
+
+  const collect = (async () => {
+    const [stdout, stderr, code] = await Promise.all([
+      new Response(proc.stdout).text(),
+      new Response(proc.stderr).text(),
+      proc.exited,
+    ])
+    return { code, stdout, stderr }
+  })()
+
+  if (opts?.timeoutMs == null) return collect
+
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const timeout = new Promise<{ code: number; stdout: string; stderr: string }>(
+    (resolve) => {
+      timer = setTimeout(() => {
+        // Negative pid = the whole process group (git + helpers).
+        try {
+          process.kill(-proc.pid, 'SIGKILL')
+        } catch {
+          /* already gone */
+        }
+        resolve({
+          code: 137,
+          stdout: '',
+          stderr: `git ${opts?.name ?? 'command'} timed out after ${Math.round((opts?.timeoutMs ?? 0) / 1000)}s`,
+        })
+      }, opts.timeoutMs)
+    },
+  )
+
+  try {
+    return await Promise.race([collect, timeout])
+  } finally {
+    if (timer) clearTimeout(timer)
   }
-  return { code, stdout, stderr }
 }
 
 /** Probe `dir` without changing the current repo. */
@@ -167,7 +189,13 @@ export async function headInfo(cwd = repoRoot): Promise<HeadInfo> {
   if (sym.code === 0) {
     const name = sym.stdout.trim()
     if (name) lastBranchByRepo.set(cwd, name)
-    return { kind: 'branch', name, sha }
+    // "main" has no upstream until push.autoSetupRemote publishes it first.
+    const up = await spawnGit(
+      ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}'],
+      cwd,
+    )
+    const upstream = up.code === 0 ? up.stdout.trim() || undefined : undefined
+    return { kind: 'branch', name, sha, upstream }
   }
   const previousBranch =
     lastBranchByRepo.get(cwd) ?? (await previousReflogBranch(cwd))

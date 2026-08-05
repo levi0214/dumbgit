@@ -93,6 +93,7 @@ describe('graphLaneLayout', () => {
         rows,
         detached: false,
         currentBranch: null,
+        currentUpstream: null,
         stashes: [],
         laneLayoutByRow: layout.rows,
         readonly: true,
@@ -116,6 +117,7 @@ describe('graphLaneLayout', () => {
         rows,
         detached: false,
         currentBranch: null,
+        currentUpstream: null,
         stashes: [
           {
             ref: 'stash@{0}',
@@ -149,6 +151,7 @@ describe('graphLaneLayout', () => {
         rows: [row],
         detached: false,
         currentBranch: 'feature/a-very-long-branch-name',
+        currentUpstream: null,
         stashes: [],
         laneLayoutByRow: layout.rows,
         readonly: true,
@@ -163,5 +166,34 @@ describe('graphLaneLayout', () => {
     expect(html).toContain('class="branch-prefix-name"')
     expect(html).toContain('data-commit-trigger="true"')
     expect(html).toContain('data-commit-ignore="true"')
+  })
+})
+
+describe('current branch action buttons', () => {
+  test('push always, pull only when an upstream exists', () => {
+    const row = commit('a', [])
+    if (row.kind !== 'commit') throw new Error('expected commit row')
+    row.row.decorateRaw = 'HEAD -> main, origin/main'
+    const layout = graphLaneLayout([row])
+
+    const render = (currentUpstream: string | null) =>
+      renderToString(
+        GraphRows({
+          rows: [row],
+          detached: false,
+          currentBranch: 'main',
+          currentUpstream,
+          stashes: [],
+          laneLayoutByRow: layout.rows,
+        }),
+      )
+
+    const withUpstream = render('origin/main')
+    expect(withUpstream).toContain('hx-post="/api/push"')
+    expect(withUpstream).toContain('hx-post="/api/pull"')
+
+    const withoutUpstream = render(null)
+    expect(withoutUpstream).toContain('hx-post="/api/push"')
+    expect(withoutUpstream).not.toContain('hx-post="/api/pull"')
   })
 })

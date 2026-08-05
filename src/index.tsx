@@ -777,6 +777,7 @@ app.get('/fragment/graph/tail', async (c) => {
         rows={rows.slice(rowOffset)}
         detached={head.kind === 'detached'}
         currentBranch={head.kind === 'branch' ? head.name : null}
+        currentUpstream={head.kind === 'branch' ? head.upstream ?? null : null}
         stashes={previewStash.stashes}
         laneLayoutByRow={laneLayout.rows.slice(rowOffset)}
         offset={rows.length}

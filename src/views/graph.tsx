@@ -452,6 +452,7 @@ function RefPills(props: {
   decorateRaw: string
   branchPrefix: string | null
   currentBranch: string | null
+  currentUpstream: string | null
   laneColor: string
   readonly?: boolean
 }) {
@@ -490,20 +491,7 @@ function RefPills(props: {
             ) : null}
             <CopyButton title="copy name" />
             {props.readonly ? null : ref === props.currentBranch ? (
-              peer ? (
-                <button
-                  type="button"
-                  class="inline-action-btn ref-action-btn"
-                  title="Pull current branch · git pull --ff-only"
-                  data-confirm-label="confirm pull"
-                  data-confirm-busy-label="pulling…"
-                  hx-post="/api/pull"
-                  hx-target="#graph"
-                  hx-swap="outerHTML"
-                >
-                  pull
-                </button>
-              ) : (
+              <>
                 <button
                   type="button"
                   class="inline-action-btn ref-action-btn"
@@ -516,7 +504,21 @@ function RefPills(props: {
                 >
                   push
                 </button>
-              )
+                {props.currentUpstream ? (
+                  <button
+                    type="button"
+                    class="inline-action-btn ref-action-btn"
+                    title="Pull current branch · git pull --ff-only"
+                    data-confirm-label="confirm pull"
+                    data-confirm-busy-label="pulling…"
+                    hx-post="/api/pull"
+                    hx-target="#graph"
+                    hx-swap="outerHTML"
+                  >
+                    pull
+                  </button>
+                ) : null}
+              </>
             ) : (
               <button
                 type="button"
@@ -558,6 +560,7 @@ function GraphCommitLine(props: {
   row: GraphCommitRow
   detached: boolean
   currentBranch: string | null
+  currentUpstream: string | null
   laneLayout: GraphLaneLayoutRow
   readonly?: boolean
   diffUrl?: string
@@ -627,20 +630,7 @@ function GraphCommitLine(props: {
           ) : null}
           <CopyButton title="copy name" />
           {props.readonly ? null : branchPrefix === props.currentBranch ? (
-            branchPrefixPeer ? (
-              <button
-                type="button"
-                class="inline-action-btn branch-prefix-action"
-                title="Pull current branch · git pull --ff-only"
-                data-confirm-label="confirm pull"
-                data-confirm-busy-label="pulling…"
-                hx-post="/api/pull"
-                hx-target="#graph"
-                hx-swap="outerHTML"
-              >
-                pull
-              </button>
-            ) : (
+            <>
               <button
                 type="button"
                 class="inline-action-btn branch-prefix-action"
@@ -653,7 +643,21 @@ function GraphCommitLine(props: {
               >
                 push
               </button>
-            )
+              {props.currentUpstream ? (
+                <button
+                  type="button"
+                  class="inline-action-btn branch-prefix-action"
+                  title="Pull current branch · git pull --ff-only"
+                  data-confirm-label="confirm pull"
+                  data-confirm-busy-label="pulling…"
+                  hx-post="/api/pull"
+                  hx-target="#graph"
+                  hx-swap="outerHTML"
+                >
+                  pull
+                </button>
+              ) : null}
+            </>
           ) : (
             <button
               type="button"
@@ -672,6 +676,7 @@ function GraphCommitLine(props: {
         decorateRaw={decorateRaw}
         branchPrefix={branchPrefix}
         currentBranch={props.currentBranch}
+        currentUpstream={props.currentUpstream}
         laneColor={laneColor}
         readonly={props.readonly}
       />
@@ -891,6 +896,7 @@ export function GraphRows(props: {
   rows: GraphRow[]
   detached: boolean
   currentBranch: string | null
+  currentUpstream: string | null
   stashes: PreviewStashEntry[]
   laneLayoutByRow: GraphLaneLayoutRow[]
   readonly?: boolean
@@ -925,6 +931,7 @@ export function GraphRows(props: {
               row={r.row}
               detached={props.detached}
               currentBranch={props.currentBranch}
+              currentUpstream={props.currentUpstream}
               laneLayout={laneLayout}
               readonly={props.readonly}
               workspaceRepoPath={props.workspaceRepoPath}
@@ -963,6 +970,7 @@ export function GraphTailFragment(props: {
   rows: GraphRow[]
   detached: boolean
   currentBranch: string | null
+  currentUpstream: string | null
   stashes: PreviewStashEntry[]
   laneLayoutByRow: GraphLaneLayoutRow[]
   offset: number
@@ -975,6 +983,7 @@ export function GraphTailFragment(props: {
         rows={props.rows}
         detached={props.detached}
         currentBranch={props.currentBranch}
+        currentUpstream={props.currentUpstream}
         stashes={props.stashes}
         laneLayoutByRow={props.laneLayoutByRow}
       />
@@ -1009,6 +1018,7 @@ export function GraphFragment(props: GraphFragmentProps) {
   const { head, rows, worktree } = props
   const detached = head.kind === 'detached'
   const currentBranch = head.kind === 'branch' ? head.name : null
+  const currentUpstream = head.kind === 'branch' ? head.upstream ?? null : null
   const laneLayout = graphLaneLayout(rows)
 
   return (
@@ -1055,6 +1065,7 @@ export function GraphFragment(props: GraphFragmentProps) {
               rows={rows}
               detached={detached}
               currentBranch={currentBranch}
+              currentUpstream={currentUpstream}
               stashes={props.previewStash.stashes}
               laneLayoutByRow={laneLayout.rows}
               offset={rows.length}

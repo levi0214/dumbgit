@@ -326,6 +326,9 @@ function WorkspaceRepoCard(props: {
               currentBranch={
                 repo.head.kind === 'branch' ? repo.head.name : null
               }
+              currentUpstream={
+                repo.head.kind === 'branch' ? repo.head.upstream ?? null : null
+              }
               stashes={[]}
               laneLayoutByRow={laneLayout.rows}
               readonly
