@@ -11,6 +11,11 @@ import path from 'node:path'
 import { rememberRepo } from '../src/history'
 import { app as honoApp } from '../src/index'
 
+// Error-message assertions below expect git's English wording; the server's
+// own git spawns inherit this locale too, so tests pass on any host locale.
+process.env.LANG = 'C'
+process.env.LC_ALL = 'C'
+
 const LOCAL_ORIGIN = 'http://127.0.0.1:7777'
 function request(input: string, init: RequestInit = {}) {
   const method = (init.method ?? 'GET').toUpperCase()
@@ -233,7 +238,10 @@ test('/api/pull is fast-forward only and surfaces errors', async () => {
     rememberRepo(repo)
 
     const bare = path.join(root, 'remote.git')
-    git(root, ['init', '--bare', bare])
+    // Explicit default branch: upstream git defaults a bare repo's HEAD to
+    // master, while Apple's git defaults to main — the clone/push flow below
+    // must not depend on the environment.
+    git(root, ['init', '--bare', '-b', 'main', bare])
     git(repo, ['remote', 'add', 'origin', bare])
 
     // No upstream yet → clear refusal, working tree untouched.
