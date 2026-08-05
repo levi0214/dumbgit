@@ -51,18 +51,37 @@ async function previousReflogBranch(cwd = repoRoot): Promise<string | undefined>
   return name && name !== 'HEAD' && !name.includes('@') ? name : undefined
 }
 
+/** Network ops (push/pull) can hang on auth prompts or unreachable remotes. */
+const NETWORK_GIT_TIMEOUT_MS = 45_000
+
 async function spawnGit(
   args: string[],
   cwd: string = repoRoot,
+  opts?: { timeoutMs?: number; name?: string },
 ): Promise<{ code: number; stdout: string; stderr: string }> {
   const proc = Bun.spawn(['git', ...args], {
     stdout: 'pipe',
     stderr: 'pipe',
     cwd,
+    timeout: opts?.timeoutMs,
+    // Kills the whole git tree (incl. git-remote-https helpers), not just `git`.
+    killSignal: 'SIGKILL',
+    // GUI has no TTY — never block waiting for a password prompt.
+    env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
   })
-  const stdout = await new Response(proc.stdout).text()
-  const stderr = await new Response(proc.stderr).text()
-  const code = await proc.exited
+  const [stdout, stderr, code] = await Promise.all([
+    new Response(proc.stdout).text(),
+    new Response(proc.stderr).text(),
+    proc.exited,
+  ])
+  if (proc.signalCode === 'SIGKILL') {
+    // Only our own timeout SIGKILLs git here — report it clearly.
+    return {
+      code,
+      stdout: '',
+      stderr: `git ${opts?.name ?? 'command'} timed out after ${Math.round((opts?.timeoutMs ?? 0) / 1000)}s`,
+    }
+  }
   return { code, stdout, stderr }
 }
 
@@ -563,9 +582,25 @@ export async function push(cwd = repoRoot): Promise<
   { ok: true } | { ok: false; stderr: string }
 > {
   // Auto set upstream on first push of a branch; no-op when upstream exists.
-  const { code, stdout, stderr } = await spawnGit(['-c', 'push.autoSetupRemote=true', 'push'], cwd)
+  const { code, stdout, stderr } = await spawnGit(
+    ['-c', 'push.autoSetupRemote=true', 'push'],
+    cwd,
+    { timeoutMs: NETWORK_GIT_TIMEOUT_MS, name: 'push' },
+  )
   if (code === 0) return { ok: true }
   return { ok: false, stderr: stderr.trim() || stdout.trim() || `git push failed (${code})` }
+}
+
+/** Fast-forward only — refuse merge/rebase so conflicts stay out of scope. */
+export async function pull(cwd = repoRoot): Promise<
+  { ok: true } | { ok: false; stderr: string }
+> {
+  const { code, stdout, stderr } = await spawnGit(['pull', '--ff-only'], cwd, {
+    timeoutMs: NETWORK_GIT_TIMEOUT_MS,
+    name: 'pull',
+  })
+  if (code === 0) return { ok: true }
+  return { ok: false, stderr: stderr.trim() || stdout.trim() || `git pull failed (${code})` }
 }
 
 /** Absolute path to the .git directory for a repository. */

@@ -490,7 +490,20 @@ function RefPills(props: {
             ) : null}
             <CopyButton title="copy name" />
             {props.readonly ? null : ref === props.currentBranch ? (
-              peer ? null : (
+              peer ? (
+                <button
+                  type="button"
+                  class="inline-action-btn ref-action-btn"
+                  title="Pull current branch · git pull --ff-only"
+                  data-confirm-label="confirm pull"
+                  data-confirm-busy-label="pulling…"
+                  hx-post="/api/pull"
+                  hx-target="#graph"
+                  hx-swap="outerHTML"
+                >
+                  pull
+                </button>
+              ) : (
                 <button
                   type="button"
                   class="inline-action-btn ref-action-btn"
@@ -614,7 +627,20 @@ function GraphCommitLine(props: {
           ) : null}
           <CopyButton title="copy name" />
           {props.readonly ? null : branchPrefix === props.currentBranch ? (
-            branchPrefixPeer ? null : (
+            branchPrefixPeer ? (
+              <button
+                type="button"
+                class="inline-action-btn branch-prefix-action"
+                title="Pull current branch · git pull --ff-only"
+                data-confirm-label="confirm pull"
+                data-confirm-busy-label="pulling…"
+                hx-post="/api/pull"
+                hx-target="#graph"
+                hx-swap="outerHTML"
+              >
+                pull
+              </button>
+            ) : (
               <button
                 type="button"
                 class="inline-action-btn branch-prefix-action"

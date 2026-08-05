@@ -42,7 +42,7 @@ graph itself. That is how dumbgit became what it is today.
 - Shows all your repos in one page.
 - Shows branches, remotes, tags, stashes, commits, and local edits.
 - Opens diffs and stages, unstages, or discards changes.
-- Switches and creates branches, checks out commits, and pushes.
+- Switches and creates branches, checks out commits, and pushes or pulls (fast-forward only).
 - Saves local edits aside and restores them later.
 - Refreshes on its own when things change.
 

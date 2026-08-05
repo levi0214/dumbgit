@@ -17,6 +17,7 @@ import {
   headInfo,
   logGraphRows,
   previewStashUiState,
+  pull,
   push,
   restorePreviewStash,
   stashFilePatch,
@@ -1106,6 +1107,19 @@ app.post('/api/branch/create', async (c) => {
 app.post('/api/push', async (c) => {
   const repoPath = c.get('repoPath')
   const r = await push(repoPath)
+  const next = await loadGraph(repoPath)
+  return c.html(
+    <Fragment>
+      <GraphFragment {...next} />
+      <StatusOob error={r.ok ? undefined : r.stderr} />
+    </Fragment>,
+    200,
+  )
+})
+
+app.post('/api/pull', async (c) => {
+  const repoPath = c.get('repoPath')
+  const r = await pull(repoPath)
   const next = await loadGraph(repoPath)
   return c.html(
     <Fragment>
