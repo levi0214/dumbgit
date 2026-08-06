@@ -1051,7 +1051,8 @@ body.main-grid-dragging {
   min-width: 0;
   padding-left: 8px;
   white-space: pre-wrap;
-  overflow-wrap: anywhere;
+  /* wrap at spaces; only break inside a token when it alone exceeds the line, so word-diff chips stay whole */
+  overflow-wrap: break-word;
 }
 .diff-row-ctx .diff-ln-text {
   color: #808080;
