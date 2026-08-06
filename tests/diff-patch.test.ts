@@ -149,4 +149,25 @@ describe('DiffPatchBody render', () => {
     const html = renderToString(DiffPatchBody({ text: '  \n' }))
     expect(html).toContain('diff-patch-empty')
   })
+
+  test('renders a jump bar for multi-hunk patches and ids hunk rows', () => {
+    const multiHunk = [
+      '@@ -1,4 +1,4 @@',
+      ' one',
+      '-two',
+      '+three',
+      '@@ -20,3 +21,3 @@ ctx',
+      ' four',
+      '-five',
+      '+six',
+    ].join('\n')
+    const html = renderToString(DiffPatchBody({ text: multiHunk }))
+    expect(html).toContain('class="diff-hunk-nav"')
+    expect(html).toContain('data-hunk="0"')
+    expect(html).toContain('data-hunk="1"')
+    expect(html).toContain('id="diff-hunk-0"')
+    expect(html).toContain('id="diff-hunk-1"')
+    expect(html).toContain('-1,4 +1,4')
+    expect(html).toContain('-20,3 +21,3')
+  })
 })

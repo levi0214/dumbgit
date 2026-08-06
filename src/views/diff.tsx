@@ -25,7 +25,7 @@ export type DiffPanelProps =
   | { state: 'error'; sha: string; stderr: string }
 
 export type DiffRow =
-  | { kind: 'hunk'; range: string; text: string; first: boolean }
+  | { kind: 'hunk'; range: string; text: string; first: boolean; n: number }
   | { kind: 'meta'; text: string }
   | {
       kind: 'ctx'
@@ -160,6 +160,7 @@ export function parseDiff(text: string): DiffRow[] {
         range,
         text: replaceTabs(m?.[5]?.trim() ?? ''),
         first: hunks === 0,
+        n: hunks,
       })
       hunks++
       continue
@@ -190,7 +191,10 @@ export function parseDiff(text: string): DiffRow[] {
 function DiffRowView({ row }: { row: DiffRow }) {
   if (row.kind === 'hunk') {
     return (
-      <div class={`diff-row diff-row-hunk${row.first ? ' diff-hunk-first' : ''}`}>
+      <div
+        class={`diff-row diff-row-hunk${row.first ? ' diff-hunk-first' : ''}`}
+        id={`diff-hunk-${row.n}`}
+      >
         <span class="diff-ln diff-ln-old" />
         <span class="diff-ln diff-ln-new" />
         <span class="diff-ln-text">
@@ -348,8 +352,25 @@ export function DiffPatchBody(props: { text: string }) {
   if (rows.length === 0) {
     return <pre class="diff-body diff-patch-empty">(no diff)</pre>
   }
+  const hunks = rows.filter(
+    (r): r is Extract<DiffRow, { kind: 'hunk' }> => r.kind === 'hunk',
+  )
   return (
     <div class="diff-body diff-patch-pre">
+      {hunks.length > 1 ? (
+        <div class="diff-hunk-nav" aria-label="jump to hunk">
+          {hunks.map((h) => (
+            <button
+              type="button"
+              class="diff-hunk-jump"
+              data-hunk={h.n}
+              title={`@@ ${h.range} @@${h.text ? ` ${h.text}` : ''}`}
+            >
+              {h.range}
+            </button>
+          ))}
+        </div>
+      ) : null}
       {rows.map((row, i) => (
         <DiffRowView key={i} row={row} />
       ))}

@@ -1087,6 +1087,34 @@ body.main-grid-dragging {
   padding-top: 0;
   border-top: none;
 }
+.diff-hunk-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 2px 0 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  margin-bottom: 4px;
+}
+.diff-hunk-jump {
+  font: inherit;
+  font-size: 10px;
+  color: var(--muted);
+  background: #2d2d2d;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px 7px;
+  cursor: pointer;
+  font-variant-numeric: tabular-nums;
+}
+.diff-hunk-jump:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: rgba(86, 156, 214, 0.12);
+}
+.diff-hunk-jump:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 1px;
+}
 .diff-hunk-range {
   color: var(--muted);
   font-style: italic;
@@ -2502,6 +2530,21 @@ const WORKSPACE_REORDER_SCRIPT = `
     });
   });
 })();
+` +
+  `
+document.addEventListener('click', function (e) {
+  var btn = e.target && e.target.closest && e.target.closest('.diff-hunk-jump');
+  if (!btn) return;
+  e.preventDefault();
+  var row = document.getElementById('diff-hunk-' + (btn.dataset && btn.dataset.hunk));
+  if (!row) return;
+  var reduceMotion = window.matchMedia &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  row.scrollIntoView({
+    behavior: reduceMotion ? 'auto' : 'smooth',
+    block: 'start',
+  });
+});
 `
 
 export function Layout(props: {
