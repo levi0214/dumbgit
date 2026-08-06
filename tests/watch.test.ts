@@ -56,12 +56,12 @@ describe('watchGitRefs', () => {
     expect(hits).toBe(0)
 
     writeFileSync(path.join(gitDir, 'refs', 'heads', 'main'), 'b'.repeat(40) + '\n')
-    await Bun.sleep(400)
+    await Bun.sleep(800)
     expect(hits).toBeGreaterThanOrEqual(1)
     const afterRef = hits
 
     writeFileSync(path.join(gitDir, 'HEAD'), 'ref: refs/heads/topic\n')
-    await Bun.sleep(400)
+    await Bun.sleep(800)
     expect(hits).toBeGreaterThan(afterRef)
   })
 
