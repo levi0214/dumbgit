@@ -645,5 +645,5 @@ export function WorkspacePatch(props: { patch: string }) {
   if (!props.patch.trim()) {
     return <pre class="diff-body diff-patch-empty">(no diff)</pre>
   }
-  return <DiffPatchBody text={props.patch} compact />
+  return <DiffPatchBody text={props.patch} />
 }

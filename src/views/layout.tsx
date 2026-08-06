@@ -1034,18 +1034,69 @@ body.main-grid-dragging {
   white-space: nowrap;
   min-width: 0;
 }
-.diff-hunk-compact {
-  color: var(--muted);
-  font-weight: 400;
-  font-style: italic;
+.diff-row {
+  display: grid;
+  grid-template-columns: calc(4ch + 8px) calc(4ch + 8px) minmax(0, 1fr);
+  align-items: baseline;
+}
+.diff-ln {
+  overflow: hidden;
+  text-align: right;
+  padding-right: 8px;
+  color: #6b6b6b;
+  font-size: 10px;
+  user-select: none;
+}
+.diff-ln-text {
+  min-width: 0;
+  padding-left: 8px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.diff-row-ctx .diff-ln-text {
+  color: #808080;
+}
+.diff-row-add {
+  color: #b5bd68;
+}
+.diff-row-add .diff-ln-new {
+  color: #b5bd68;
+}
+.diff-row-del {
+  color: #cc6666;
+}
+.diff-row-del .diff-ln-old {
+  color: #cc6666;
+}
+/* Changed words render as an "inverse" chip: solid line-color background with dark text (mirrors pi's terminal diff). */
+.diff-row-add .diff-word-chg {
+  background: #b5bd68;
+  color: #1e1e1e;
+}
+.diff-row-del .diff-word-chg {
+  background: #cc6666;
+  color: #1e1e1e;
+}
+.diff-row-hunk {
   margin-top: 12px;
   padding-top: 8px;
   border-top: 1px dashed rgba(255, 255, 255, 0.1);
 }
-.diff-hunk-compact.diff-hunk-first {
+.diff-row-hunk.diff-hunk-first {
   margin-top: 0;
   padding-top: 0;
   border-top: none;
+}
+.diff-hunk-range {
+  color: var(--muted);
+  font-style: italic;
+}
+.diff-hunk-ctx {
+  color: var(--accent);
+  font-weight: 600;
+}
+.diff-row-meta {
+  color: var(--muted);
 }
 .diff-files-block {
   border-bottom: 1px solid var(--border);
@@ -1114,7 +1165,7 @@ body.main-grid-dragging {
 }
 .diff-patch-pre {
   margin: 0 !important;
-  padding: 10px 0 0 !important;
+  padding: 0 !important;
   flex: 0 0 auto;
   min-height: 0;
   overflow: visible !important;
@@ -1197,32 +1248,6 @@ body.main-grid-dragging {
   font-size: 12px;
   flex: 0 0 auto;
   min-height: 0;
-}
-.diff-add {
-  display: block;
-  color: #89d185;
-  background: rgba(106, 153, 85, 0.12);
-  border-left: 2px solid #89d185;
-  padding-left: 6px;
-}
-.diff-del {
-  display: block;
-  color: #f48771;
-  background: rgba(244, 135, 113, 0.1);
-  border-left: 2px solid #f48771;
-  padding-left: 6px;
-}
-.diff-hunk {
-  display: block;
-  color: var(--accent);
-  font-weight: 600;
-}
-.diff-meta-line {
-  display: block;
-  color: var(--muted);
-}
-.diff-ctx {
-  display: block;
 }
 
 .workspace-page {

@@ -24,18 +24,208 @@ export type DiffPanelProps =
     }
   | { state: 'error'; sha: string; stderr: string }
 
-function diffLineClass(line: string): string {
-  if (line.startsWith('+++ ') || line.startsWith('--- ')) return 'diff-meta-line'
-  if (line.startsWith('@@')) return 'diff-hunk'
-  if (line.startsWith('+')) return 'diff-add'
-  if (line.startsWith('-')) return 'diff-del'
-  return 'diff-ctx'
+export type DiffRow =
+  | { kind: 'hunk'; range: string; text: string; first: boolean }
+  | { kind: 'meta'; text: string }
+  | {
+      kind: 'ctx'
+      oldNo?: number
+      newNo?: number
+      text: string
+      /** Word-level split; `chg` marks the tokens that actually changed within this line (never set for ctx). */
+      word?: { t: string; chg: boolean }[]
+    }
+  | {
+      kind: 'add'
+      oldNo?: number
+      newNo?: number
+      text: string
+      /** Word-level split; `chg` marks the tokens that actually changed within this line. */
+      word?: { t: string; chg: boolean }[]
+    }
+  | {
+      kind: 'del'
+      oldNo?: number
+      newNo?: number
+      text: string
+      /** Word-level split; `chg` marks the tokens that actually changed within this line. */
+      word?: { t: string; chg: boolean }[]
+    }
+
+/** Unified-diff framing git emits around a single file's patch — redundant when the UI already shows the path. */
+const NOISE_RE =
+  /^(?:diff --git |index |(?:old|new|deleted) file mode |similarity index |dissimilarity index |rename (?:from|to) |copy (?:from|to) |--- |\+\+\+ |\\ No newline)/
+
+/** `@@ -A[,B] +C[,D] @@ ctx` → captures the old/new ranges and the hunk's section header. */
+const HUNK_RE = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@(?: (.*))?$/
+
+function tokenize(s: string): string[] {
+  return s.match(/[^\s]+|\s+/g) ?? []
 }
 
-function diffLineContent(line: string, cls: string): string {
-  if (cls === 'diff-add' || cls === 'diff-del') return line.slice(1)
-  if (cls === 'diff-ctx' && line.startsWith(' ')) return line.slice(1)
-  return line
+/** Render tabs as three spaces so column alignment survives display (pi does the same). */
+function replaceTabs(s: string): string {
+  return s.replace(/\t/g, '   ')
+}
+
+/** Word-level diff of two strings via LCS. Tokens matched on both sides are `same`; everything else is `chg`. */
+export function diffWords(a: string, b: string): {
+  a: { t: string; same: boolean }[]
+  b: { t: string; same: boolean }[]
+} {
+  const A = tokenize(a)
+  const B = tokenize(b)
+  const n = A.length
+  const m = B.length
+  const dp: number[][] = Array.from(
+    { length: n + 1 },
+    () => new Array<number>(m + 1).fill(0),
+  )
+  for (let i = n - 1; i >= 0; i--) {
+    for (let j = m - 1; j >= 0; j--) {
+      dp[i]![j] =
+        A[i] === B[j] ? dp[i + 1]![j + 1]! + 1 : Math.max(dp[i + 1]![j]!, dp[i]![j + 1]!)
+    }
+  }
+  const ra: { t: string; same: boolean }[] = []
+  const rb: { t: string; same: boolean }[] = []
+  let i = 0
+  let j = 0
+  while (i < n && j < m) {
+    if (A[i] === B[j]) {
+      ra.push({ t: A[i]!, same: true })
+      rb.push({ t: B[j]!, same: true })
+      i++
+      j++
+    } else if (dp[i + 1]![j]! >= dp[i]![j + 1]!) {
+      ra.push({ t: A[i]!, same: false })
+      i++
+    } else {
+      rb.push({ t: B[j]!, same: false })
+      j++
+    }
+  }
+  while (i < n) {
+    ra.push({ t: A[i]!, same: false })
+    i++
+  }
+  while (j < m) {
+    rb.push({ t: B[j]!, same: false })
+    j++
+  }
+  return { a: ra, b: rb }
+}
+
+/** Consecutive `-`/`+` runs inside a hunk. Only a clean 1:1 replacement gets a word-level diff (pi's rule) — pairing more than one line per side misaligns and reads as noise. */
+function annotateWordDiffs(rows: DiffRow[]): void {
+  let i = 0
+  while (i < rows.length) {
+    if (rows[i]!.kind !== 'del') {
+      i++
+      continue
+    }
+    const dels: Extract<DiffRow, { kind: 'del' }>[] = []
+    while (i < rows.length && rows[i]!.kind === 'del') {
+      dels.push(rows[i]! as Extract<DiffRow, { kind: 'del' }>)
+      i++
+    }
+    const adds: Extract<DiffRow, { kind: 'add' }>[] = []
+    while (i < rows.length && rows[i]!.kind === 'add') {
+      adds.push(rows[i]! as Extract<DiffRow, { kind: 'add' }>)
+      i++
+    }
+    if (dels.length !== 1 || adds.length !== 1) continue
+    const wd = diffWords(dels[0]!.text, adds[0]!.text)
+    dels[0]!.word = wd.a.map((t) => ({ t: t.t, chg: !t.same }))
+    adds[0]!.word = wd.b.map((t) => ({ t: t.t, chg: !t.same }))
+  }
+}
+
+/** Parse a unified diff into rows with old/new line numbers; del/add runs are paired for word-level highlighting. */
+export function parseDiff(text: string): DiffRow[] {
+  const rows: DiffRow[] = []
+  let oldNo: number | undefined
+  let newNo: number | undefined
+  let hunks = 0
+  for (const line of text.split('\n')) {
+    if (line.startsWith('@@')) {
+      const m = HUNK_RE.exec(line)
+      const range = m
+        ? `-${m[1]}${m[2] ? `,${m[2]}` : ''} +${m[3]}${m[4] ? `,${m[4]}` : ''}`
+        : ''
+      oldNo = m && m[1] !== '0' ? Number(m[1]) : undefined
+      newNo = m && m[3] !== '0' ? Number(m[3]) : undefined
+      rows.push({
+        kind: 'hunk',
+        range,
+        text: replaceTabs(m?.[5]?.trim() ?? ''),
+        first: hunks === 0,
+      })
+      hunks++
+      continue
+    }
+    if (NOISE_RE.test(line)) continue
+    const head = line[0]
+    if (head === ' ') {
+      rows.push({ kind: 'ctx', oldNo, newNo, text: replaceTabs(line.slice(1)) })
+      if (oldNo !== undefined) oldNo++
+      if (newNo !== undefined) newNo++
+    } else if (head === '-') {
+      rows.push({ kind: 'del', oldNo, newNo, text: replaceTabs(line.slice(1)) })
+      if (oldNo !== undefined) oldNo++
+    } else if (head === '+') {
+      rows.push({ kind: 'add', oldNo, newNo, text: replaceTabs(line.slice(1)) })
+      if (newNo !== undefined) newNo++
+    } else {
+      rows.push({ kind: 'meta', text: line })
+    }
+  }
+  const isBlank = (r: DiffRow) => r.text.trim() === '' && (r.kind === 'ctx' || r.kind === 'meta')
+  while (rows.length > 0 && isBlank(rows[0]!)) rows.shift()
+  while (rows.length > 0 && isBlank(rows[rows.length - 1]!)) rows.pop()
+  annotateWordDiffs(rows)
+  return rows
+}
+
+function DiffRowView({ row }: { row: DiffRow }) {
+  if (row.kind === 'hunk') {
+    return (
+      <div class={`diff-row diff-row-hunk${row.first ? ' diff-hunk-first' : ''}`}>
+        <span class="diff-ln diff-ln-old" />
+        <span class="diff-ln diff-ln-new" />
+        <span class="diff-ln-text">
+          {row.range ? <span class="diff-hunk-range">@@ {row.range} @@</span> : null}
+          {row.text ? <span class="diff-hunk-ctx"> {row.text}</span> : null}
+        </span>
+      </div>
+    )
+  }
+  if (row.kind === 'meta') {
+    return (
+      <div class="diff-row diff-row-meta">
+        <span class="diff-ln diff-ln-old" />
+        <span class="diff-ln diff-ln-new" />
+        <span class="diff-ln-text">{row.text}</span>
+      </div>
+    )
+  }
+  return (
+    <div class={`diff-row diff-row-${row.kind}`}>
+      <span class="diff-ln diff-ln-old">{row.kind === 'add' ? '' : (row.oldNo ?? '')}</span>
+      <span class="diff-ln diff-ln-new">{row.kind === 'del' ? '' : (row.newNo ?? '')}</span>
+      <span class="diff-ln-text">
+        {row.word
+          ? row.word.map((w, j) =>
+              w.chg && !/^\s+$/.test(w.t) ? (
+                <span key={j} class="diff-word-chg">{w.t}</span>
+              ) : (
+                w.t
+              ),
+            )
+          : row.text}
+      </span>
+    </div>
+  )
 }
 
 function FileNums(props: { file: CommitFile }) {
@@ -152,58 +342,18 @@ function DiffTag(props: { tag: TagInfo }) {
   )
 }
 
-/** Per-file boilerplate (`diff --git`, blob hashes, `---`/`+++`, no-newline marker) — useless when caller already shows the file path. */
-function isCompactNoiseLine(line: string): boolean {
-  return (
-    line.startsWith('diff --git ') ||
-    line.startsWith('index ') ||
-    line.startsWith('--- ') ||
-    line.startsWith('+++ ') ||
-    line.startsWith('\\ No newline')
-  )
-}
-
-/** Capture the section blurb after `@@ -X,Y +A,B @@ ` (function name / header) — the only useful bit of a hunk header. */
-const HUNK_RE = /^@@\s+-\d+(?:,\d+)?\s+\+\d+(?:,\d+)?\s+@@\s*(.*)$/
-function compactHunkContext(line: string): string {
-  const m = HUNK_RE.exec(line)
-  return m && m[1] ? m[1].trim() : ''
-}
-
-/** Unified diff body. `compact` strips patch framing and replaces hunk headers (`@@ … @@ ctx`) with just `ctx` (or omits them). */
-export function DiffPatchBody(props: { text: string; compact?: boolean }) {
-  let lines = props.text.split('\n')
-  if (props.compact) {
-    lines = lines.filter((l) => !isCompactNoiseLine(l))
-    while (lines.length > 0 && lines[0]!.trim() === '') lines.shift()
-    while (lines.length > 0 && lines[lines.length - 1]!.trim() === '') lines.pop()
+/** Unified diff body: line numbers plus word-level highlights on changed lines. */
+export function DiffPatchBody(props: { text: string }) {
+  const rows = parseDiff(props.text)
+  if (rows.length === 0) {
+    return <pre class="diff-body diff-patch-empty">(no diff)</pre>
   }
-  let hunksSeen = 0
   return (
-    <pre class="diff-body diff-patch-pre">
-      {lines.map((line, i) => {
-        if (props.compact && line.startsWith('@@')) {
-          const ctx = compactHunkContext(line)
-          const isFirst = hunksSeen === 0
-          hunksSeen++
-          if (isFirst && !ctx) return null
-          const cls = `diff-hunk diff-hunk-compact${isFirst ? ' diff-hunk-first' : ''}`
-          return (
-            <span key={i} class={cls}>
-              {ctx}
-              {'\n'}
-            </span>
-          )
-        }
-        const cls = diffLineClass(line)
-        return (
-          <span key={i} class={cls}>
-            {diffLineContent(line, cls)}
-            {'\n'}
-          </span>
-        )
-      })}
-    </pre>
+    <div class="diff-body diff-patch-pre">
+      {rows.map((row, i) => (
+        <DiffRowView key={i} row={row} />
+      ))}
+    </div>
   )
 }
 
@@ -288,7 +438,7 @@ export function WorkTreeDiffPanel(props: WorkTreeDiffPanelProps) {
       </div>
       <div id="diff-patch-slot" class="diff-patch-slot diff-patch-slot-inline">
         {patch ? (
-          <DiffPatchBody text={props.patch} compact />
+          <DiffPatchBody text={props.patch} />
         ) : (
           <pre class="diff-body diff-patch-empty">(no diff)</pre>
         )}
