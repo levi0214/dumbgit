@@ -63,6 +63,13 @@ function tokenize(s: string): string[] {
   return s.match(/[^\s]+|\s+/g) ?? []
 }
 
+/**
+ * Above this many tokens per line, word-level LCS (O(n·m)) can stall on
+ * minified or embedded-data lines; the pair then renders plain line colors.
+ * Hand-written lines are typically 5–50 tokens.
+ */
+const WORD_DIFF_MAX_TOKENS = 500
+
 /** Render tabs as three spaces so column alignment survives display (pi does the same). */
 function replaceTabs(s: string): string {
   return s.replace(/\t/g, '   ')
@@ -135,6 +142,12 @@ function annotateWordDiffs(rows: DiffRow[]): void {
       i++
     }
     if (dels.length !== 1 || adds.length !== 1) continue
+    if (
+      tokenize(dels[0]!.text).length > WORD_DIFF_MAX_TOKENS ||
+      tokenize(adds[0]!.text).length > WORD_DIFF_MAX_TOKENS
+    ) {
+      continue
+    }
     const wd = diffWords(dels[0]!.text, adds[0]!.text)
     dels[0]!.word = wd.a.map((t) => ({ t: t.t, chg: !t.same }))
     adds[0]!.word = wd.b.map((t) => ({ t: t.t, chg: !t.same }))

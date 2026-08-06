@@ -91,6 +91,22 @@ describe('parseDiff', () => {
     expect(add?.word).toBeUndefined()
   })
 
+  test('skips word diff for oversized single lines (minified/embedded data)', () => {
+    const big = Array.from({ length: 600 }, (_, i) => `w${i}`).join(' ')
+    const raw = `@@ -1 +1 @@\n-${big}\n+${big} x`
+    const rows = parseDiff(raw)
+    const del = rows.find(
+      (r): r is Extract<DiffRow, { kind: 'del' }> => r.kind === 'del',
+    )
+    const add = rows.find(
+      (r): r is Extract<DiffRow, { kind: 'add' }> => r.kind === 'add',
+    )
+    expect(del?.word).toBeUndefined()
+    expect(add?.word).toBeUndefined()
+    const html = renderToString(DiffPatchBody({ text: raw }))
+    expect(html).not.toContain('diff-word-chg')
+  })
+
   test('renders tabs as three spaces', () => {
     const rows = parseDiff('@@ -1 +1 @@\n-\tfoo\n+\tbar')
     expect(rows[1]?.kind === 'del' && rows[1]?.text).toBe('   foo')
