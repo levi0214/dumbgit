@@ -81,6 +81,30 @@ describe('graphLaneLayout', () => {
     )
   })
 
+  test('keeps the earliest tip color along its first-parent ancestry', () => {
+    // The side branch reaches c before the main path reaches a. A streaming
+    // allocator would let that pending path recolor c and everything below it.
+    const rows = [
+      commit('h', ['a']),
+      commit('x', ['b']),
+      commit('b', ['c']),
+      commit('a', ['c']),
+      commit('c', ['d']),
+      commit('d', []),
+    ]
+
+    const layout = graphLaneLayout(rows)
+
+    expect(layout.rows.map((row) => row.nodeColor)).toEqual([0, 1, 1, 0, 0, 0])
+    expect([0, 3, 4, 5].map((index) => layout.rows[index]!.nodeColor)).toEqual([
+      0, 0, 0, 0,
+    ])
+    expect(layout.rows[4]!.incoming).toEqual([
+      { lane: 0, color: 0 },
+      { lane: 1, color: 1 },
+    ])
+  })
+
   test('compacts surviving lanes left when an earlier path ends', () => {
     const rows = [
       commit('a', ['b']),

@@ -236,6 +236,68 @@ type PendingLane = {
   color: number
 }
 
+type SemanticBranches = {
+  colorByRow: number[]
+  colorBySha: Map<string, number>
+  nextColor: number
+}
+
+/**
+ * Assign immutable colors to semantic first-parent branches before choosing
+ * their screen columns. The earliest visible tip owns its ancestry; later
+ * branches stop when they reach a commit that already belongs to a branch.
+ *
+ * This mirrors Git Graph's Branch/Vertex model: moving a path left does not
+ * change its identity, and a side branch joins the established main branch
+ * rather than donating its color to it.
+ */
+function semanticBranches(rows: GraphRow[]): SemanticBranches {
+  const rowBySha = new Map<string, number>()
+  rows.forEach((item, index) => {
+    rowBySha.set(item.row.shaFull.toLowerCase(), index)
+  })
+
+  const colorByRow = Array<number>(rows.length).fill(-1)
+  const availableAfter: number[] = []
+
+  for (let start = 0; start < rows.length; start++) {
+    if (colorByRow[start] !== -1) continue
+
+    let color = availableAfter.findIndex((end) => start > end)
+    if (color === -1) {
+      color = availableAfter.length
+      availableAfter.push(-1)
+    }
+
+    let current = start
+    let end = start
+    while (colorByRow[current] === -1) {
+      colorByRow[current] = color
+      const firstParent = rows[current]!.row.parents[0]?.toLowerCase()
+      if (!firstParent) break
+
+      const parentRow = rowBySha.get(firstParent)
+      if (parentRow === undefined) {
+        // The branch continues beyond the loaded window, so its color cannot
+        // safely be reused by another visible branch.
+        end = rows.length
+        break
+      }
+
+      end = Math.max(end, parentRow)
+      if (parentRow <= current || colorByRow[parentRow] !== -1) break
+      current = parentRow
+    }
+    availableAfter[color] = end
+  }
+
+  const colorBySha = new Map<string, number>()
+  rows.forEach((item, index) => {
+    colorBySha.set(item.row.shaFull.toLowerCase(), colorByRow[index]!)
+  })
+  return { colorByRow, colorBySha, nextColor: availableAfter.length }
+}
+
 function firstFreeLane<T>(lanes: Array<T | null>, after = -1): number {
   for (let i = after + 1; i < lanes.length; i++) {
     if (lanes[i] === null) return i
@@ -254,20 +316,24 @@ function firstFreeLane<T>(lanes: Array<T | null>, after = -1): number {
 export function graphLaneLayout(rows: GraphRow[]): GraphLaneLayout {
   let lanes: Array<PendingLane | null> = []
   const layoutRows: GraphLaneLayoutRow[] = []
-  let nextColor = 0
+  const branches = semanticBranches(rows)
+  const boundaryColors = new Map<string, number>()
+  let nextColor = branches.nextColor
 
-  for (const item of rows) {
+  for (const [rowIndex, item] of rows.entries()) {
     const sha = item.row.shaFull.toLowerCase()
+    const nodeColor = branches.colorByRow[rowIndex]!
     const topLanes = [...lanes]
     const incomingIndexes: number[] = []
     for (let lane = 0; lane < topLanes.length; lane++) {
       if (topLanes[lane]?.target === sha) incomingIndexes.push(lane)
     }
 
-    const lane = incomingIndexes[0] ?? firstFreeLane(lanes)
-    const nodeColor = incomingIndexes.length > 0
-      ? topLanes[lane]!.color
-      : nextColor++
+    // Keep the vertex on its semantic branch when several paths converge.
+    const primaryIncoming = incomingIndexes.find(
+      (incomingLane) => topLanes[incomingLane]!.color === nodeColor,
+    )
+    const lane = primaryIncoming ?? incomingIndexes[0] ?? firstFreeLane(lanes)
     const incoming = incomingIndexes.map((incomingLane) => ({
       lane: incomingLane,
       color: topLanes[incomingLane]!.color,
@@ -279,7 +345,25 @@ export function graphLaneLayout(rows: GraphRow[]): GraphLaneLayout {
     const outgoingPaths: Array<{ path: PendingLane; color: number }> = []
     const parents = item.row.parents.map((parent) => parent.toLowerCase())
     for (const [parentIndex, parent] of parents.entries()) {
-      const pendingLane = lanes.findIndex((path) => path?.target === parent)
+      let targetColor = branches.colorBySha.get(parent)
+      if (targetColor === undefined) {
+        if (parentIndex === 0) {
+          targetColor = nodeColor
+        } else {
+          targetColor = boundaryColors.get(parent)
+          if (targetColor === undefined) {
+            targetColor = nextColor++
+            boundaryColors.set(parent, targetColor)
+          }
+        }
+      }
+
+      // Only coalesce with the path that owns the target branch. If a side
+      // branch reached the target first, keep both paths until the commit so
+      // that the established first-parent branch retains its color.
+      const pendingLane = lanes.findIndex(
+        (path) => path?.target === parent && path.color === targetColor,
+      )
       if (pendingLane >= 0) {
         const path = lanes[pendingLane]!
         outgoingPaths.push({
@@ -291,7 +375,7 @@ export function graphLaneLayout(rows: GraphRow[]): GraphLaneLayout {
         continue
       }
 
-      const color = parentIndex === 0 ? nodeColor : nextColor++
+      const color = parentIndex === 0 ? nodeColor : targetColor
       const path = { target: parent, color }
       const parentLane =
         parentIndex === 0 ? lane : firstFreeLane(lanes, lane)
