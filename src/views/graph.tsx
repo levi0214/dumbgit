@@ -40,6 +40,15 @@ export type GraphFragmentProps =
       swapOob?: boolean
     }
 
+export type GraphLogFragmentProps = {
+  head: HeadInfo
+  rows: GraphRow[]
+  previewStash: PreviewStashUi
+  graphCommitLimit: number
+  graphNextLimit: number
+  showLoadMore: boolean
+}
+
 const TAG_ICO = raw(
   `<svg class="tag-ico" xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>`,
 )
@@ -1256,8 +1265,8 @@ export function GraphLoadMore(props: {
       type="button"
       class="graph-load-more"
       title={`git log --date-order -n ${props.nextLimit}`}
-      hx-get={`/fragment/graph?limit=${encodeURIComponent(String(props.nextLimit))}`}
-      hx-target="#graph"
+      hx-get={`/fragment/graph/log?limit=${encodeURIComponent(String(props.nextLimit))}`}
+      hx-target="#graph-log"
       hx-swap="outerHTML show:none"
       hx-trigger="click, intersect once root:#graph threshold:0.2"
     >
@@ -1294,6 +1303,38 @@ export function GraphTailFragment(props: {
   )
 }
 
+export function GraphLogFragment(props: GraphLogFragmentProps) {
+  const detached = props.head.kind === 'detached'
+  const currentBranch = props.head.kind === 'branch' ? props.head.name : null
+  const currentUpstream =
+    props.head.kind === 'branch' ? props.head.upstream ?? null : null
+  const laneLayout = graphLaneLayout(props.rows)
+  return (
+    <div
+      id="graph-log"
+      class="graph-body"
+      data-graph-limit={String(props.graphCommitLimit)}
+    >
+      <div class={`log-lines${props.rows.length === 0 ? ' empty' : ''}`}>
+        {props.rows.length === 0 ? (
+          '(no commits yet)'
+        ) : (
+          <GraphTailFragment
+            rows={props.rows}
+            detached={detached}
+            currentBranch={currentBranch}
+            currentUpstream={currentUpstream}
+            stashes={props.previewStash.stashes}
+            laneLayoutByRow={laneLayout.rows}
+            nextLimit={props.graphNextLimit}
+            showLoadMore={props.showLoadMore}
+          />
+        )}
+      </div>
+    </div>
+  )
+}
+
 export function GraphFragment(props: GraphFragmentProps) {
   const oob = props.swapOob ? ({ 'hx-swap-oob': 'true' } as const) : {}
   if (!props.ok) {
@@ -1315,9 +1356,6 @@ export function GraphFragment(props: GraphFragmentProps) {
 
   const { head, rows, worktree } = props
   const detached = head.kind === 'detached'
-  const currentBranch = head.kind === 'branch' ? head.name : null
-  const currentUpstream = head.kind === 'branch' ? head.upstream ?? null : null
-  const laneLayout = graphLaneLayout(rows)
 
   return (
     <div
@@ -1325,7 +1363,6 @@ export function GraphFragment(props: GraphFragmentProps) {
       class="graph-root"
       data-repo={props.repoPath}
       data-server-pid={String(props.serverPid)}
-      data-graph-limit={String(props.graphCommitLimit)}
       {...oob}
     >
       <div class={`graph-head${detached ? ' graph-head-detached' : ''}`}>
@@ -1354,24 +1391,14 @@ export function GraphFragment(props: GraphFragmentProps) {
         previewStash={props.previewStash}
         repoPath={props.repoPath}
       />
-      <div class="graph-body">
-        <div class={`log-lines${rows.length === 0 ? ' empty' : ''}`}>
-          {rows.length === 0 ? (
-            '(no commits yet)'
-          ) : (
-            <GraphTailFragment
-              rows={rows}
-              detached={detached}
-              currentBranch={currentBranch}
-              currentUpstream={currentUpstream}
-              stashes={props.previewStash.stashes}
-              laneLayoutByRow={laneLayout.rows}
-              nextLimit={props.graphNextLimit}
-              showLoadMore={props.showLoadMore}
-            />
-          )}
-        </div>
-      </div>
+      <GraphLogFragment
+        head={head}
+        rows={rows}
+        previewStash={props.previewStash}
+        graphCommitLimit={props.graphCommitLimit}
+        graphNextLimit={props.graphNextLimit}
+        showLoadMore={props.showLoadMore}
+      />
     </div>
   )
 }

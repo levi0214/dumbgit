@@ -293,14 +293,14 @@ describe('graphLaneLayout', () => {
     expect(expanded).toContain('style="width:98px;height:16px"')
   })
 
-  test('reloads the whole graph when expanding to preserve its column', () => {
+  test('replaces only the log while preserving the graph scroll container', () => {
     const html = renderToString(
       GraphLoadMore({ nextLimit: 100, show: true }),
     )
 
-    expect(html).toContain('hx-get="/fragment/graph?limit=100"')
-    expect(html).toContain('hx-target="#graph"')
-    expect(html).not.toContain('/fragment/graph/tail')
+    expect(html).toContain('hx-get="/fragment/graph/log?limit=100"')
+    expect(html).toContain('hx-target="#graph-log"')
+    expect(html).not.toContain('hx-target="#graph"')
   })
 
   test('marks commit rows for a larger workspace click target', () => {

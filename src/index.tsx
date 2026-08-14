@@ -34,7 +34,7 @@ import {
   setRepoActive,
 } from './history'
 import { watchGitRefs } from './watch'
-import { GraphFragment } from './views/graph'
+import { GraphFragment, GraphLogFragment } from './views/graph'
 import type { GraphFragmentProps } from './views/graph'
 import { DiffPanel, DiffPatchBody, WorkTreeDiffPanel } from './views/diff'
 import { Layout } from './views/layout'
@@ -731,6 +731,49 @@ app.use('/fragment/graph', requireActiveRepo)
 app.use('/fragment/graph/*', requireActiveRepo)
 app.use('/fragment/worktree', requireActiveRepo)
 app.use('/api/*', requireActiveRepo)
+
+app.get('/fragment/graph/log', async (c) => {
+  const repoPath = c.get('repoPath')
+  c.header('Cache-Control', 'no-store')
+  const q = c.req.query('limit')
+  const parsed = q !== undefined ? Number.parseInt(q, 10) : NaN
+  const graphCommitLimit = clampGraphCommitLimit(
+    Number.isFinite(parsed) ? parsed : GRAPH_COMMIT_DEFAULT,
+  )
+  try {
+    const [head, rows, previewStash] = await Promise.all([
+      headInfo(repoPath),
+      logGraphRows(graphCommitLimit, repoPath),
+      previewStashUiState(repoPath),
+    ])
+    const graphNextLimit = Math.min(
+      graphCommitLimit + GRAPH_COMMIT_STEP,
+      GRAPH_COMMIT_MAX,
+    )
+    return c.html(
+      <GraphLogFragment
+        head={head}
+        rows={rows}
+        previewStash={previewStash}
+        graphCommitLimit={graphCommitLimit}
+        graphNextLimit={graphNextLimit}
+        showLoadMore={
+          rows.length >= graphCommitLimit &&
+          rows.length > 0 &&
+          graphCommitLimit < GRAPH_COMMIT_MAX
+        }
+      />,
+    )
+  } catch (e) {
+    const message =
+      e instanceof GitError
+        ? e.message
+        : e instanceof Error
+          ? e.message
+          : String(e)
+    return c.text(message, 500)
+  }
+})
 
 app.get('/fragment/graph', async (c) => {
   const repoPath = c.get('repoPath')

@@ -126,6 +126,15 @@ test('Workspace owns repository activation and repository routing', async () => 
 
     expect((await request('/fragment/graph')).status).toBe(400)
     expect((await request(`/fragment/graph?${query}`)).status).toBe(200)
+    const graphLogResponse = await request(
+      `/fragment/graph/log?limit=100&${query}`,
+    )
+    expect(graphLogResponse.status).toBe(200)
+    const graphLog = await graphLogResponse.text()
+    expect(graphLog).toContain('id="graph-log"')
+    expect(graphLog).toContain('data-graph-limit="100"')
+    expect(graphLog).not.toContain('class="graph-root"')
+    expect(graphLog).not.toContain('id="worktree"')
 
     const post = (url: string, fields: Record<string, string> = {}) =>
       request(url, {
