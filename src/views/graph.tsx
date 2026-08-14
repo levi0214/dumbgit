@@ -928,10 +928,44 @@ function GraphCommitLine(props: {
   )
 }
 
+type StashLanePath = {
+  lane: number
+  color: number
+}
+
+/** Use the first lanes and colors free at this base commit, not graph-wide. */
+function stashLanePaths(
+  layout: GraphLaneLayoutRow,
+  count: number,
+): StashLanePath[] {
+  const occupiedLanes = new Set<number>([
+    layout.lane,
+    ...layout.incoming.map((edge) => edge.lane),
+    ...layout.passThrough.map((edge) => edge.from),
+  ])
+  const occupiedColors = new Set<number>([
+    layout.nodeColor,
+    ...layout.incoming.map((edge) => edge.color),
+    ...layout.passThrough.map((edge) => edge.color),
+  ])
+  const paths: StashLanePath[] = []
+  for (let i = 0; i < count; i++) {
+    let lane = 0
+    while (occupiedLanes.has(lane)) lane++
+    occupiedLanes.add(lane)
+
+    let color = 0
+    while (occupiedColors.has(color)) color++
+    occupiedColors.add(color)
+    paths.push({ lane, color })
+  }
+  return paths
+}
+
 function StashLaneSpans(props: {
   layout: GraphLaneLayoutRow
-  priorStashLanes: number[]
-  stashLane: number
+  priorStashPaths: StashLanePath[]
+  stashPath: StashLanePath
   columnWidth: number
 }) {
   const height = GRAPH_ROW_HEIGHT
@@ -945,10 +979,10 @@ function StashLaneSpans(props: {
   }
   const passThrough = [
     ...[...activeByLane].map(([lane, color]) => ({ lane, color })),
-    ...props.priorStashLanes.map((lane) => ({ lane, color: lane })),
+    ...props.priorStashPaths,
   ].sort((a, b) => a.lane - b.lane)
-  const stashX = physicalLaneX(props.stashLane)
-  const stashColor = logicalLaneColor(props.stashLane)
+  const stashX = physicalLaneX(props.stashPath.lane)
+  const stashColor = logicalLaneColor(props.stashPath.color)
   return (
     <svg
       class="graph-lanes-svg graph-stash-lanes"
@@ -997,13 +1031,13 @@ function StashLaneSpans(props: {
 function GraphStashLine(props: {
   stash: PreviewStashEntry
   laneLayout: GraphLaneLayoutRow
-  priorStashLanes: number[]
-  stashLane: number
+  priorStashPaths: StashLanePath[]
+  stashPath: StashLanePath
   graphColumnWidth: number
 }) {
   const ref = encodeURIComponent(props.stash.ref)
   const summaryUrl = `/api/stash?ref=${ref}`
-  const laneColor = logicalLaneColor(props.stashLane)
+  const laneColor = logicalLaneColor(props.stashPath.color)
   return (
     <div
       class="log-row log-row-commit log-row-stash"
@@ -1012,8 +1046,8 @@ function GraphStashLine(props: {
       <span class="graph-prefix">
         <StashLaneSpans
           layout={props.laneLayout}
-          priorStashLanes={props.priorStashLanes}
-          stashLane={props.stashLane}
+          priorStashPaths={props.priorStashPaths}
+          stashPath={props.stashPath}
           columnWidth={props.graphColumnWidth}
         />
       </span>
@@ -1143,20 +1177,25 @@ export function GraphRows(props: {
     stashesByBase.set(stash.baseSha, bucket)
   }
 
+  const stashPathsByRow = props.rows.map((item, index) =>
+    stashLanePaths(
+      props.laneLayoutByRow[index]!,
+      stashesByBase.get(item.row.shaFull)?.length ?? 0,
+    )
+  )
   const rightmostCommitLane = props.laneLayoutByRow.reduce(
     (max, layout) => Math.max(max, graphRowRightmostLane(layout)),
     0,
   )
-  const maxStashesOnCommit = props.rows.reduce(
-    (max, item) =>
-      Math.max(max, stashesByBase.get(item.row.shaFull)?.length ?? 0),
+  const rightmostStashLane = stashPathsByRow.reduce(
+    (max, paths) =>
+      paths.reduce((rowMax, path) => Math.max(rowMax, path.lane), max),
     0,
   )
-  const stashLaneStart = rightmostCommitLane + 1
-  const rightmostVisibleLane =
-    maxStashesOnCommit > 0
-      ? stashLaneStart + maxStashesOnCommit - 1
-      : rightmostCommitLane
+  const rightmostVisibleLane = Math.max(
+    rightmostCommitLane,
+    rightmostStashLane,
+  )
   const columnWidth = graphColumnWidth(
     rightmostVisibleLane,
     props.compact ?? false,
@@ -1168,16 +1207,11 @@ export function GraphRows(props: {
         const laneLayout = props.laneLayoutByRow[i]
         if (!laneLayout) return null
         const stashes = stashesByBase.get(r.row.shaFull) ?? []
-        const stashLanes = stashes.map((_, stashIndex) =>
-          stashLaneStart + stashIndex
-        )
-        const commitLayout = stashLanes.length > 0
+        const stashPaths = stashPathsByRow[i]!
+        const commitLayout = stashPaths.length > 0
           ? {
               ...laneLayout,
-              incoming: [
-                ...laneLayout.incoming,
-                ...stashLanes.map((lane) => ({ lane, color: lane })),
-              ],
+              incoming: [...laneLayout.incoming, ...stashPaths],
             }
           : laneLayout
         return (
@@ -1187,8 +1221,8 @@ export function GraphRows(props: {
                 key={stash.ref}
                 stash={stash}
                 laneLayout={laneLayout}
-                priorStashLanes={stashLanes.slice(0, stashIndex)}
-                stashLane={stashLanes[stashIndex]!}
+                priorStashPaths={stashPaths.slice(0, stashIndex)}
+                stashPath={stashPaths[stashIndex]!}
                 graphColumnWidth={columnWidth}
               />
             ))}

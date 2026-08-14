@@ -236,6 +236,63 @@ describe('graphLaneLayout', () => {
     expect(html).toContain('hx-get="/api/stash?ref=stash%40%7B0%7D"')
   })
 
+  test('places stashes from the first locally free lane across load depths', () => {
+    const base = commit('b', [])
+    const extra = commit('x', [])
+    const baseLayout = {
+      lane: 0,
+      nodeColor: 0,
+      incoming: [{ lane: 0, color: 0 }],
+      outgoing: [],
+      passThrough: [{ from: 1, to: 1, color: 1 }],
+    }
+    const stashes = Array.from({ length: 4 }, (_, index) => ({
+      ref: `stash@{${index}}`,
+      baseSha: 'b'.repeat(40),
+      subject: 'preview stash',
+      age: 'just now',
+    }))
+    const render = (expanded: boolean) =>
+      renderToString(
+        GraphRows({
+          rows: expanded ? [base, extra] : [base],
+          detached: false,
+          currentBranch: null,
+          currentUpstream: null,
+          stashes,
+          laneLayoutByRow: expanded
+            ? [
+                baseLayout,
+                {
+                  lane: 3,
+                  nodeColor: 3,
+                  incoming: [],
+                  outgoing: [],
+                  passThrough: [],
+                },
+              ]
+            : [baseLayout],
+          readonly: true,
+        }),
+      )
+
+    const stashNodes = (html: string) =>
+      [...html.matchAll(/graph-stash-node"[^>]*cx="(\d+)"[^>]*stroke="([^"]+)"/g)]
+        .map((match) => [Number(match[1]), match[2]])
+    const initial = render(false)
+    const expanded = render(true)
+
+    expect(stashNodes(initial)).toEqual([
+      [36, '#39d353'],
+      [52, '#f0a51a'],
+      [68, '#a78bfa'],
+      [84, '#22c7b8'],
+    ])
+    expect(stashNodes(expanded)).toEqual(stashNodes(initial))
+    expect(initial).toContain('style="width:98px;height:16px"')
+    expect(expanded).toContain('style="width:98px;height:16px"')
+  })
+
   test('reloads the whole graph when expanding to preserve its column', () => {
     const html = renderToString(
       GraphLoadMore({ nextLimit: 100, show: true }),
