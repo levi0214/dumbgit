@@ -25,7 +25,7 @@ function commit(sha: string, parents: string[]): GraphRow {
 }
 
 describe('graphLaneLayout', () => {
-  test('coalesces duplicate parent paths into the pending target lane', () => {
+  test('keeps first-parent branches separate until the parent vertex', () => {
     const rows = [
       commit('d', ['a', 'b']),
       commit('a', ['c']),
@@ -53,17 +53,17 @@ describe('graphLaneLayout', () => {
       lane: 1,
       nodeColor: 1,
       incoming: [{ lane: 1, color: 1 }],
-      outgoing: [{ lane: 0, color: 1 }],
+      outgoing: [{ lane: 1, color: 1 }],
       passThrough: [{ from: 0, to: 0, color: 0 }],
     })
     expect(layout.rows[3]).toEqual({
       lane: 0,
       nodeColor: 0,
-      incoming: [{ lane: 0, color: 0 }],
+      incoming: [{ lane: 0, color: 0 }, { lane: 1, color: 1 }],
       outgoing: [{ lane: 0, color: 0 }],
       passThrough: [],
     })
-    expect(layout.rows.map(graphRowGutterCols)).toEqual([3, 3, 3, 1])
+    expect(layout.rows.map(graphRowGutterCols)).toEqual([3, 3, 3, 3])
 
     const html = renderToString(
       GraphRows({
@@ -77,8 +77,26 @@ describe('graphLaneLayout', () => {
       }),
     )
     expect(html).toMatch(
-      /d="M 20 8 C[^"]*4 20"[^>]*stroke="#e653a8"/,
+      /d="M 20 -4 C[^"]*4 8"[^>]*stroke="#e653a8"/,
     )
+  })
+
+  test('reuses a target branch route for an additional merge parent', () => {
+    const rows = [
+      commit('x', ['b']),
+      commit('m', ['a', 'b']),
+      commit('a', ['c']),
+      commit('b', ['c']),
+      commit('c', []),
+    ]
+
+    const layout = graphLaneLayout(rows)
+
+    expect(layout.rows[1]!.outgoing).toEqual([
+      { lane: 1, color: 1 },
+      { lane: 0, color: 0 },
+    ])
+    expect(graphRowGutterCols(layout.rows[1]!)).toBe(3)
   })
 
   test('keeps the earliest tip color along its first-parent ancestry', () => {
@@ -102,6 +120,34 @@ describe('graphLaneLayout', () => {
     expect(layout.rows[4]!.incoming).toEqual([
       { lane: 0, color: 0 },
       { lane: 1, color: 1 },
+    ])
+  })
+
+  test('carries sibling branches through intervening rows to their shared parent', () => {
+    const rows = [
+      commit('m', ['q']),
+      commit('r', ['s']),
+      commit('s', ['q']),
+      commit('g', ['t']),
+      commit('t', ['q']),
+      commit('q', ['o']),
+      commit('o', []),
+    ]
+
+    const layout = graphLaneLayout(rows)
+
+    expect(layout.rows[3]!.passThrough).toEqual([
+      { from: 0, to: 0, color: 0 },
+      { from: 1, to: 1, color: 1 },
+    ])
+    expect(layout.rows[4]!.passThrough).toEqual([
+      { from: 0, to: 0, color: 0 },
+      { from: 1, to: 1, color: 1 },
+    ])
+    expect(layout.rows[5]!.incoming).toEqual([
+      { lane: 0, color: 0 },
+      { lane: 1, color: 1 },
+      { lane: 2, color: 2 },
     ])
   })
 
@@ -133,7 +179,7 @@ describe('graphLaneLayout', () => {
 
     const layout = graphLaneLayout(rows)
 
-    expect(layout.rows.map(graphRowGutterCols)).toEqual([3, 3, 3, 1, 1])
+    expect(layout.rows.map(graphRowGutterCols)).toEqual([3, 3, 3, 3, 1])
 
     const html = renderToString(
       GraphRows({
@@ -181,7 +227,7 @@ describe('graphLaneLayout', () => {
       /<svg class="graph-lanes-svg graph-stash-lanes"[\s\S]*?<\/svg>/,
     )?.[0]
     expect(stashSvg).toContain('stroke="#169fe6"')
-    expect(stashSvg).not.toContain('stroke="#e653a8"')
+    expect(stashSvg).toContain('stroke="#e653a8"')
     expect(stashSvg).toContain('stroke="#39d353"')
     expect(html).toContain('class="ref-stash-ico"')
     expect(html).toContain('graph-stash-node')

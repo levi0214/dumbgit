@@ -231,14 +231,21 @@ export type GraphLaneLayout = {
   rows: GraphLaneLayoutRow[]
 }
 
-type PendingLane = {
-  target: string
+type SemanticBranch = {
+  /** Topological identity; unlike color, this is never reused. */
+  id: number
   color: number
 }
 
+type PendingLane = {
+  target: string
+  branch: SemanticBranch
+}
+
 type SemanticBranches = {
-  colorByRow: number[]
-  colorBySha: Map<string, number>
+  branchByRow: SemanticBranch[]
+  branchBySha: Map<string, SemanticBranch>
+  nextBranchId: number
   nextColor: number
 }
 
@@ -257,22 +264,24 @@ function semanticBranches(rows: GraphRow[]): SemanticBranches {
     rowBySha.set(item.row.shaFull.toLowerCase(), index)
   })
 
-  const colorByRow = Array<number>(rows.length).fill(-1)
+  const branchByRow = Array<SemanticBranch | null>(rows.length).fill(null)
   const availableAfter: number[] = []
+  let nextBranchId = 0
 
   for (let start = 0; start < rows.length; start++) {
-    if (colorByRow[start] !== -1) continue
+    if (branchByRow[start] !== null) continue
 
     let color = availableAfter.findIndex((end) => start > end)
     if (color === -1) {
       color = availableAfter.length
       availableAfter.push(-1)
     }
+    const branch = { id: nextBranchId++, color }
 
     let current = start
     let end = start
-    while (colorByRow[current] === -1) {
-      colorByRow[current] = color
+    while (branchByRow[current] === null) {
+      branchByRow[current] = branch
       const firstParent = rows[current]!.row.parents[0]?.toLowerCase()
       if (!firstParent) break
 
@@ -285,17 +294,23 @@ function semanticBranches(rows: GraphRow[]): SemanticBranches {
       }
 
       end = Math.max(end, parentRow)
-      if (parentRow <= current || colorByRow[parentRow] !== -1) break
+      if (parentRow <= current || branchByRow[parentRow] !== null) break
       current = parentRow
     }
     availableAfter[color] = end
   }
 
-  const colorBySha = new Map<string, number>()
+  const resolvedBranches = branchByRow.map((branch) => branch!)
+  const branchBySha = new Map<string, SemanticBranch>()
   rows.forEach((item, index) => {
-    colorBySha.set(item.row.shaFull.toLowerCase(), colorByRow[index]!)
+    branchBySha.set(item.row.shaFull.toLowerCase(), resolvedBranches[index]!)
   })
-  return { colorByRow, colorBySha, nextColor: availableAfter.length }
+  return {
+    branchByRow: resolvedBranches,
+    branchBySha,
+    nextBranchId,
+    nextColor: availableAfter.length,
+  }
 }
 
 function firstFreeLane<T>(lanes: Array<T | null>, after = -1): number {
@@ -307,22 +322,24 @@ function firstFreeLane<T>(lanes: Array<T | null>, after = -1): number {
 }
 
 /**
- * Compact logical paths after every row, like `git log --graph`.
+ * Compact logical paths after every row without changing their branch.
  *
- * A path keeps its color while moving between physical columns. Pending paths
- * to the same parent coalesce early, avoiding both empty left gutters and
- * temporary third-color loops around merges.
+ * First-parent paths remain independent until the actual parent vertex. Merge
+ * connectors may reuse an existing path only when it belongs to the same
+ * semantic branch; equal target hashes alone never create an early junction.
  */
 export function graphLaneLayout(rows: GraphRow[]): GraphLaneLayout {
   let lanes: Array<PendingLane | null> = []
   const layoutRows: GraphLaneLayoutRow[] = []
   const branches = semanticBranches(rows)
-  const boundaryColors = new Map<string, number>()
+  const boundaryBranches = new Map<string, SemanticBranch>()
+  let nextBranchId = branches.nextBranchId
   let nextColor = branches.nextColor
 
   for (const [rowIndex, item] of rows.entries()) {
     const sha = item.row.shaFull.toLowerCase()
-    const nodeColor = branches.colorByRow[rowIndex]!
+    const nodeBranch = branches.branchByRow[rowIndex]!
+    const nodeColor = nodeBranch.color
     const topLanes = [...lanes]
     const incomingIndexes: number[] = []
     for (let lane = 0; lane < topLanes.length; lane++) {
@@ -331,12 +348,12 @@ export function graphLaneLayout(rows: GraphRow[]): GraphLaneLayout {
 
     // Keep the vertex on its semantic branch when several paths converge.
     const primaryIncoming = incomingIndexes.find(
-      (incomingLane) => topLanes[incomingLane]!.color === nodeColor,
+      (incomingLane) => topLanes[incomingLane]!.branch.id === nodeBranch.id,
     )
     const lane = primaryIncoming ?? incomingIndexes[0] ?? firstFreeLane(lanes)
     const incoming = incomingIndexes.map((incomingLane) => ({
       lane: incomingLane,
-      color: topLanes[incomingLane]!.color,
+      color: topLanes[incomingLane]!.branch.color,
     }))
 
     for (const incomingLane of incomingIndexes) lanes[incomingLane] = null
@@ -345,42 +362,42 @@ export function graphLaneLayout(rows: GraphRow[]): GraphLaneLayout {
     const outgoingPaths: Array<{ path: PendingLane; color: number }> = []
     const parents = item.row.parents.map((parent) => parent.toLowerCase())
     for (const [parentIndex, parent] of parents.entries()) {
-      let targetColor = branches.colorBySha.get(parent)
-      if (targetColor === undefined) {
-        if (parentIndex === 0) {
-          targetColor = nodeColor
+      let pathBranch: SemanticBranch
+      if (parentIndex === 0) {
+        // A normal branch owns its first-parent edge all the way to the parent,
+        // even when another active branch is also waiting for that commit.
+        pathBranch = nodeBranch
+      } else {
+        // An additional merge edge is drawn as part of the parent branch and
+        // may attach to that branch's existing route.
+        const loadedBranch = branches.branchBySha.get(parent)
+        if (loadedBranch) {
+          pathBranch = loadedBranch
         } else {
-          targetColor = boundaryColors.get(parent)
-          if (targetColor === undefined) {
-            targetColor = nextColor++
-            boundaryColors.set(parent, targetColor)
+          const boundaryBranch = boundaryBranches.get(parent)
+          pathBranch = boundaryBranch ?? {
+            id: nextBranchId++,
+            color: nextColor++,
           }
+          if (!boundaryBranch) boundaryBranches.set(parent, pathBranch)
         }
       }
 
-      // Only coalesce with the path that owns the target branch. If a side
-      // branch reached the target first, keep both paths until the commit so
-      // that the established first-parent branch retains its color.
       const pendingLane = lanes.findIndex(
-        (path) => path?.target === parent && path.color === targetColor,
+        (path) =>
+          path?.target === parent && path.branch.id === pathBranch.id,
       )
       if (pendingLane >= 0) {
         const path = lanes[pendingLane]!
-        outgoingPaths.push({
-          path,
-          // First-parent history leaves the node in its own logical color;
-          // extra merge parents use the color of the branch they connect to.
-          color: parentIndex === 0 ? nodeColor : path.color,
-        })
+        outgoingPaths.push({ path, color: pathBranch.color })
         continue
       }
 
-      const color = parentIndex === 0 ? nodeColor : targetColor
-      const path = { target: parent, color }
+      const path = { target: parent, branch: pathBranch }
       const parentLane =
         parentIndex === 0 ? lane : firstFreeLane(lanes, lane)
       lanes[parentLane] = path
-      outgoingPaths.push({ path, color })
+      outgoingPaths.push({ path, color: pathBranch.color })
     }
 
     const compactLanes = lanes.filter((path): path is PendingLane => !!path)
@@ -394,7 +411,9 @@ export function graphLaneLayout(rows: GraphRow[]): GraphLaneLayout {
       const path = topLanes[from]
       if (!path || incomingIndexes.includes(from)) continue
       const to = bottomLaneByPath.get(path)
-      if (to !== undefined) passThrough.push({ from, to, color: path.color })
+      if (to !== undefined) {
+        passThrough.push({ from, to, color: path.branch.color })
+      }
     }
     const outgoing = outgoingPaths.map(({ path, color }) => ({
       lane: bottomLaneByPath.get(path)!,
