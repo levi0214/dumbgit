@@ -25,7 +25,7 @@ function commit(sha: string, parents: string[]): GraphRow {
 }
 
 describe('graphLaneLayout', () => {
-  test('keeps duplicate parent paths separate until the commit node', () => {
+  test('coalesces duplicate parent paths into the pending target lane', () => {
     const rows = [
       commit('d', ['a', 'b']),
       commit('a', ['c']),
@@ -37,32 +37,51 @@ describe('graphLaneLayout', () => {
 
     expect(layout.rows[0]).toEqual({
       lane: 0,
+      nodeColor: 0,
       incoming: [],
-      outgoing: [0, 1],
+      outgoing: [{ lane: 0, color: 0 }, { lane: 1, color: 1 }],
       passThrough: [],
     })
     expect(layout.rows[1]).toEqual({
       lane: 0,
-      incoming: [0],
-      outgoing: [0],
-      passThrough: [1],
+      nodeColor: 0,
+      incoming: [{ lane: 0, color: 0 }],
+      outgoing: [{ lane: 0, color: 0 }],
+      passThrough: [{ from: 1, to: 1, color: 1 }],
     })
     expect(layout.rows[2]).toEqual({
       lane: 1,
-      incoming: [1],
-      outgoing: [1],
-      passThrough: [0],
+      nodeColor: 1,
+      incoming: [{ lane: 1, color: 1 }],
+      outgoing: [{ lane: 0, color: 1 }],
+      passThrough: [{ from: 0, to: 0, color: 0 }],
     })
     expect(layout.rows[3]).toEqual({
       lane: 0,
-      incoming: [0, 1],
-      outgoing: [0],
+      nodeColor: 0,
+      incoming: [{ lane: 0, color: 0 }],
+      outgoing: [{ lane: 0, color: 0 }],
       passThrough: [],
     })
-    expect(layout.rows.map(graphRowGutterCols)).toEqual([3, 3, 3, 3])
+    expect(layout.rows.map(graphRowGutterCols)).toEqual([3, 3, 3, 1])
+
+    const html = renderToString(
+      GraphRows({
+        rows,
+        detached: false,
+        currentBranch: null,
+        currentUpstream: null,
+        stashes: [],
+        laneLayoutByRow: layout.rows,
+        readonly: true,
+      }),
+    )
+    expect(html).toMatch(
+      /d="M 20 8 C[^"]*4 20"[^>]*stroke="#e653a8"/,
+    )
   })
 
-  test('assigns disconnected tips to one stable physical lane each', () => {
+  test('compacts surviving lanes left when an earlier path ends', () => {
     const rows = [
       commit('a', ['b']),
       commit('c', ['d']),
@@ -72,8 +91,11 @@ describe('graphLaneLayout', () => {
 
     const layout = graphLaneLayout(rows)
 
-    expect(layout.rows.map((row) => row.lane)).toEqual([0, 1, 0, 1])
-    expect(layout.rows.map(graphRowGutterCols)).toEqual([1, 3, 3, 3])
+    expect(layout.rows.map((row) => row.lane)).toEqual([0, 1, 0, 0])
+    expect(layout.rows.map(graphRowGutterCols)).toEqual([1, 3, 3, 1])
+    expect(layout.rows[2]!.passThrough).toEqual([
+      { from: 1, to: 0, color: 1 },
+    ])
   })
 
   test('keeps one graph column after lanes converge', () => {
@@ -87,7 +109,7 @@ describe('graphLaneLayout', () => {
 
     const layout = graphLaneLayout(rows)
 
-    expect(layout.rows.map(graphRowGutterCols)).toEqual([3, 3, 3, 3, 1])
+    expect(layout.rows.map(graphRowGutterCols)).toEqual([3, 3, 3, 1, 1])
 
     const html = renderToString(
       GraphRows({
@@ -135,7 +157,7 @@ describe('graphLaneLayout', () => {
       /<svg class="graph-lanes-svg graph-stash-lanes"[\s\S]*?<\/svg>/,
     )?.[0]
     expect(stashSvg).toContain('stroke="#169fe6"')
-    expect(stashSvg).toContain('stroke="#e653a8"')
+    expect(stashSvg).not.toContain('stroke="#e653a8"')
     expect(stashSvg).toContain('stroke="#39d353"')
     expect(html).toContain('class="ref-stash-ico"')
     expect(html).toContain('graph-stash-node')

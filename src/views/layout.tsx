@@ -1989,6 +1989,42 @@ function syncWorkspaceSelection() {
 }
 
 var workspaceBoardScrollTop = null;
+var graphExpansionAnchor = null;
+
+function rememberGraphExpansionScroll() {
+  var graph = document.getElementById('graph');
+  if (!graph) return;
+  var graphRect = graph.getBoundingClientRect();
+  var state = { scrollTop: graph.scrollTop, sha: '', top: 0 };
+  var rows = graph.querySelectorAll('[data-sha]');
+  for (var i = 0; i < rows.length; i++) {
+    var rect = rows[i].getBoundingClientRect();
+    if (rect.bottom < graphRect.top) continue;
+    state.sha = rows[i].getAttribute('data-sha') || '';
+    state.top = rect.top - graphRect.top;
+    break;
+  }
+  graphExpansionAnchor = state;
+}
+
+function restoreGraphExpansionScroll() {
+  var state = graphExpansionAnchor;
+  if (!state) return;
+  graphExpansionAnchor = null;
+  var graph = document.getElementById('graph');
+  if (!graph) return;
+  if (state.sha) {
+    var graphRect = graph.getBoundingClientRect();
+    var rows = graph.querySelectorAll('[data-sha]');
+    for (var i = 0; i < rows.length; i++) {
+      if (rows[i].getAttribute('data-sha') !== state.sha) continue;
+      var rowTop = rows[i].getBoundingClientRect().top - graphRect.top;
+      graph.scrollTop += rowTop - state.top;
+      return;
+    }
+  }
+  graph.scrollTop = state.scrollTop;
+}
 
 function revealWorkspaceInspectorRepo() {
   var board = document.getElementById('workspace-board');
@@ -2116,6 +2152,9 @@ document.body.addEventListener('htmx:afterSwap', function (e) {
     syncViewingHighlight();
     syncWorktreeFileSelection();
   }
+  if (t.id === 'graph' && graphExpansionAnchor) {
+    requestAnimationFrame(restoreGraphExpansionScroll);
+  }
   if (t.id === 'worktree') syncWorktreeFileSelection();
   if (t.id === 'workspace-board' || t.id === 'workspace-inspector') {
     syncWorkspaceSelection();
@@ -2189,7 +2228,9 @@ document.addEventListener('click', function (e) {
 
 document.body.addEventListener('htmx:beforeRequest', function (e) {
   var elt = e.detail && e.detail.elt;
-  if (!elt || !elt.matches || !elt.matches('[data-confirm-busy-label]')) return;
+  if (!elt || !elt.matches) return;
+  if (elt.matches('.graph-load-more')) rememberGraphExpansionScroll();
+  if (!elt.matches('[data-confirm-busy-label]')) return;
   if (elt.classList.contains('confirm-busy')) return;
   armConfirmBusy(elt);
 });
@@ -2202,18 +2243,6 @@ document.body.addEventListener('htmx:afterRequest', function (e) {
   if (!e.detail.successful) return;
   var xhr = e.detail.xhr;
   if (!xhr) return;
-  var url = xhr.responseURL || '';
-  if (url.indexOf('/fragment/graph/tail') !== -1) {
-    try {
-      var lim = new URL(url).searchParams.get('limit');
-      var g = document.getElementById('graph');
-      if (g && lim) g.dataset.graphLimit = lim;
-    } catch (err) {
-      /* ignore */
-    }
-    syncViewingHighlight();
-    syncWorktreeFileSelection();
-  }
 });
 
 function dismissStatus() {

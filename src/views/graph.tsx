@@ -202,22 +202,41 @@ export const GRAPH_LANE_PALETTE = [
   '#70b7ff',
 ] as const
 
+export type GraphLaneEdge = {
+  lane: number
+  /** Logical path color, independent of its current screen column. */
+  color: number
+}
+
+export type GraphLaneTransition = {
+  from: number
+  to: number
+  color: number
+}
+
 export type GraphLaneLayoutRow = {
   /** The physical lane containing this commit node. */
   lane: number
-  /** Lanes whose pending target is this commit. Empty means a branch tip. */
-  incoming: number[]
-  /** Lanes assigned to this commit's parents, in parent order. */
-  outgoing: number[]
-  /** Unrelated lanes that pass straight through this row. */
-  passThrough: number[]
+  /** Logical color carried by this commit's primary path. */
+  nodeColor: number
+  /** Top-edge lanes whose pending target is this commit. */
+  incoming: GraphLaneEdge[]
+  /** Bottom-edge lanes assigned to this commit's parents, in parent order. */
+  outgoing: GraphLaneEdge[]
+  /** Unrelated paths, including any leftward compaction across this row. */
+  passThrough: GraphLaneTransition[]
 }
 
 export type GraphLaneLayout = {
   rows: GraphLaneLayoutRow[]
 }
 
-function firstFreeLane(lanes: Array<string | null>, after = -1): number {
+type PendingLane = {
+  target: string
+  color: number
+}
+
+function firstFreeLane<T>(lanes: Array<T | null>, after = -1): number {
   for (let i = after + 1; i < lanes.length; i++) {
     if (lanes[i] === null) return i
   }
@@ -226,56 +245,80 @@ function firstFreeLane(lanes: Array<string | null>, after = -1): number {
 }
 
 /**
- * A deliberately literal lane allocator.
+ * Compact logical paths after every row, like `git log --graph`.
  *
- * Every pending parent path owns one physical lane. Duplicate paths to the
- * same future commit are not coalesced early; they remain separate until that
- * commit row, where all matching lanes terminate at the real node.
+ * A path keeps its color while moving between physical columns. Pending paths
+ * to the same parent coalesce early, avoiding both empty left gutters and
+ * temporary third-color loops around merges.
  */
 export function graphLaneLayout(rows: GraphRow[]): GraphLaneLayout {
-  const lanes: Array<string | null> = []
+  let lanes: Array<PendingLane | null> = []
   const layoutRows: GraphLaneLayoutRow[] = []
+  let nextColor = 0
 
   for (const item of rows) {
     const sha = item.row.shaFull.toLowerCase()
-    const incoming: number[] = []
-    for (let lane = 0; lane < lanes.length; lane++) {
-      if (lanes[lane]?.toLowerCase() === sha) incoming.push(lane)
+    const topLanes = [...lanes]
+    const incomingIndexes: number[] = []
+    for (let lane = 0; lane < topLanes.length; lane++) {
+      if (topLanes[lane]?.target === sha) incomingIndexes.push(lane)
     }
 
-    let lane: number
-    if (incoming.length > 0) {
-      lane = incoming[0]!
-    } else {
-      lane = firstFreeLane(lanes)
-      lanes[lane] = sha
-    }
+    const lane = incomingIndexes[0] ?? firstFreeLane(lanes)
+    const nodeColor = incomingIndexes.length > 0
+      ? topLanes[lane]!.color
+      : nextColor++
+    const incoming = incomingIndexes.map((incomingLane) => ({
+      lane: incomingLane,
+      color: topLanes[incomingLane]!.color,
+    }))
 
-    const passThrough: number[] = []
-    for (let i = 0; i < lanes.length; i++) {
-      if (lanes[i] !== null && !incoming.includes(i) && i !== lane) {
-        passThrough.push(i)
-      }
-    }
+    for (const incomingLane of incomingIndexes) lanes[incomingLane] = null
+    lanes[lane] = null
 
-    for (const matchedLane of incoming) lanes[matchedLane] = null
-
-    const outgoing: number[] = []
+    const outgoingPaths: Array<{ path: PendingLane; color: number }> = []
     const parents = item.row.parents.map((parent) => parent.toLowerCase())
-    if (parents[0]) {
-      lanes[lane] = parents[0]
-      outgoing.push(lane)
-    } else {
-      lanes[lane] = null
+    for (const [parentIndex, parent] of parents.entries()) {
+      const pendingLane = lanes.findIndex((path) => path?.target === parent)
+      if (pendingLane >= 0) {
+        const path = lanes[pendingLane]!
+        outgoingPaths.push({
+          path,
+          // First-parent history leaves the node in its own logical color;
+          // extra merge parents use the color of the branch they connect to.
+          color: parentIndex === 0 ? nodeColor : path.color,
+        })
+        continue
+      }
+
+      const color = parentIndex === 0 ? nodeColor : nextColor++
+      const path = { target: parent, color }
+      const parentLane =
+        parentIndex === 0 ? lane : firstFreeLane(lanes, lane)
+      lanes[parentLane] = path
+      outgoingPaths.push({ path, color })
     }
 
-    for (const parent of parents.slice(1)) {
-      const parentLane = firstFreeLane(lanes, lane)
-      lanes[parentLane] = parent
-      outgoing.push(parentLane)
-    }
+    const compactLanes = lanes.filter((path): path is PendingLane => !!path)
+    const bottomLaneByPath = new Map<PendingLane, number>()
+    compactLanes.forEach((path, bottomLane) => {
+      bottomLaneByPath.set(path, bottomLane)
+    })
 
-    layoutRows.push({ lane, incoming, outgoing, passThrough })
+    const passThrough: GraphLaneTransition[] = []
+    for (let from = 0; from < topLanes.length; from++) {
+      const path = topLanes[from]
+      if (!path || incomingIndexes.includes(from)) continue
+      const to = bottomLaneByPath.get(path)
+      if (to !== undefined) passThrough.push({ from, to, color: path.color })
+    }
+    const outgoing = outgoingPaths.map(({ path, color }) => ({
+      lane: bottomLaneByPath.get(path)!,
+      color,
+    }))
+
+    layoutRows.push({ lane, nodeColor, incoming, outgoing, passThrough })
+    lanes = compactLanes
   }
 
   return { rows: layoutRows }
@@ -285,9 +328,9 @@ export function graphLaneLayout(rows: GraphRow[]): GraphLaneLayout {
 function graphRowRightmostLane(layout: GraphLaneLayoutRow): number {
   return Math.max(
     layout.lane,
-    ...layout.incoming,
-    ...layout.outgoing,
-    ...layout.passThrough,
+    ...layout.incoming.map((edge) => edge.lane),
+    ...layout.outgoing.map((edge) => edge.lane),
+    ...layout.passThrough.flatMap((edge) => [edge.from, edge.to]),
   )
 }
 
@@ -318,11 +361,11 @@ function physicalLaneX(lane: number): number {
   return graphColX(lane * 2)
 }
 
-export function physicalLaneColor(lane: number): string {
-  return GRAPH_LANE_PALETTE[lane % GRAPH_LANE_PALETTE.length]!
+function logicalLaneColor(color: number): string {
+  return GRAPH_LANE_PALETTE[color % GRAPH_LANE_PALETTE.length]!
 }
 
-/** One SVG row: paths may meet only at the commit dot in its center. */
+/** One SVG row; paths may change columns as empty lanes compact left. */
 export function GraphLaneSpans(props: {
   layout: GraphLaneLayoutRow
   isHead: boolean
@@ -336,32 +379,51 @@ export function GraphLaneSpans(props: {
   const width =
     props.columnWidth ?? graphRowGutterCols(props.layout) * GRAPH_COL_WIDTH
   const nodeX = physicalLaneX(props.layout.lane)
-  const nodeColor = physicalLaneColor(props.layout.lane)
+  const nodeColor = logicalLaneColor(props.layout.nodeColor)
   const strokes = []
 
-  for (const lane of props.layout.passThrough) {
-    const x = physicalLaneX(lane)
+  for (const edge of props.layout.passThrough) {
+    const x1 = physicalLaneX(edge.from)
+    const x2 = physicalLaneX(edge.to)
+    const color = logicalLaneColor(edge.color)
     strokes.push(
-      <line
-        key={`pass-${lane}`}
-        x1={x}
-        y1={-GRAPH_LINE_OVERLAP}
-        x2={x}
-        y2={height + GRAPH_LINE_OVERLAP}
-        stroke={physicalLaneColor(lane)}
-        stroke-width="1.8"
-        stroke-linecap="round"
-      />,
+      edge.from === edge.to ? (
+        <line
+          key={`pass-${edge.from}-${edge.to}`}
+          x1={x1}
+          y1={-GRAPH_LINE_OVERLAP}
+          x2={x2}
+          y2={height + GRAPH_LINE_OVERLAP}
+          stroke={color}
+          stroke-width="1.8"
+          stroke-linecap="round"
+        />
+      ) : (
+        <path
+          key={`pass-${edge.from}-${edge.to}`}
+          d={graphCurvePath(
+            x1,
+            -GRAPH_LINE_OVERLAP,
+            x2,
+            height + GRAPH_LINE_OVERLAP,
+          )}
+          fill="none"
+          stroke={color}
+          stroke-width="1.8"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        />
+      ),
     )
   }
 
-  for (const lane of props.layout.incoming) {
-    const x = physicalLaneX(lane)
-    const color = physicalLaneColor(lane)
+  for (const edge of props.layout.incoming) {
+    const x = physicalLaneX(edge.lane)
+    const color = logicalLaneColor(edge.color)
     strokes.push(
-      lane === props.layout.lane ? (
+      edge.lane === props.layout.lane ? (
         <line
-          key={`in-${lane}`}
+          key={`in-${edge.lane}`}
           x1={x}
           y1={-GRAPH_LINE_OVERLAP}
           x2={nodeX}
@@ -372,7 +434,7 @@ export function GraphLaneSpans(props: {
         />
       ) : (
         <path
-          key={`in-${lane}`}
+          key={`in-${edge.lane}`}
           d={graphCurvePath(x, -GRAPH_LINE_OVERLAP, nodeX, mid)}
           fill="none"
           stroke={color}
@@ -384,13 +446,13 @@ export function GraphLaneSpans(props: {
     )
   }
 
-  for (const lane of props.layout.outgoing) {
-    const x = physicalLaneX(lane)
-    const color = physicalLaneColor(lane)
+  for (const edge of props.layout.outgoing) {
+    const x = physicalLaneX(edge.lane)
+    const color = logicalLaneColor(edge.color)
     strokes.push(
-      lane === props.layout.lane ? (
+      edge.lane === props.layout.lane ? (
         <line
-          key={`out-${lane}`}
+          key={`out-${edge.lane}`}
           x1={nodeX}
           y1={mid}
           x2={x}
@@ -401,7 +463,7 @@ export function GraphLaneSpans(props: {
         />
       ) : (
         <path
-          key={`out-${lane}`}
+          key={`out-${edge.lane}`}
           d={graphCurvePath(nodeX, mid, x, height + GRAPH_LINE_OVERLAP)}
           fill="none"
           stroke={color}
@@ -600,7 +662,7 @@ function GraphCommitLine(props: {
   const branchPrefix = branchPrefixFromTokens(tokens)
   const branchPrefixPeer = remotePeer(tokens, branchPrefix)
   const tagNames = collectTagNames(tokens)
-  const laneColor = physicalLaneColor(props.laneLayout.lane)
+  const laneColor = logicalLaneColor(props.laneLayout.nodeColor)
   const tint = laneTintStyle(laneColor)
   const ageTitle = [author, date].filter(Boolean).join(' · ')
   const diffUrl =
@@ -771,13 +833,19 @@ function StashLaneSpans(props: {
 }) {
   const height = GRAPH_ROW_HEIGHT
   const mid = height / 2
-  const activeCommitLanes = [...new Set([
-    ...props.layout.incoming,
-    ...props.layout.passThrough,
-  ])].sort((a, b) => a - b)
-  const passThrough = [...activeCommitLanes, ...props.priorStashLanes]
+  const activeByLane = new Map<number, number>()
+  for (const edge of props.layout.incoming) {
+    activeByLane.set(edge.lane, edge.color)
+  }
+  for (const edge of props.layout.passThrough) {
+    activeByLane.set(edge.from, edge.color)
+  }
+  const passThrough = [
+    ...[...activeByLane].map(([lane, color]) => ({ lane, color })),
+    ...props.priorStashLanes.map((lane) => ({ lane, color: lane })),
+  ].sort((a, b) => a.lane - b.lane)
   const stashX = physicalLaneX(props.stashLane)
-  const stashColor = physicalLaneColor(props.stashLane)
+  const stashColor = logicalLaneColor(props.stashLane)
   return (
     <svg
       class="graph-lanes-svg graph-stash-lanes"
@@ -786,16 +854,16 @@ function StashLaneSpans(props: {
       aria-hidden="true"
       focusable="false"
     >
-      {passThrough.map((lane) => {
-        const x = physicalLaneX(lane)
+      {passThrough.map((edge) => {
+        const x = physicalLaneX(edge.lane)
         return (
           <line
-            key={lane}
+            key={edge.lane}
             x1={x}
             y1={-GRAPH_LINE_OVERLAP}
             x2={x}
             y2={height + GRAPH_LINE_OVERLAP}
-            stroke={physicalLaneColor(lane)}
+            stroke={logicalLaneColor(edge.color)}
             stroke-width="1.8"
             stroke-linecap="round"
           />
@@ -832,7 +900,7 @@ function GraphStashLine(props: {
 }) {
   const ref = encodeURIComponent(props.stash.ref)
   const summaryUrl = `/api/stash?ref=${ref}`
-  const laneColor = physicalLaneColor(props.stashLane)
+  const laneColor = logicalLaneColor(props.stashLane)
   return (
     <div
       class="log-row log-row-commit log-row-stash"
@@ -1003,7 +1071,10 @@ export function GraphRows(props: {
         const commitLayout = stashLanes.length > 0
           ? {
               ...laneLayout,
-              incoming: [...new Set([...laneLayout.incoming, ...stashLanes])],
+              incoming: [
+                ...laneLayout.incoming,
+                ...stashLanes.map((lane) => ({ lane, color: lane })),
+              ],
             }
           : laneLayout
         return (
