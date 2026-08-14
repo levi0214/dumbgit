@@ -176,6 +176,11 @@ const GRAPH_COL_WIDTH = 8
 const GRAPH_ROW_HEIGHT = 16
 const GRAPH_NODE_RADIUS = 3.2
 const GRAPH_LINE_OVERLAP = 4
+/** Stable graph/description boundary without Git Graph's very wide empty gutter. */
+const GRAPH_COLUMN_MIN = 48
+const GRAPH_COLUMN_MIN_COMPACT = 32
+const GRAPH_COLUMN_END_PAD = 10
+const GRAPH_COLUMN_END_PAD_COMPACT = 6
 
 function graphColX(col: number): number {
   return col * GRAPH_COL_WIDTH + GRAPH_COL_WIDTH / 2
@@ -277,14 +282,25 @@ export function graphLaneLayout(rows: GraphRow[]): GraphLaneLayout {
 }
 
 /** Width needed by this row's node, curves, and pass-through lanes. */
-export function graphRowGutterCols(layout: GraphLaneLayoutRow): number {
-  const rightmostLane = Math.max(
+function graphRowRightmostLane(layout: GraphLaneLayoutRow): number {
+  return Math.max(
     layout.lane,
     ...layout.incoming,
     ...layout.outgoing,
     ...layout.passThrough,
   )
-  return rightmostLane * 2 + 1
+}
+
+export function graphRowGutterCols(layout: GraphLaneLayoutRow): number {
+  return graphRowRightmostLane(layout) * 2 + 1
+}
+
+function graphColumnWidth(rightmostLane: number, compact: boolean): number {
+  const required = (rightmostLane * 2 + 1) * GRAPH_COL_WIDTH
+  return Math.max(
+    compact ? GRAPH_COLUMN_MIN_COMPACT : GRAPH_COLUMN_MIN,
+    required + (compact ? GRAPH_COLUMN_END_PAD_COMPACT : GRAPH_COLUMN_END_PAD),
+  )
 }
 
 /** Inline CSS vars so branch pills share the commit's lane color. */
@@ -311,11 +327,14 @@ export function GraphLaneSpans(props: {
   layout: GraphLaneLayoutRow
   isHead: boolean
   isDetached: boolean
+  /** Shared by every row so descriptions begin on one vertical boundary. */
+  columnWidth?: number
   rowHeight?: number
 }) {
   const height = props.rowHeight ?? GRAPH_ROW_HEIGHT
   const mid = height / 2
-  const width = graphRowGutterCols(props.layout) * GRAPH_COL_WIDTH
+  const width =
+    props.columnWidth ?? graphRowGutterCols(props.layout) * GRAPH_COL_WIDTH
   const nodeX = physicalLaneX(props.layout.lane)
   const nodeColor = physicalLaneColor(props.layout.lane)
   const strokes = []
@@ -562,6 +581,7 @@ function GraphCommitLine(props: {
   currentBranch: string | null
   currentUpstream: string | null
   laneLayout: GraphLaneLayoutRow
+  graphColumnWidth: number
   readonly?: boolean
   diffUrl?: string
   diffTarget?: string
@@ -607,6 +627,7 @@ function GraphCommitLine(props: {
           layout={props.laneLayout}
           isHead={isHead}
           isDetached={isHead && props.detached}
+          columnWidth={props.graphColumnWidth}
         />
       </span>
       {branchPrefix ? (
@@ -742,22 +763,30 @@ function GraphCommitLine(props: {
   )
 }
 
-function StashLaneSpans(props: { layout: GraphLaneLayoutRow }) {
-  const width = graphRowGutterCols(props.layout) * GRAPH_COL_WIDTH
+function StashLaneSpans(props: {
+  layout: GraphLaneLayoutRow
+  priorStashLanes: number[]
+  stashLane: number
+  columnWidth: number
+}) {
   const height = GRAPH_ROW_HEIGHT
-  const lanes = [...new Set([
+  const mid = height / 2
+  const activeCommitLanes = [...new Set([
     ...props.layout.incoming,
     ...props.layout.passThrough,
   ])].sort((a, b) => a - b)
+  const passThrough = [...activeCommitLanes, ...props.priorStashLanes]
+  const stashX = physicalLaneX(props.stashLane)
+  const stashColor = physicalLaneColor(props.stashLane)
   return (
     <svg
       class="graph-lanes-svg graph-stash-lanes"
-      viewBox={`0 0 ${width} ${height}`}
-      style={`width:${width}px;height:${height}px`}
+      viewBox={`0 0 ${props.columnWidth} ${height}`}
+      style={`width:${props.columnWidth}px;height:${height}px`}
       aria-hidden="true"
       focusable="false"
     >
-      {lanes.map((lane) => {
+      {passThrough.map((lane) => {
         const x = physicalLaneX(lane)
         return (
           <line
@@ -772,6 +801,24 @@ function StashLaneSpans(props: { layout: GraphLaneLayoutRow }) {
           />
         )
       })}
+      <line
+        x1={stashX}
+        y1={mid}
+        x2={stashX}
+        y2={height + GRAPH_LINE_OVERLAP}
+        stroke={stashColor}
+        stroke-width="1.8"
+        stroke-linecap="round"
+      />
+      <circle
+        class="graph-node graph-stash-node"
+        cx={stashX}
+        cy={mid}
+        r={GRAPH_NODE_RADIUS}
+        fill="var(--bg)"
+        stroke={stashColor}
+        stroke-width="1.7"
+      />
     </svg>
   )
 }
@@ -779,13 +826,25 @@ function StashLaneSpans(props: { layout: GraphLaneLayoutRow }) {
 function GraphStashLine(props: {
   stash: PreviewStashEntry
   laneLayout: GraphLaneLayoutRow
+  priorStashLanes: number[]
+  stashLane: number
+  graphColumnWidth: number
 }) {
   const ref = encodeURIComponent(props.stash.ref)
   const summaryUrl = `/api/stash?ref=${ref}`
+  const laneColor = physicalLaneColor(props.stashLane)
   return (
-    <div class="log-row log-row-commit log-row-stash">
+    <div
+      class="log-row log-row-commit log-row-stash"
+      style={laneTintStyle(laneColor)}
+    >
       <span class="graph-prefix">
-        <StashLaneSpans layout={props.laneLayout} />
+        <StashLaneSpans
+          layout={props.laneLayout}
+          priorStashLanes={props.priorStashLanes}
+          stashLane={props.stashLane}
+          columnWidth={props.graphColumnWidth}
+        />
       </span>
       <button
         type="button"
@@ -796,7 +855,7 @@ function GraphStashLine(props: {
         hx-target="#diff"
         hx-swap="outerHTML"
       >
-        <span class="ref-pill ref-pill-stash">
+        <span class="ref-pill ref-pill-stash lane-tint">
           <svg
             class="ref-stash-ico"
             width="10"
@@ -899,6 +958,8 @@ export function GraphRows(props: {
   currentUpstream: string | null
   stashes: PreviewStashEntry[]
   laneLayoutByRow: GraphLaneLayoutRow[]
+  /** Tighter reserved graph column for multi-repository cards. */
+  compact?: boolean
   readonly?: boolean
   workspaceRepoPath?: string
   diffUrlForSha?: (sha: string) => string
@@ -911,19 +972,50 @@ export function GraphRows(props: {
     stashesByBase.set(stash.baseSha, bucket)
   }
 
+  const rightmostCommitLane = props.laneLayoutByRow.reduce(
+    (max, layout) => Math.max(max, graphRowRightmostLane(layout)),
+    0,
+  )
+  const maxStashesOnCommit = props.rows.reduce(
+    (max, item) =>
+      Math.max(max, stashesByBase.get(item.row.shaFull)?.length ?? 0),
+    0,
+  )
+  const stashLaneStart = rightmostCommitLane + 1
+  const rightmostVisibleLane =
+    maxStashesOnCommit > 0
+      ? stashLaneStart + maxStashesOnCommit - 1
+      : rightmostCommitLane
+  const columnWidth = graphColumnWidth(
+    rightmostVisibleLane,
+    props.compact ?? false,
+  )
+
   return (
     <>
       {props.rows.map((r, i) => {
         const laneLayout = props.laneLayoutByRow[i]
         if (!laneLayout) return null
         const stashes = stashesByBase.get(r.row.shaFull) ?? []
+        const stashLanes = stashes.map((_, stashIndex) =>
+          stashLaneStart + stashIndex
+        )
+        const commitLayout = stashLanes.length > 0
+          ? {
+              ...laneLayout,
+              incoming: [...new Set([...laneLayout.incoming, ...stashLanes])],
+            }
+          : laneLayout
         return (
           <>
-            {stashes.map((stash) => (
+            {stashes.map((stash, stashIndex) => (
               <GraphStashLine
                 key={stash.ref}
                 stash={stash}
                 laneLayout={laneLayout}
+                priorStashLanes={stashLanes.slice(0, stashIndex)}
+                stashLane={stashLanes[stashIndex]!}
+                graphColumnWidth={columnWidth}
               />
             ))}
             <GraphCommitLine
@@ -932,7 +1024,8 @@ export function GraphRows(props: {
               detached={props.detached}
               currentBranch={props.currentBranch}
               currentUpstream={props.currentUpstream}
-              laneLayout={laneLayout}
+              laneLayout={commitLayout}
+              graphColumnWidth={columnWidth}
               readonly={props.readonly}
               workspaceRepoPath={props.workspaceRepoPath}
               diffUrl={props.diffUrlForSha?.(r.row.shaFull)}
@@ -946,7 +1039,6 @@ export function GraphRows(props: {
 }
 
 export function GraphLoadMore(props: {
-  offset: number
   nextLimit: number
   show: boolean
 }) {
@@ -956,8 +1048,8 @@ export function GraphLoadMore(props: {
       type="button"
       class="graph-load-more"
       title={`git log --date-order -n ${props.nextLimit}`}
-      hx-get={`/fragment/graph/tail?offset=${encodeURIComponent(String(props.offset))}&limit=${encodeURIComponent(String(props.nextLimit))}`}
-      hx-target="this"
+      hx-get={`/fragment/graph?limit=${encodeURIComponent(String(props.nextLimit))}`}
+      hx-target="#graph"
       hx-swap="outerHTML show:none"
       hx-trigger="click, intersect once root:#graph threshold:0.2"
     >
@@ -973,7 +1065,6 @@ export function GraphTailFragment(props: {
   currentUpstream: string | null
   stashes: PreviewStashEntry[]
   laneLayoutByRow: GraphLaneLayoutRow[]
-  offset: number
   nextLimit: number
   showLoadMore: boolean
 }) {
@@ -988,7 +1079,6 @@ export function GraphTailFragment(props: {
         laneLayoutByRow={props.laneLayoutByRow}
       />
       <GraphLoadMore
-        offset={props.offset}
         nextLimit={props.nextLimit}
         show={props.showLoadMore}
       />
@@ -1068,7 +1158,6 @@ export function GraphFragment(props: GraphFragmentProps) {
               currentUpstream={currentUpstream}
               stashes={props.previewStash.stashes}
               laneLayoutByRow={laneLayout.rows}
-              offset={rows.length}
               nextLimit={props.graphNextLimit}
               showLoadMore={props.showLoadMore}
             />

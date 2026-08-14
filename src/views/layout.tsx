@@ -541,8 +541,8 @@ body.main-grid-dragging {
 .ref-pill-branch.lane-tint,
 .ref-pill-head.lane-tint {
   color: var(--fg);
-  background: rgba(255, 255, 255, 0.045);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--lane) 50%, #555);
+  background: color-mix(in srgb, var(--lane) 10%, #333);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--lane) 62%, #555);
 }
 .branch-prefix.lane-tint:hover,
 .ref-pill-branch.lane-tint:hover {
@@ -552,8 +552,8 @@ body.main-grid-dragging {
 }
 .ref-pill-remote.lane-tint {
   color: #c8c8c8;
-  border-color: rgba(255, 255, 255, 0.22);
-  background: rgba(255, 255, 255, 0.025);
+  border-color: color-mix(in srgb, var(--lane) 42%, #666);
+  background: color-mix(in srgb, var(--lane) 5%, transparent);
 }
 .ref-pill-remote.lane-tint:hover {
   color: #fff;
@@ -595,9 +595,9 @@ body.main-grid-dragging {
 }
 .log-row-stash .ref-pill-stash {
   color: var(--fg);
-  background: rgba(255, 255, 255, 0.05);
-  border-color: rgba(255, 255, 255, 0.14);
-  opacity: 0.72;
+  background: color-mix(in srgb, var(--lane) 11%, #333);
+  border-color: color-mix(in srgb, var(--lane) 62%, #555);
+  opacity: 0.78;
 }
 .ref-stash-ico {
   flex: 0 0 auto;

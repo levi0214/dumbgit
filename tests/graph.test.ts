@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { renderToString } from 'hono/jsx/dom/server'
 import type { GraphRow } from '../src/git'
 import {
+  GraphLoadMore,
   GraphRows,
   graphLaneLayout,
   graphRowGutterCols,
@@ -75,7 +76,7 @@ describe('graphLaneLayout', () => {
     expect(layout.rows.map(graphRowGutterCols)).toEqual([1, 3, 3, 3])
   })
 
-  test('shrinks the gutter after lanes converge', () => {
+  test('keeps one graph column after lanes converge', () => {
     const rows = [
       commit('d', ['a', 'b']),
       commit('a', ['c']),
@@ -101,7 +102,7 @@ describe('graphLaneLayout', () => {
     )
     const widths = [...html.matchAll(/class="graph-lanes-svg"[^>]*style="width:(\d+)px/g)]
       .map((match) => Number(match[1]))
-    expect(widths).toEqual([24, 24, 24, 24, 8])
+    expect(widths).toEqual([48, 48, 48, 48, 48])
   })
 
   test('keeps every active lane continuous through an inserted stash row', () => {
@@ -135,10 +136,22 @@ describe('graphLaneLayout', () => {
     )?.[0]
     expect(stashSvg).toContain('stroke="#169fe6"')
     expect(stashSvg).toContain('stroke="#e653a8"')
+    expect(stashSvg).toContain('stroke="#39d353"')
     expect(html).toContain('class="ref-stash-ico"')
-    expect(html).not.toContain('graph-stash-node')
+    expect(html).toContain('graph-stash-node')
+    expect(html).toContain('d="M 36 -4 C')
     expect(html).toContain('class="stash-summary-btn"')
     expect(html).toContain('hx-get="/api/stash?ref=stash%40%7B0%7D"')
+  })
+
+  test('reloads the whole graph when expanding to preserve its column', () => {
+    const html = renderToString(
+      GraphLoadMore({ nextLimit: 100, show: true }),
+    )
+
+    expect(html).toContain('hx-get="/fragment/graph?limit=100"')
+    expect(html).toContain('hx-target="#graph"')
+    expect(html).not.toContain('/fragment/graph/tail')
   })
 
   test('marks commit rows for a larger workspace click target', () => {

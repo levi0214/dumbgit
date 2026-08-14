@@ -331,6 +331,7 @@ function WorkspaceRepoCard(props: {
               }
               stashes={[]}
               laneLayoutByRow={laneLayout.rows}
+              compact
               readonly
               workspaceRepoPath={repo.repoPath}
               diffTarget="#workspace-inspector"
