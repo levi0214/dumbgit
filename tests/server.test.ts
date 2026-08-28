@@ -93,8 +93,7 @@ test('Workspace owns repository activation and repository routing', async () => 
     expect(workspacePage).toContain('var htmx=function()')
     expect(workspacePage).not.toContain('unpkg.com')
     expect(workspacePage).toContain('1 repository · 1 active')
-    expect(workspacePage).toContain(`data-copy="${repo}"`)
-    expect(workspacePage).toContain('copy repository path for example')
+    expect(workspacePage).toContain(`title="${repo}"`)
     expect(workspacePage).not.toContain('/workspace/repo/terminal')
 
     const stopped = await request(

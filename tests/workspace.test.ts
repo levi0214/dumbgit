@@ -146,12 +146,7 @@ describe('workspace states', () => {
     )
 
     expect(html).toContain('workspace-repo-stopped')
-    expect(html).toContain('class="workspace-repo-path"')
-    expect(html).toContain('data-copy="/tmp/example"')
-    expect(html).toContain('copy repository path for example')
-    expect(html).toContain('class="copy-btn"')
-    expect(html).toContain('class="copy-ico"')
-    expect(html).toContain('class="check-ico"')
+    expect(html).toContain('title="/tmp/example"')
     expect(html).not.toContain('workspace-open-terminal')
     expect(html).toContain('workspace-drag-handle')
     expect(html).toContain('workspace-instance-toggle is-start')

@@ -9,7 +9,6 @@ import type {
   WorkTreeEntry,
   WorkTreeSummary,
 } from '../git'
-import { CopyButton } from './copy'
 import { DiffPanel, DiffPatchBody } from './diff'
 import { GraphRows, graphLaneLayout } from './graph'
 
@@ -121,21 +120,6 @@ function WorkspaceRepoName(props: {
   )
 }
 
-function WorkspaceRepoPath(props: { repoPath: string }) {
-  const name = path.basename(props.repoPath)
-  const parentLabel = workspaceRepoParentLabel(props.repoPath)
-  return (
-    <span
-      class="workspace-repo-path"
-      data-copy={props.repoPath}
-      title={props.repoPath}
-    >
-      <span class="workspace-repo-path-label">{parentLabel}</span>
-      <CopyButton title={`copy repository path for ${name}`} />
-    </span>
-  )
-}
-
 function WorkspaceCardActions(props: {
   repoPath: string
   repoUrl?: string
@@ -234,13 +218,12 @@ function WorkspaceRepoCard(props: {
         class={`workspace-repo-card workspace-repo-error${props.repo.active ? '' : ' workspace-repo-stopped'}`}
         data-workspace-repo={props.repo.repoPath}
       >
-        <div class="workspace-card-head">
+        <div class="workspace-card-head" title={props.repo.repoPath}>
           <div>
             <WorkspaceRepoName
               repoPath={props.repo.repoPath}
               repoUrl={repoUrl}
             />
-            <WorkspaceRepoPath repoPath={props.repo.repoPath} />
           </div>
           <WorkspaceCardActions
             repoPath={props.repo.repoPath}
@@ -275,13 +258,12 @@ function WorkspaceRepoCard(props: {
       class={`workspace-repo-card${repo.active ? '' : ' workspace-repo-stopped'}`}
       data-workspace-repo={repo.repoPath}
     >
-      <div class="workspace-card-head">
+      <div class="workspace-card-head" title={repo.repoPath}>
         <div class="workspace-repo-identity">
           <WorkspaceRepoName repoPath={repo.repoPath} repoUrl={repoUrl} />
           <span class="workspace-branch" title={branch}>
             {branch}
           </span>
-          <WorkspaceRepoPath repoPath={repo.repoPath} />
         </div>
         <WorkspaceCardActions
           repoPath={repo.repoPath}

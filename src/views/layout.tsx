@@ -1348,21 +1348,20 @@ body.main-grid-dragging {
   opacity: 0.42;
 }
 .workspace-card-head {
-  min-height: 53px;
-  padding: 8px 10px 7px 12px;
+  min-height: 44px;
+  padding: 8px 12px;
   border-bottom: 1px solid var(--border);
   background: #2a2a2c;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 8px;
 }
 .workspace-repo-identity {
   min-width: 0;
-  display: grid;
-  grid-template-columns: minmax(0, auto) minmax(0, 1fr);
-  align-items: center;
-  gap: 3px 8px;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
 }
 .workspace-repo-name {
   min-width: 0;
@@ -1382,42 +1381,10 @@ a.workspace-repo-name:hover {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  padding-left: 8px;
-  border-left: 1px solid rgba(255, 255, 255, 0.12);
   color: var(--accent);
   font-size: 11px;
 }
-.workspace-repo-path {
-  grid-column: 1 / -1;
-  justify-self: start;
-  width: fit-content;
-  max-width: 100%;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 3px;
-  color: var(--muted);
-  font-size: 9px;
-  cursor: pointer;
-}
-.workspace-repo-path-label {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.workspace-repo-path .copy-btn {
-  flex: 0 0 auto;
-  visibility: hidden;
-}
-.workspace-repo-path .copy-btn:hover {
-  opacity: 0.7;
-  background: transparent;
-}
-.workspace-repo-path:hover .copy-btn,
-.workspace-repo-path:focus-within .copy-btn {
-  visibility: visible;
-}
+
 .workspace-icon-action {
   width: 26px;
   height: 26px;
@@ -1454,15 +1421,21 @@ a.workspace-repo-name:hover {
 }
 .workspace-drag-handle {
   width: 20px;
-  height: 26px;
+  height: 20px;
   padding: 0;
   border: 0;
   background: transparent;
   color: #626262;
+  opacity: 0;
   font: inherit;
   font-size: 13px;
   line-height: 1;
   cursor: grab;
+  transition: opacity 120ms ease;
+}
+.workspace-repo-card:hover .workspace-drag-handle,
+.workspace-drag-handle:focus-visible {
+  opacity: 1;
 }
 .workspace-drag-handle:hover {
   color: var(--fg);
@@ -1896,11 +1869,8 @@ body.workspace-reordering {
   .workspace-board {
     grid-template-columns: minmax(280px, 1fr);
   }
-  .workspace-repo-path {
-    display: none;
-  }
   .workspace-card-head {
-    min-height: 43px;
+    min-height: 40px;
   }
 }
 `
