@@ -1269,37 +1269,12 @@ body.main-grid-dragging {
   min-height: 0;
   padding: 12px 16px;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   gap: 10px;
   overflow: hidden;
 }
 .workspace-page:has(.workspace-inspector:not([hidden])) {
-  grid-template-rows: auto minmax(230px, 46%) minmax(260px, 1fr);
-}
-.workspace-toolbar {
-  min-height: 42px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-}
-.workspace-title-block {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-}
-.workspace-title-block h1 {
-  margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  font-size: 17px;
-  line-height: 1.2;
-  letter-spacing: -0.01em;
-}
-.workspace-title-block p {
-  margin: 2px 0 0;
-  color: var(--muted);
-  font-size: 10px;
+  grid-template-rows: minmax(230px, 46%) minmax(260px, 1fr);
 }
 .workspace-board {
   min-height: 0;
@@ -1751,7 +1726,7 @@ body.workspace-reordering {
     padding: 8px;
   }
   .workspace-page:has(.workspace-inspector:not([hidden])) {
-    grid-template-rows: auto minmax(240px, 52%) minmax(220px, 1fr);
+    grid-template-rows: minmax(240px, 52%) minmax(220px, 1fr);
   }
   .workspace-board {
     grid-template-columns: minmax(280px, 1fr);

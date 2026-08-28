@@ -285,18 +285,6 @@ export function WorkspaceView(props: {
 }) {
   return (
     <main class="workspace-page">
-      <header class="workspace-toolbar">
-        <div class="workspace-title-block">
-          <div>
-            <h1>dumbgit</h1>
-            <p>
-              {props.repos.length}{' '}
-              {props.repos.length === 1 ? 'repository' : 'repositories'}
-            </p>
-          </div>
-        </div>
-      </header>
-
       <WorkspaceBoard {...props} />
 
       <WorkspaceInspectorEmpty />
