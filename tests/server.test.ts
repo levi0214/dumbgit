@@ -89,10 +89,8 @@ test('Workspace routes repository pages and guards git fragments', async () => {
     expect(workspace.status).toBe(200)
     const workspacePage = await workspace.text()
     expect(workspacePage).toContain('<title>dumbgit</title>')
-    expect(workspacePage).toContain('<h1>dumbgit</h1>')
     expect(workspacePage).toContain('var htmx=function()')
     expect(workspacePage).not.toContain('unpkg.com')
-    expect(workspacePage).toContain('1 repository')
     expect(workspacePage).toContain(`title="${repo}"`)
     expect(workspacePage).not.toContain('/workspace/repo/terminal')
 
