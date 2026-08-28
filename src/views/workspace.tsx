@@ -16,7 +16,6 @@ export type WorkspaceRepoSnapshot =
   | {
       ok: true
       repoPath: string
-      active: boolean
       head: HeadInfo
       rows: GraphRow[]
       worktree: WorkTreeSummary
@@ -24,7 +23,6 @@ export type WorkspaceRepoSnapshot =
   | {
       ok: false
       repoPath: string
-      active: boolean
       stderr: string
     }
 
@@ -123,13 +121,8 @@ function WorkspaceRepoName(props: {
 function WorkspaceCardActions(props: {
   repoPath: string
   repoUrl?: string
-  active: boolean
-  limit: number
 }) {
   const name = path.basename(props.repoPath)
-  const controlUrl =
-    `/workspace/repo/${props.active ? 'stop' : 'start'}` +
-    `?repo=${repoQuery(props.repoPath)}&limit=${props.limit}`
   return (
     <div class="workspace-card-actions">
       <button
@@ -140,17 +133,6 @@ function WorkspaceCardActions(props: {
         aria-label={`Drag ${name} to reorder`}
       >
         ⠿
-      </button>
-      <button
-        type="button"
-        class={`workspace-instance-toggle${props.active ? '' : ' is-start'}`}
-        title={`${props.active ? 'Stop monitoring' : 'Start monitoring'} ${name}`}
-        hx-post={controlUrl}
-        hx-target="#workspace-board"
-        hx-swap="outerHTML"
-        hx-disabled-elt="this"
-      >
-        {props.active ? 'Stop' : 'Start'}
       </button>
       {props.repoUrl ? (
         <a
@@ -210,12 +192,10 @@ function WorkspaceRepoCard(props: {
   limit: number
 }) {
   if (!props.repo.ok) {
-    const repoUrl = props.repo.active
-      ? `/repo?repo=${repoQuery(props.repo.repoPath)}`
-      : undefined
+    const repoUrl = `/repo?repo=${repoQuery(props.repo.repoPath)}`
     return (
       <article
-        class={`workspace-repo-card workspace-repo-error${props.repo.active ? '' : ' workspace-repo-stopped'}`}
+        class="workspace-repo-card workspace-repo-error"
         data-workspace-repo={props.repo.repoPath}
       >
         <div class="workspace-card-head" title={props.repo.repoPath}>
@@ -228,8 +208,6 @@ function WorkspaceRepoCard(props: {
           <WorkspaceCardActions
             repoPath={props.repo.repoPath}
             repoUrl={repoUrl}
-            active={props.repo.active}
-            limit={props.limit}
           />
         </div>
         <pre>
@@ -244,26 +222,19 @@ function WorkspaceRepoCard(props: {
   const laneLayout = graphLaneLayout(repo.rows)
   const totals = changeTotals(repo.worktree)
   const dirty = totals.files > 0
-  const repoUrl = repo.active
-    ? `/repo?repo=${repoQuery(repo.repoPath)}`
-    : undefined
+  const repoUrl = `/repo?repo=${repoQuery(repo.repoPath)}`
   const worktreeUrl = `/workspace/worktree?repo=${repoQuery(repo.repoPath)}`
 
   return (
     <article
-      class={`workspace-repo-card${repo.active ? '' : ' workspace-repo-stopped'}`}
+      class="workspace-repo-card"
       data-workspace-repo={repo.repoPath}
     >
       <div class="workspace-card-head" title={repo.repoPath}>
         <div class="workspace-repo-identity">
           <WorkspaceRepoName repoPath={repo.repoPath} repoUrl={repoUrl} />
         </div>
-        <WorkspaceCardActions
-          repoPath={repo.repoPath}
-          repoUrl={repoUrl}
-          active={repo.active}
-          limit={props.limit}
-        />
+        <WorkspaceCardActions repoPath={repo.repoPath} repoUrl={repoUrl} />
       </div>
 
       <button
@@ -337,8 +308,6 @@ export function WorkspaceView(props: {
             <p>
               {props.repos.length}{' '}
               {props.repos.length === 1 ? 'repository' : 'repositories'}
-              {' · '}
-              {props.repos.filter((repo) => repo.active).length} active
             </p>
           </div>
         </div>
@@ -354,7 +323,6 @@ export function WorkspaceView(props: {
 export function WorkspaceBoard(props: {
   repos: WorkspaceRepoSnapshot[]
   limit: number
-  controlError?: string
 }) {
   return (
     <section
@@ -363,11 +331,6 @@ export function WorkspaceBoard(props: {
       aria-label="Repositories"
       data-workspace-limit={String(props.limit)}
     >
-      {props.controlError ? (
-        <div class="workspace-control-error">
-          {workspaceSafeText(props.controlError)}
-        </div>
-      ) : null}
       {props.repos.map((repo) => (
         <WorkspaceRepoCard
           key={repo.repoPath}

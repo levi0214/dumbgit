@@ -14,7 +14,6 @@ import {
   rememberRepo,
   reorderRepoHistory,
   repoHistoryPath,
-  setRepoActive,
 } from '../src/history'
 
 test('remembers and reorders canonical repository paths', () => {
@@ -45,11 +44,6 @@ test('remembers and reorders canonical repository paths', () => {
       realpathSync(second),
     ])
 
-    expect(setRepoActive(first, false)).toBe(true)
-    expect(readRepoHistory().find((entry) => entry.repoPath === realpathSync(first))?.active).toBe(false)
-    rememberRepo(first)
-    expect(readRepoHistory().find((entry) => entry.repoPath === realpathSync(first))?.active).toBe(true)
-
     reorderRepoHistory([realpathSync(second), realpathSync(first)])
     expect(readRepoHistory().map((entry) => entry.repoPath)).toEqual([
       realpathSync(second),
@@ -57,8 +51,8 @@ test('remembers and reorders canonical repository paths', () => {
     ])
     expect(JSON.parse(readFileSync(historyFile, 'utf8'))).toEqual({
       repos: [
-        { repoPath: realpathSync(second), active: true },
-        { repoPath: realpathSync(first), active: true },
+        { repoPath: realpathSync(second) },
+        { repoPath: realpathSync(first) },
       ],
     })
 

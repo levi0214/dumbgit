@@ -10,7 +10,6 @@ import path from 'node:path'
 
 export type RememberedRepo = {
   repoPath: string
-  active: boolean
 }
 
 type HistoryFile = {
@@ -35,12 +34,14 @@ export function readRepoHistory(): RememberedRepo[] {
       readFileSync(repoHistoryPath(), 'utf8'),
     ) as Partial<HistoryFile>
     if (!Array.isArray(parsed.repos)) return []
-    return parsed.repos.filter(
-      (entry): entry is RememberedRepo =>
-        !!entry &&
-        typeof entry.repoPath === 'string' &&
-        typeof entry.active === 'boolean',
-    )
+    // Older files stored an `active` flag; it is gone now. Normalize so the
+    // flag never leaks through a re-read / re-write cycle.
+    return parsed.repos
+      .filter(
+        (entry): entry is RememberedRepo =>
+          !!entry && typeof entry.repoPath === 'string',
+      )
+      .map((entry) => ({ repoPath: entry.repoPath }))
   } catch {
     return []
   }
@@ -57,35 +58,16 @@ function writeRepoHistory(repos: RememberedRepo[]): void {
   renameSync(temp, file)
 }
 
-export function rememberRepo(repoPath: string, active = true): void {
+export function rememberRepo(repoPath: string): void {
   try {
     const canonical = realpathSync(repoPath)
     const repos = readRepoHistory()
-    const existing = repos.find(
-      (entry) => entry.repoPath === canonical,
-    )
-    if (existing) {
-      if (active) existing.active = true
-    } else {
-      repos.push({ repoPath: canonical, active })
+    if (!repos.some((entry) => entry.repoPath === canonical)) {
+      repos.push({ repoPath: canonical })
     }
     writeRepoHistory(repos)
   } catch {
     // History is a convenience; it must never prevent opening a repository.
-  }
-}
-
-export function setRepoActive(repoPath: string, active: boolean): boolean {
-  try {
-    const canonical = realpathSync(repoPath)
-    const repos = readRepoHistory()
-    const existing = repos.find((entry) => entry.repoPath === canonical)
-    if (!existing) return false
-    existing.active = active
-    writeRepoHistory(repos)
-    return true
-  } catch {
-    return false
   }
 }
 

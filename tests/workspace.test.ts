@@ -130,14 +130,13 @@ describe('workspace states', () => {
     ).toBe('fatal: ~/dev/2025/secret-repo/.git is unavailable')
   })
 
-  test('renders inactive repositories without status labels', () => {
+  test('renders a workspace card with name, drag handle and depth toggle', () => {
     const html = renderToString(
       WorkspaceView({
         repos: [
           {
             ok: false,
             repoPath: '/tmp/example',
-            active: false,
             stderr: 'unavailable',
           },
         ],
@@ -145,12 +144,11 @@ describe('workspace states', () => {
       }),
     )
 
-    expect(html).toContain('workspace-repo-stopped')
     expect(html).toContain('title="/tmp/example"')
     expect(html).not.toContain('workspace-open-terminal')
     expect(html).toContain('workspace-drag-handle')
-    expect(html).toContain('workspace-instance-toggle is-start')
-    expect(html).toContain('>Start</button>')
+    expect(html).not.toContain('workspace-instance-toggle')
+    expect(html).not.toContain('>Stop</button>')
     expect(html).toContain('class="workspace-depth-toggle"')
     expect(html).toContain('aria-expanded="false"')
     expect(html).toContain('Show 10 commits in all repositories')
@@ -167,7 +165,6 @@ describe('workspace states', () => {
           {
             ok: false,
             repoPath: '/tmp/example',
-            active: false,
             stderr: 'unavailable',
           },
         ],

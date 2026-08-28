@@ -66,7 +66,7 @@ test('rejects non-local hosts and cross-origin mutations', async () => {
   expect(missingOrigin.status).toBe(403)
 })
 
-test('Workspace owns repository activation and repository routing', async () => {
+test('Workspace routes repository pages and guards git fragments', async () => {
   const root = mkdtempSync(path.join(os.tmpdir(), 'dumbgit-server-'))
   const repoDir = path.join(root, 'example')
   let repo = repoDir
@@ -92,31 +92,13 @@ test('Workspace owns repository activation and repository routing', async () => 
     expect(workspacePage).toContain('<h1>dumbgit</h1>')
     expect(workspacePage).toContain('var htmx=function()')
     expect(workspacePage).not.toContain('unpkg.com')
-    expect(workspacePage).toContain('1 repository · 1 active')
+    expect(workspacePage).toContain('1 repository')
     expect(workspacePage).toContain(`title="${repo}"`)
     expect(workspacePage).not.toContain('/workspace/repo/terminal')
 
-    const stopped = await request(
-      `/workspace/repo/stop?${query}&limit=5`,
-      { method: 'POST' },
-    )
-    expect(stopped.status).toBe(200)
-    expect(await stopped.text()).toContain('>Start</button>')
-
-    const inactiveRepo = await request(`/repo?${query}`)
-    expect(inactiveRepo.status).toBe(302)
-    expect(inactiveRepo.headers.get('location')).toBe('/')
-
-    const started = await request(
-      `/workspace/repo/start?${query}&limit=5`,
-      { method: 'POST' },
-    )
-    expect(started.status).toBe(200)
-    expect(await started.text()).toContain('>Stop</button>')
-
-    const activeRepo = await request(`/repo?${query}`)
-    expect(activeRepo.status).toBe(200)
-    const page = await activeRepo.text()
+    const repoPage = await request(`/repo?${query}`)
+    expect(repoPage.status).toBe(200)
+    const page = await repoPage.text()
     expect(page).toContain(`data-repo="${repo}"`)
     expect(page).toContain('hx-vals=')
     expect(page).toContain('class="graph-crumb"')
@@ -209,10 +191,6 @@ test('Workspace owns repository activation and repository routing', async () => 
       git(repo, ['rev-parse', '--verify', 'refs/heads/body-context']),
     ).toBe(head)
   } finally {
-    await request(
-      `/workspace/repo/stop?repo=${encodeURIComponent(repo)}&limit=5`,
-      { method: 'POST' },
-    )
     if (previousHistoryFile === undefined) {
       delete process.env.DUMBGIT_HISTORY_FILE
     } else {
@@ -293,7 +271,6 @@ test('/api/pull is fast-forward only and surfaces errors', async () => {
     expect(await diverged.text()).toContain('Not possible to fast-forward')
     expect(git(repo, ['rev-parse', 'HEAD'])).toBe(localHead)
   } finally {
-    await post('/workspace/repo/stop?limit=5')
     if (previousHistoryFile === undefined) {
       delete process.env.DUMBGIT_HISTORY_FILE
     } else {

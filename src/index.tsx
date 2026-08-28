@@ -31,7 +31,6 @@ import { createIdleExit } from './idle-exit'
 import {
   readRepoHistory,
   reorderRepoHistory,
-  setRepoActive,
 } from './history'
 import { watchGitRefs } from './watch'
 import { GraphFragment, GraphLogFragment } from './views/graph'
@@ -168,7 +167,6 @@ async function loadGraph(
 
 type WorkspaceRepoSource = {
   repoPath: string
-  active: boolean
   revision?: number
 }
 
@@ -179,18 +177,14 @@ function clampWorkspaceCommitLimit(raw?: string): number {
 }
 
 async function syncRepoWatchers(): Promise<void> {
-  const active = new Set(
-    readRepoHistory()
-      .filter((entry) => entry.active)
-      .map((entry) => entry.repoPath),
-  )
+  const known = new Set(readRepoHistory().map((entry) => entry.repoPath))
   for (const [repoPath, close] of state.repoWatchers) {
-    if (active.has(repoPath)) continue
+    if (known.has(repoPath)) continue
     close()
     state.repoWatchers.delete(repoPath)
   }
   await Promise.all(
-    [...active].map(async (repoPath) => {
+    [...known].map(async (repoPath) => {
       if (state.repoWatchers.has(repoPath)) return
       try {
         const watchedDir = await gitDir(repoPath)
@@ -208,7 +202,6 @@ async function syncRepoWatchers(): Promise<void> {
 async function discoverWorkspaceRepos(): Promise<WorkspaceRepoSource[]> {
   const repos = readRepoHistory().map((entry) => ({
     repoPath: entry.repoPath,
-    active: entry.active,
     revision: state.repoRevisions.get(entry.repoPath),
   }))
   await syncRepoWatchers()
@@ -218,7 +211,6 @@ async function discoverWorkspaceRepos(): Promise<WorkspaceRepoSource[]> {
 async function loadWorkspace(
   limit: number,
   options: {
-    refreshInactive?: boolean
     forceRefresh?: boolean
   } = {},
 ): Promise<WorkspaceRepoSnapshot[]> {
@@ -226,28 +218,14 @@ async function loadWorkspace(
   return Promise.all(
     repos.map(async (source): Promise<WorkspaceRepoSnapshot> => {
       const cached = state.workspaceSnapshots.get(source.repoPath)
-      if (
-        !source.active &&
-        !options.refreshInactive &&
-        cached?.limit === limit
-      ) {
-        return {
-          ...cached.snapshot,
-          repoPath: source.repoPath,
-          active: false,
-        }
-      }
 
       let fingerprint: string | undefined
-      if (source.active) {
-        try {
-          fingerprint = await workspaceRepoFingerprint(source.repoPath)
-        } catch {
-          // Fall through to the full read so its existing error UI is used.
-        }
+      try {
+        fingerprint = await workspaceRepoFingerprint(source.repoPath)
+      } catch {
+        // Fall through to the full read so its existing error UI is used.
       }
       if (
-        source.active &&
         !options.forceRefresh &&
         cached?.limit === limit &&
         cached.revision === source.revision &&
@@ -257,7 +235,6 @@ async function loadWorkspace(
         return {
           ...cached.snapshot,
           repoPath: source.repoPath,
-          active: true,
         }
       }
 
@@ -271,7 +248,6 @@ async function loadWorkspace(
         snapshot = {
           ok: true,
           repoPath: source.repoPath,
-          active: source.active,
           head,
           rows,
           worktree,
@@ -280,7 +256,6 @@ async function loadWorkspace(
         snapshot = {
           ok: false,
           repoPath: source.repoPath,
-          active: source.active,
           stderr: error instanceof Error ? error.message : String(error),
         }
       }
@@ -303,7 +278,7 @@ type DumbgitState = {
   lastChange: number
   /** SSE waiters woken by `bumpGitChange` (replaces 100ms polling). */
   changeWaiters: Set<() => void>
-  /** Last rendered snapshot; inactive repositories do not refresh on polling. */
+  /** Snapshot cache keyed by repo path; refreshed on git change. */
   workspaceSnapshots: Map<
     string,
     {
@@ -439,17 +414,14 @@ app.get('/healthz.json', (c) => {
   })
 })
 
-function resolveWorkspaceRepo(
-  raw?: string,
-  options: { requireActive?: boolean } = {},
-): string | null {
+function resolveWorkspaceRepo(raw?: string): string | null {
   if (!raw) return null
   try {
     const repoPath = realpathSync(raw)
     const entry = readRepoHistory().find(
       (candidate) => candidate.repoPath === repoPath,
     )
-    if (!entry || (options.requireActive && !entry.active)) return null
+    if (!entry) return null
     return repoPath
   } catch {
     return null
@@ -459,10 +431,7 @@ function resolveWorkspaceRepo(
 async function renderWorkspace(c: Context) {
   c.header('Cache-Control', 'no-store')
   const limit = clampWorkspaceCommitLimit(c.req.query('limit'))
-  const repos = await loadWorkspace(limit, {
-    refreshInactive: true,
-    forceRefresh: true,
-  })
+  const repos = await loadWorkspace(limit, { forceRefresh: true })
   return c.html(
     <Layout title="dumbgit">
       <WorkspaceView repos={repos} limit={limit} />
@@ -475,9 +444,7 @@ app.get('/', renderWorkspace)
 
 app.get('/repo', async (c) => {
   c.header('Cache-Control', 'no-store')
-  const repoPath = resolveWorkspaceRepo(c.req.query('repo'), {
-    requireActive: true,
-  })
+  const repoPath = resolveWorkspaceRepo(c.req.query('repo'))
   if (!repoPath) return c.redirect('/')
   const graph = await loadGraph(repoPath)
   return c.html(
@@ -543,46 +510,6 @@ app.post('/workspace/repo/reorder', async (c) => {
   }
   reorderRepoHistory(ordered)
   return c.body(null, 204)
-})
-
-app.post('/workspace/repo/start', async (c) => {
-  c.header('Cache-Control', 'no-store')
-  const limit = clampWorkspaceCommitLimit(c.req.query('limit'))
-  const repoPath = resolveWorkspaceRepo(c.req.query('repo'))
-  const controlError =
-    repoPath && setRepoActive(repoPath, true)
-      ? undefined
-      : 'Repository is not in Workspace history.'
-  await syncRepoWatchers()
-  const repos = await loadWorkspace(limit, { forceRefresh: true })
-  return c.html(
-    <WorkspaceBoard
-      repos={repos}
-      limit={limit}
-      controlError={controlError}
-    />,
-    200,
-  )
-})
-
-app.post('/workspace/repo/stop', async (c) => {
-  c.header('Cache-Control', 'no-store')
-  const limit = clampWorkspaceCommitLimit(c.req.query('limit'))
-  const repoPath = resolveWorkspaceRepo(c.req.query('repo'))
-  const controlError =
-    repoPath && setRepoActive(repoPath, false)
-      ? undefined
-      : 'Repository is not in Workspace history.'
-  await syncRepoWatchers()
-  const repos = await loadWorkspace(limit)
-  return c.html(
-    <WorkspaceBoard
-      repos={repos}
-      limit={limit}
-      controlError={controlError}
-    />,
-    200,
-  )
 })
 
 app.get('/workspace/commit', async (c) => {
@@ -709,7 +636,7 @@ app.get('/workspace/worktree/file', async (c) => {
   return c.html(<WorkspacePatch patch={patch.patch} />, 200)
 })
 
-async function requireActiveRepo(c: Context<AppEnv>, next: Next) {
+async function requireWorkspaceRepo(c: Context<AppEnv>, next: Next) {
   let rawRepo = c.req.query('repo')
   if (!rawRepo && c.req.method === 'POST') {
     try {
@@ -719,18 +646,16 @@ async function requireActiveRepo(c: Context<AppEnv>, next: Next) {
       // Invalid request bodies fail through the normal missing-repository path.
     }
   }
-  const repoPath = resolveWorkspaceRepo(rawRepo, {
-    requireActive: true,
-  })
-  if (!repoPath) return c.text('missing, inactive, or unknown repository', 400)
+  const repoPath = resolveWorkspaceRepo(rawRepo)
+  if (!repoPath) return c.text('missing or unknown repository', 400)
   c.set('repoPath', repoPath)
   await next()
 }
 
-app.use('/fragment/graph', requireActiveRepo)
-app.use('/fragment/graph/*', requireActiveRepo)
-app.use('/fragment/worktree', requireActiveRepo)
-app.use('/api/*', requireActiveRepo)
+app.use('/fragment/graph', requireWorkspaceRepo)
+app.use('/fragment/graph/*', requireWorkspaceRepo)
+app.use('/fragment/worktree', requireWorkspaceRepo)
+app.use('/api/*', requireWorkspaceRepo)
 
 app.get('/fragment/graph/log', async (c) => {
   const repoPath = c.get('repoPath')
