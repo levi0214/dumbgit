@@ -1160,26 +1160,6 @@ body.main-grid-dragging {
   text-transform: none;
   white-space: nowrap;
 }
-.commit-stats-breakdown {
-  padding: 2px 12px 5px;
-  display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: 5px;
-  color: var(--muted);
-  font-size: 10px;
-}
-.commit-stats-kind {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 6px;
-}
-.commit-stats-label {
-  color: #a5a5a5;
-}
-.commit-stats-separator {
-  color: rgba(255, 255, 255, 0.2);
-}
 .diff-files-empty {
   padding: 8px 12px 12px;
   color: var(--muted);

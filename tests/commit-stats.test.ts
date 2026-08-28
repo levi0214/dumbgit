@@ -1,21 +1,9 @@
 import { describe, expect, test } from 'bun:test'
 import { renderToString } from 'hono/jsx/dom/server'
-import {
-  DiffPanel,
-  isTestFile,
-  summarizeCommitFiles,
-} from '../src/views/diff'
+import { DiffPanel, summarizeCommitFiles } from '../src/views/diff'
 
 describe('commit line stats', () => {
-  test('recognizes common test paths and names', () => {
-    expect(isTestFile('src/index.tsx')).toBe(false)
-    expect(isTestFile('src/index.test.ts')).toBe(true)
-    expect(isTestFile('tests/fixtures/result.json')).toBe(true)
-    expect(isTestFile('src/Old.ts → src/New.spec.ts')).toBe(true)
-    expect(isTestFile('README.md')).toBe(false)
-  })
-
-  test('totals non-test and test lines', () => {
+  test('totals added and deleted lines across files', () => {
     expect(
       summarizeCommitFiles([
         { status: 'M', path: 'src/index.ts', added: 12, deleted: 4 },
@@ -23,15 +11,10 @@ describe('commit line stats', () => {
         { status: 'M', path: 'README.md', added: 3, deleted: 1 },
         { status: 'A', path: 'assets/icon.png', binary: true },
       ]),
-    ).toEqual({
-      total: { added: 23, deleted: 5 },
-      nonTest: { added: 15, deleted: 5 },
-      tests: { added: 8, deleted: 0 },
-      testFiles: 1,
-    })
+    ).toEqual({ added: 23, deleted: 5 })
   })
 
-  test('renders totals always and a breakdown only for mixed commits', () => {
+  test('renders a single total, without a test/non-test breakdown', () => {
     const baseSummary = {
       subject: 'make the change',
       body: '',
@@ -45,9 +28,7 @@ describe('commit line stats', () => {
         sha: 'a'.repeat(40),
         summary: {
           ...baseSummary,
-          files: [
-            { status: 'M', path: 'src/main.c', added: 7, deleted: 2 },
-          ],
+          files: [{ status: 'M', path: 'src/main.c', added: 7, deleted: 2 }],
         },
       }),
     )
@@ -55,6 +36,8 @@ describe('commit line stats', () => {
     expect(sourceOnly).toContain('>+7</span>')
     expect(sourceOnly).toContain('>−2</span>')
     expect(sourceOnly).not.toContain('commit-stats-breakdown')
+    expect(sourceOnly).not.toContain('non-test')
+    expect(sourceOnly).not.toContain('>tests</span>')
 
     const mixed = renderToString(
       DiffPanel({
@@ -69,8 +52,11 @@ describe('commit line stats', () => {
         },
       }),
     )
-    expect(mixed).toContain('class="commit-stats-breakdown"')
-    expect(mixed).toContain('>non-test</span>')
-    expect(mixed).toContain('>tests</span>')
+    expect(mixed).toContain('class="commit-line-counts"')
+    expect(mixed).toContain('>+11</span>')
+    expect(mixed).toContain('>−3</span>')
+    expect(mixed).not.toContain('commit-stats-breakdown')
+    expect(mixed).not.toContain('non-test')
+    expect(mixed).not.toContain('>tests</span>')
   })
 })

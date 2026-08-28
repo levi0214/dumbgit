@@ -271,58 +271,22 @@ type CommitLineStats = {
   deleted: number
 }
 
-export type CommitStats = {
-  total: CommitLineStats
-  nonTest: CommitLineStats
-  tests: CommitLineStats
-  testFiles: number
-}
-
-/** Tests are the only special case; everything else stays "non-test". */
-export function isTestFile(displayPath: string): boolean {
-  const renamed = displayPath.split(' → ')
-  const filePath = (renamed[renamed.length - 1] ?? displayPath)
-    .trim()
-    .replaceAll('\\', '/')
-  const basename = filePath.split('/').pop() ?? ''
-  return (
-    /(^|\/)(__tests__|tests?|specs?|e2e|cypress|playwright)(\/|$)/i.test(
-      filePath,
-    ) ||
-    /(?:^|[._-])(?:test|tests|spec)(?:[._-]|$)/i.test(basename) ||
-    /(?:Test|Tests|Spec)\.[^.]+$/.test(basename)
-  )
-}
-
 function emptyLineStats(): CommitLineStats {
   return { added: 0, deleted: 0 }
 }
 
-export function summarizeCommitFiles(files: CommitFile[]): CommitStats {
-  const stats: CommitStats = {
-    total: emptyLineStats(),
-    nonTest: emptyLineStats(),
-    tests: emptyLineStats(),
-    testFiles: 0,
-  }
-
+export function summarizeCommitFiles(files: CommitFile[]): CommitLineStats {
+  const stats = emptyLineStats()
   for (const file of files) {
-    const test = isTestFile(file.path)
-    const bucket = test ? stats.tests : stats.nonTest
-    if (test) stats.testFiles += 1
-
     const added =
       file.added !== undefined && Number.isFinite(file.added) ? file.added : 0
     const deleted =
       file.deleted !== undefined && Number.isFinite(file.deleted)
         ? file.deleted
         : 0
-    stats.total.added += added
-    stats.total.deleted += deleted
-    bucket.added += added
-    bucket.deleted += deleted
+    stats.added += added
+    stats.deleted += deleted
   }
-
   return stats
 }
 
@@ -534,23 +498,8 @@ export function DiffPanel(props: DiffPanelProps) {
             changed files{' '}
             <span class="diff-files-count">({summary.files.length})</span>
           </span>
-          <CommitLineCounts stats={stats.total} />
+          <CommitLineCounts stats={stats} />
         </div>
-        {stats.testFiles > 0 ? (
-          <div class="commit-stats-breakdown">
-            <span class="commit-stats-kind">
-              <span class="commit-stats-label">non-test</span>
-              <CommitLineCounts stats={stats.nonTest} />
-            </span>
-            <span class="commit-stats-separator" aria-hidden="true">
-              ·
-            </span>
-            <span class="commit-stats-kind">
-              <span class="commit-stats-label">tests</span>
-              <CommitLineCounts stats={stats.tests} />
-            </span>
-          </div>
-        ) : null}
         {summary.files.length > 0 ? (
           <ul class="diff-files">
             {summary.files.map((f) => {
