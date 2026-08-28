@@ -1336,6 +1336,12 @@ body.main-grid-dragging {
   text-decoration: none;
   cursor: pointer;
 }
+.workspace-card-head:focus-visible {
+  position: relative;
+  z-index: 1;
+  outline: 1px solid var(--accent);
+  outline-offset: -2px;
+}
 .workspace-card-head:hover .workspace-repo-name {
   color: var(--accent);
 }
