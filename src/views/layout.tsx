@@ -10,8 +10,12 @@ const CSS = `
   --accent: #569cd6;
   --graph-rail-muted: #5a5a5a;
   --border: #333;
+  /* Red/green semantics are unified under the error/success tokens:
+     --error = delete/error, --success = add/success. */
   --error: #f48771;
-  --success: #6a9955;
+  --success: #89d185;
+  /* Modified/attention uses a warm amber, distinct from add (green) and delete (red). */
+  --modified: #e3b341;
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; overflow: hidden; }
@@ -638,7 +642,7 @@ body.main-grid-dragging {
 .log-row-stash .stash-drop-btn:hover,
 .log-row-stash .stash-drop-btn.confirm-armed {
   color: var(--error);
-  background: rgba(244, 71, 71, 0.12);
+  background: color-mix(in srgb, var(--error) 12%, transparent);
 }
 .branch-prefix {
   display: inline-flex;
@@ -1026,7 +1030,7 @@ body.main-grid-dragging {
 .worktree-action-danger.confirm-armed {
   border-color: var(--error);
   color: var(--error);
-  background: rgba(244, 71, 71, 0.12);
+  background: color-mix(in srgb, var(--error) 12%, transparent);
 }
 .diff-subject-path {
   overflow: hidden;
@@ -1058,24 +1062,24 @@ body.main-grid-dragging {
   color: #808080;
 }
 .diff-row-add {
-  color: #b5bd68;
+  color: var(--success);
 }
 .diff-row-add .diff-ln-new {
-  color: #b5bd68;
+  color: var(--success);
 }
 .diff-row-del {
-  color: #cc6666;
+  color: var(--error);
 }
 .diff-row-del .diff-ln-old {
-  color: #cc6666;
+  color: var(--error);
 }
 /* Changed words render as an "inverse" chip: solid line-color background with dark text (mirrors pi's terminal diff). */
 .diff-row-add .diff-word-chg {
-  background: #b5bd68;
+  background: var(--success);
   color: #1e1e1e;
 }
 .diff-row-del .diff-word-chg {
-  background: #cc6666;
+  background: var(--error);
   color: #1e1e1e;
 }
 .diff-row-hunk {
@@ -1253,7 +1257,7 @@ body.main-grid-dragging {
 }
 .file-A { color: var(--success); }
 .file-D { color: var(--error); }
-.file-M { color: #dcdcaa; }
+.file-M { color: var(--modified); }
 .file-R { color: var(--accent); }
 .file-path { word-break: break-all; flex: 1; min-width: 0; }
 .file-num {
@@ -1263,8 +1267,8 @@ body.main-grid-dragging {
   color: var(--muted);
   white-space: nowrap;
 }
-.file-num-add { color: #89d185; }
-.file-num-del { color: #f48771; }
+.file-num-add { color: var(--success); }
+.file-num-del { color: var(--error); }
 .file-num-new { color: var(--accent); }
 .file-num-binary { color: var(--muted); font-style: italic; }
 .diff-body {
@@ -1850,10 +1854,10 @@ body.workspace-reordering {
   font-variant-numeric: tabular-nums;
 }
 .workspace-file-group-staged .workspace-file-group-head {
-  color: rgba(137, 209, 133, 0.78);
+  color: color-mix(in srgb, var(--success) 78%, transparent);
 }
 .workspace-file-group-unstaged .workspace-file-group-head {
-  color: rgba(220, 220, 170, 0.72);
+  color: color-mix(in srgb, var(--modified) 72%, transparent);
 }
 .workspace-file-group-untracked .workspace-file-group-head {
   color: rgba(86, 156, 214, 0.76);
