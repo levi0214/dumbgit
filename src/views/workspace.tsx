@@ -244,10 +244,6 @@ function WorkspaceRepoCard(props: {
   const laneLayout = graphLaneLayout(repo.rows)
   const totals = changeTotals(repo.worktree)
   const dirty = totals.files > 0
-  const branch =
-    repo.head.kind === 'branch'
-      ? repo.head.name
-      : `detached · ${repo.head.sha.slice(0, 7)}`
   const repoUrl = repo.active
     ? `/repo?repo=${repoQuery(repo.repoPath)}`
     : undefined
@@ -261,9 +257,6 @@ function WorkspaceRepoCard(props: {
       <div class="workspace-card-head" title={repo.repoPath}>
         <div class="workspace-repo-identity">
           <WorkspaceRepoName repoPath={repo.repoPath} repoUrl={repoUrl} />
-          <span class="workspace-branch" title={branch}>
-            {branch}
-          </span>
         </div>
         <WorkspaceCardActions
           repoPath={repo.repoPath}
@@ -282,7 +275,6 @@ function WorkspaceRepoCard(props: {
         hx-target="#workspace-inspector"
         hx-swap="outerHTML"
       >
-        <span class="workspace-worktree-indicator" aria-hidden="true"></span>
         <span class="workspace-worktree-label">
           <span>{dirty ? 'Uncommitted changes' : 'Working tree clean'}</span>
           {dirty ? (

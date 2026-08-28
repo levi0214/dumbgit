@@ -1361,7 +1361,6 @@ body.main-grid-dragging {
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 8px;
 }
 .workspace-repo-name {
   min-width: 0;
@@ -1376,20 +1375,6 @@ body.main-grid-dragging {
 a.workspace-repo-name:hover {
   color: var(--accent);
 }
-.workspace-branch {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--accent);
-  font-size: 10px;
-  line-height: 16px;
-  padding: 1px 6px;
-  border-radius: 4px;
-  background: rgba(86, 156, 214, 0.1);
-  box-shadow: inset 0 0 0 1px rgba(86, 156, 214, 0.22);
-}
-
 .workspace-icon-action {
   width: 26px;
   height: 26px;
@@ -1547,19 +1532,6 @@ body.workspace-reordering {
 }
 .workspace-worktree-summary.workspace-worktree-dirty {
   color: var(--fg);
-}
-.workspace-worktree-indicator {
-  width: 7px;
-  height: 7px;
-  flex: 0 0 auto;
-  border: 1.5px solid var(--graph-rail-muted);
-  border-radius: 50%;
-}
-.workspace-worktree-dirty .workspace-worktree-indicator {
-  border: 0;
-  border-radius: 1px;
-  background: var(--accent);
-  transform: rotate(45deg);
 }
 .workspace-worktree-label {
   min-width: 0;
