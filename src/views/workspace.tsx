@@ -98,56 +98,6 @@ function changeTotals(worktree: WorkTreeSummary): {
   return { files: paths.size, added, deleted }
 }
 
-function WorkspaceRepoName(props: {
-  repoPath: string
-  repoUrl?: string
-}) {
-  const name = path.basename(props.repoPath)
-  return props.repoUrl ? (
-    <a
-      class="workspace-repo-name"
-      href={props.repoUrl}
-      title={`Open ${name}`}
-    >
-      {name}
-    </a>
-  ) : (
-    <span class="workspace-repo-name" title={name}>
-      {name}
-    </span>
-  )
-}
-
-function WorkspaceCardActions(props: {
-  repoPath: string
-  repoUrl?: string
-}) {
-  const name = path.basename(props.repoPath)
-  return (
-    <div class="workspace-card-actions">
-      <button
-        type="button"
-        class="workspace-drag-handle"
-        draggable="true"
-        title={`Drag ${name} to reorder`}
-        aria-label={`Drag ${name} to reorder`}
-      >
-        ⠿
-      </button>
-      {props.repoUrl ? (
-        <a
-          class="workspace-icon-action workspace-open-repo"
-          href={props.repoUrl}
-          title="Open full repository view"
-          aria-label={`Open ${name}`}
-        >
-          ↗
-        </a>
-      ) : null}
-    </div>
-  )
-}
-
 function WorkspaceDepthToggle(props: { limit: number }) {
   const expanded = props.limit === 10
   const nextLimit = expanded ? 5 : 10
@@ -191,6 +141,18 @@ function WorkspaceRepoCard(props: {
   repo: WorkspaceRepoSnapshot
   limit: number
 }) {
+  const name = path.basename(props.repo.repoPath)
+  const dragHandle = (
+    <button
+      type="button"
+      class="workspace-drag-handle"
+      draggable="true"
+      title={`Drag ${name} to reorder`}
+      aria-label={`Drag ${name} to reorder`}
+    >
+      <span class="workspace-drag-glyph">⠿</span>
+    </button>
+  )
   if (!props.repo.ok) {
     const repoUrl = `/repo?repo=${repoQuery(props.repo.repoPath)}`
     return (
@@ -198,18 +160,28 @@ function WorkspaceRepoCard(props: {
         class="workspace-repo-card workspace-repo-error"
         data-workspace-repo={props.repo.repoPath}
       >
-        <div class="workspace-card-head" title={props.repo.repoPath}>
-          <div>
-            <WorkspaceRepoName
-              repoPath={props.repo.repoPath}
-              repoUrl={repoUrl}
-            />
-          </div>
-          <WorkspaceCardActions
-            repoPath={props.repo.repoPath}
-            repoUrl={repoUrl}
-          />
-        </div>
+        {dragHandle}
+        <a
+          class="workspace-card-head"
+          href={repoUrl}
+          title={props.repo.repoPath}
+        >
+          <span class="workspace-repo-name">{name}</span>
+          <span class="workspace-open-hint" aria-hidden="true">
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="m9 18 6-6-6-6" />
+            </svg>
+          </span>
+        </a>
         <pre>
           {workspaceSafeRepoText(props.repo.stderr, props.repo.repoPath)}
         </pre>
@@ -230,12 +202,24 @@ function WorkspaceRepoCard(props: {
       class="workspace-repo-card"
       data-workspace-repo={repo.repoPath}
     >
-      <div class="workspace-card-head" title={repo.repoPath}>
-        <div class="workspace-repo-identity">
-          <WorkspaceRepoName repoPath={repo.repoPath} repoUrl={repoUrl} />
-        </div>
-        <WorkspaceCardActions repoPath={repo.repoPath} repoUrl={repoUrl} />
-      </div>
+      {dragHandle}
+      <a class="workspace-card-head" href={repoUrl} title={repo.repoPath}>
+        <span class="workspace-repo-name">{name}</span>
+        <span class="workspace-open-hint" aria-hidden="true">
+          <svg
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="m9 18 6-6-6-6" />
+          </svg>
+        </span>
+      </a>
 
       <button
         type="button"

@@ -1315,6 +1315,7 @@ body.main-grid-dragging {
 .workspace-repo-card {
   min-width: 0;
   overflow: hidden;
+  position: relative;
   border: 1px solid var(--border);
   border-radius: 7px;
   background: #252526;
@@ -1331,11 +1332,12 @@ body.main-grid-dragging {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  color: inherit;
+  text-decoration: none;
+  cursor: pointer;
 }
-.workspace-repo-identity {
-  min-width: 0;
-  display: flex;
-  align-items: center;
+.workspace-card-head:hover .workspace-repo-name {
+  color: var(--accent);
 }
 .workspace-repo-name {
   min-width: 0;
@@ -1343,60 +1345,47 @@ body.main-grid-dragging {
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--fg);
-  text-decoration: none;
   font-weight: 700;
   font-size: 13px;
 }
-a.workspace-repo-name:hover {
-  color: var(--accent);
-}
-.workspace-icon-action {
-  width: 26px;
-  height: 26px;
+.workspace-open-hint {
   flex: 0 0 auto;
-  border: 1px solid transparent;
-  border-radius: 4px;
-  padding: 0;
-  background: transparent;
-  color: var(--muted);
-  text-decoration: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  cursor: pointer;
-  transition: transform 120ms ease-out;
+  color: var(--muted);
 }
-.workspace-icon-action:hover:not(:disabled) {
+.workspace-open-hint svg {
+  display: block;
+}
+.workspace-card-head:hover .workspace-open-hint {
   color: var(--accent);
-  border-color: var(--border);
-  background: rgba(86, 156, 214, 0.08);
-}
-.workspace-icon-action:active:not(:disabled) {
-  transform: scale(0.97);
-}
-.workspace-icon-action:disabled {
-  opacity: 0.38;
-  cursor: default;
-}
-.workspace-card-actions {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  gap: 6px;
 }
 .workspace-drag-handle {
-  width: 20px;
-  height: 20px;
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 18px;
+  height: 11px;
   padding: 0;
   border: 0;
   background: transparent;
   color: #626262;
   opacity: 0;
   font: inherit;
-  font-size: 13px;
+  font-size: 10px;
   line-height: 1;
   cursor: grab;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   transition: opacity 120ms ease;
+}
+.workspace-drag-handle .workspace-drag-glyph {
+  display: inline-block;
+  transform: rotate(90deg);
 }
 .workspace-repo-card:hover .workspace-drag-handle,
 .workspace-drag-handle:focus-visible {
