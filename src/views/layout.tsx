@@ -1360,7 +1360,7 @@ body.main-grid-dragging {
 .workspace-repo-identity {
   min-width: 0;
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 8px;
 }
 .workspace-repo-name {
@@ -1382,7 +1382,12 @@ a.workspace-repo-name:hover {
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--accent);
-  font-size: 11px;
+  font-size: 10px;
+  line-height: 16px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: rgba(86, 156, 214, 0.1);
+  box-shadow: inset 0 0 0 1px rgba(86, 156, 214, 0.22);
 }
 
 .workspace-icon-action {
