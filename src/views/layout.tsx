@@ -1741,7 +1741,7 @@ const EMPTY_DIFF_HTML =
   '<div id="diff" class="diff-panel diff-empty">(click a commit message to see changed files)</div>'
 
 const KEY_SCRIPT =
-  `const EMPTY_DIFF = ${JSON.stringify(EMPTY_DIFF_HTML)};` +
+  `var EMPTY_DIFF = ${JSON.stringify(EMPTY_DIFF_HTML)};` +
   `
 function withRepo(url) {
   var repo = document.body.dataset ? document.body.dataset.repo : '';
