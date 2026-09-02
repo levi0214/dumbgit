@@ -1,6 +1,6 @@
 /** @jsxImportSource hono/jsx */
 import { raw } from 'hono/html'
-import HTMX_SCRIPT from '../vendor/htmx-2.0.4.min.txt' with { type: 'text' }
+import HTMX_SCRIPT from '../vendor/htmx-2.0.10.min.txt' with { type: 'text' }
 
 const CSS = `
 :root {
