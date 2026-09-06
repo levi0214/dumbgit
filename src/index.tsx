@@ -56,7 +56,7 @@ const HEALTH_BODY = 'dumbgit ok'
 /** The single Workspace controller always owns one stable local port. */
 const DEFAULT_PORT = 7777
 
-/** Initial / expanded `git log -n` depth (ASCII graph needs full re-fetch each time). */
+/** Initial / expanded `git log -n` depth (lanes are laid out over the whole window, so every expansion re-fetches and re-renders the full graph). */
 const GRAPH_COMMIT_DEFAULT = 50
 const GRAPH_COMMIT_STEP = 50
 const GRAPH_COMMIT_MAX = 500
