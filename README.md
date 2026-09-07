@@ -66,7 +66,7 @@ or a coding agent. It stays dumb on purpose.
 - Hacking on dumbgit: run `bun install`, `bun link`, then `bun run dev`.
 - Maintainers: see [RELEASING.md](RELEASING.md).
 
-## Jump from the shell
+## Jump helper
 
 This zsh function cds to a remembered repo. Put it in `~/.zshrc`.
 
