@@ -1298,6 +1298,14 @@ body.main-grid-dragging {
   display: flex;
   flex-direction: column;
 }
+.workspace-repo-card.workspace-repo-dirty {
+  --dirty-border: color-mix(in srgb, var(--modified) 40%, #252526);
+  border-color: var(--dirty-border);
+}
+.workspace-repo-card.workspace-repo-dirty .workspace-card-head {
+  background: color-mix(in srgb, var(--modified) 15%, #2a2a2c);
+  border-bottom-color: var(--dirty-border);
+}
 .workspace-card-head {
   min-height: 44px;
   padding: 8px 12px;

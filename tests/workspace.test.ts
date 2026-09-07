@@ -130,6 +130,49 @@ describe('workspace states', () => {
     ).toBe('fatal: ~/dev/2025/secret-repo/.git is unavailable')
   })
 
+  test('marks dirty repository cards', () => {
+    const html = renderToString(
+      WorkspaceView({
+        repos: [
+          {
+            ok: true,
+            repoPath: '/tmp/clean',
+            head: { kind: 'branch', name: 'main', sha: 'a'.repeat(40) },
+            rows: [],
+            worktree: { staged: [], unstaged: [], untracked: [] },
+          },
+          {
+            ok: true,
+            repoPath: '/tmp/dirty',
+            head: { kind: 'branch', name: 'main', sha: 'b'.repeat(40) },
+            rows: [],
+            worktree: {
+              staged: [],
+              unstaged: [
+                {
+                  mark: ' M',
+                  path: 'note.txt',
+                  added: 1,
+                  deleted: 0,
+                },
+              ],
+              untracked: [],
+            },
+          },
+        ],
+        limit: 5,
+      }),
+    )
+
+    const cardTag = (repoPath: string) => {
+      const at = html.indexOf(`data-workspace-repo="${repoPath}"`)
+      expect(at).toBeGreaterThan(-1)
+      return html.slice(html.lastIndexOf('<article', at), at)
+    }
+    expect(cardTag('/tmp/clean')).not.toContain('workspace-repo-dirty')
+    expect(cardTag('/tmp/dirty')).toContain('workspace-repo-dirty')
+  })
+
   test('renders a workspace card with name, drag handle and depth toggle', () => {
     const html = renderToString(
       WorkspaceView({

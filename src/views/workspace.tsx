@@ -199,7 +199,7 @@ function WorkspaceRepoCard(props: {
 
   return (
     <article
-      class="workspace-repo-card"
+      class={`workspace-repo-card${dirty ? ' workspace-repo-dirty' : ''}`}
       data-workspace-repo={repo.repoPath}
     >
       {dragHandle}
