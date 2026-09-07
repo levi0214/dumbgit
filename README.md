@@ -66,6 +66,38 @@ or a coding agent. It stays dumb on purpose.
 - Hacking on dumbgit: run `bun install`, `bun link`, then `bun run dev`.
 - Maintainers: see [RELEASING.md](RELEASING.md).
 
+## Jump from the shell
+
+This zsh function cds to a remembered repo. Put it in `~/.zshrc`.
+
+```zsh
+j() {
+  local file="$HOME/Library/Application Support/dumbgit/repos.json"
+  local -a repos hits
+  repos=(${(f)"$(sed -n 's/.*"repoPath": "\(.*\)".*/\1/p' "$file")"})
+  (( $# )) && hits=(${(M)repos:#*$1*}) || hits=($repos)
+
+  case $#hits in
+    0) print -u2 "no match: $1"; return 1 ;;
+    1) cd "$hits[1]" && pwd ;;
+    *)
+      if (( $# )); then
+        select dest in $hits; do
+          [[ -n $dest ]] && cd "$dest" && pwd && break
+        done
+      else
+        print -l $hits
+      fi
+      ;;
+  esac
+}
+```
+
+```
+j              # list remembered repos
+j <name>       # substring of a stored path; menu if several match
+```
+
 ## License
 
 MIT. See [LICENSE](LICENSE).
