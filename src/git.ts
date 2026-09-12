@@ -783,6 +783,16 @@ export async function dropPreviewStash(ref?: string, cwd = repoRoot): Promise<
   return { ok: true }
 }
 
+/** Stashes store tracked changes against parent 1 and untracked files in parent 3. */
+async function stashDiffCommands(ref: string, cwd: string): Promise<string[][]> {
+  const commands = [['diff', '--no-color', `${ref}^1`, ref]]
+  const untracked = await spawnGit(['rev-parse', '--verify', `${ref}^3`], cwd)
+  if (untracked.code === 0) {
+    commands.push(['show', '--root', '--format=', '--no-color', untracked.stdout.trim()])
+  }
+  return commands
+}
+
 export async function stashSummary(
   ref: string,
   cwd = repoRoot,
@@ -794,24 +804,17 @@ export async function stashSummary(
     return { ok: false, stderr: meta.stderr.trim() || `git log failed (${meta.code})` }
   }
   const [author = 'git stash', date = ''] = meta.stdout.trimEnd().split('\n')
-  const fileShow = await spawnGit([
-    'show',
-    '--name-status',
-    '--format=',
-    '--no-color',
-    stash.ref,
-  ], cwd)
-  if (fileShow.code !== 0) {
-    return {
-      ok: false,
-      stderr:
-        fileShow.stderr.trim() || `git show --name-status failed (${fileShow.code})`,
+  const files: CommitFile[] = []
+  for (const command of await stashDiffCommands(stash.ref, cwd)) {
+    const names = await spawnGit([...command, '--name-status'], cwd)
+    if (names.code !== 0) {
+      return { ok: false, stderr: names.stderr.trim() || `stash diff failed (${names.code})` }
     }
-  }
-  const numstat = await spawnGit(['show', '--numstat', '--format=', stash.ref], cwd)
-  let files = parseShowNameStatus(fileShow.stdout)
-  if (numstat.code === 0) {
-    files = mergeNumstat(files, parseNumstat(numstat.stdout))
+    const numstat = await spawnGit([...command, '--numstat'], cwd)
+    if (numstat.code !== 0) {
+      return { ok: false, stderr: numstat.stderr.trim() || `stash diff failed (${numstat.code})` }
+    }
+    files.push(...mergeNumstat(parseShowNameStatus(names.stdout), parseNumstat(numstat.stdout)))
   }
   return {
     ok: true,
@@ -834,7 +837,27 @@ export async function stashFilePatch(
 ): Promise<{ ok: true; patch: string } | { ok: false; stderr: string }> {
   const stash = await findDumbgitPreviewStash(ref, cwd)
   if (!stash) return { ok: false, stderr: 'stash not found' }
-  return commitFilePatch(stash.ref, displayPath, files, cwd)
+  if (!files) {
+    const summary = await stashSummary(ref, cwd)
+    if (!summary.ok) return summary
+    files = summary.value.files
+  }
+  const file = files.find((f) => f.path === displayPath)
+  if (!file) return { ok: false, stderr: 'path not in stash file list' }
+
+  // Include both sides of a rename so Git preserves the rename in the patch.
+  const paths = file.status.startsWith('R') ? displayPath.split(' → ') : [displayPath]
+  const patches: string[] = []
+  for (const command of await stashDiffCommands(stash.ref, cwd)) {
+    const patch = await spawnGit([
+      ...command, '--patch', '--', ...paths.map((p) => `:(literal)${p}`),
+    ], cwd)
+    if (patch.code !== 0) {
+      return { ok: false, stderr: patch.stderr.trim() || `stash diff failed (${patch.code})` }
+    }
+    if (patch.stdout.trim()) patches.push(patch.stdout.trimEnd())
+  }
+  return { ok: true, patch: patches.join('\n') }
 }
 
 // Worktree status and file actions.
