@@ -1,4 +1,4 @@
-import { realpathSync, statSync } from 'node:fs'
+import { lstatSync, realpathSync, statSync } from 'node:fs'
 import path from 'node:path'
 
 // Core repo state and git process helpers.
@@ -566,13 +566,69 @@ export async function commitSummary(
   }
 }
 
+export type ImagePreview = { src?: string; message?: string; previous?: boolean }
+type FilePatchResult =
+  | { ok: true; patch: string; image?: ImagePreview }
+  | { ok: false; stderr: string }
+
+const IMAGE_TYPES: Record<string, string> = {
+  '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif', '.webp': 'image/webp', '.svg': 'image/svg+xml',
+  '.avif': 'image/avif', '.bmp': 'image/bmp', '.ico': 'image/x-icon',
+}
+const IMAGE_MAX_BYTES = 10 * 1024 * 1024
+
+/** Keep image bytes out of text decoding; data URLs also isolate SVG from the app origin. */
+async function imagePreview(
+  rel: string, refs: string[] | null, cwd: string, previous = false,
+): Promise<ImagePreview | undefined> {
+  const mime = IMAGE_TYPES[path.extname(rel).toLowerCase()]
+  if (!mime) return undefined
+  const unavailable = { message: 'Image preview unavailable', previous }
+  const tooLarge = { message: 'Image is too large to preview (10 MB limit)', previous }
+  try {
+    let bytes: Uint8Array
+    if (refs) {
+      let oid = ''
+      for (const ref of refs) {
+        const resolved = await spawnGit(['rev-parse', '--verify', '--end-of-options', `${ref}:${rel}`], cwd)
+        if (resolved.code === 0 && /^[a-f0-9]{40,64}$/i.test(resolved.stdout.trim())) {
+          oid = resolved.stdout.trim()
+          break
+        }
+      }
+      if (!oid) return unavailable
+      const size = await spawnGit(['cat-file', '-s', oid], cwd)
+      if (size.code !== 0) return unavailable
+      if (Number(size.stdout) > IMAGE_MAX_BYTES) return tooLarge
+      const proc = Bun.spawn(['git', 'cat-file', 'blob', oid], { cwd, stdout: 'pipe', stderr: 'ignore' })
+      const [buffer, code] = await Promise.all([new Response(proc.stdout).arrayBuffer(), proc.exited])
+      if (code !== 0) return unavailable
+      bytes = new Uint8Array(buffer)
+    } else {
+      const root = realpathSync(cwd)
+      const absolute = path.resolve(root, rel)
+      if (!lstatSync(absolute).isFile()) return unavailable
+      const relative = path.relative(root, realpathSync(absolute))
+      if (relative.startsWith('../') || path.isAbsolute(relative)) return unavailable
+      const file = Bun.file(absolute)
+      if (file.size > IMAGE_MAX_BYTES) return tooLarge
+      bytes = new Uint8Array(await file.arrayBuffer())
+    }
+    if (bytes.byteLength > IMAGE_MAX_BYTES) return tooLarge
+    return { src: `data:${mime};base64,${Buffer.from(bytes).toString('base64')}`, previous }
+  } catch {
+    return unavailable
+  }
+}
+
 /** Unified diff for one file in a commit; `displayPath` must match `commitSummary()` (renames use `old → new`). */
 export async function commitFilePatch(
   sha: string,
   displayPath: string,
   files?: CommitFile[],
   cwd = repoRoot,
-): Promise<{ ok: true; patch: string } | { ok: false; stderr: string }> {
+): Promise<FilePatchResult> {
   if (!files) {
     const summary = await commitSummary(sha, {}, cwd)
     if (!summary.ok) return summary
@@ -587,6 +643,10 @@ export async function commitFilePatch(
 
   const raw = gitDiffPath(displayPath)
   if (!raw) return { ok: false, stderr: 'invalid path' }
+
+  const deleted = files.find((f) => f.path === displayPath)?.status === 'D'
+  const image = await imagePreview(raw, [deleted ? `${sha}^1` : sha], cwd, deleted)
+  if (image) return { ok: true, patch: '', image }
 
   const patch = await spawnGit([
     'show',
@@ -834,7 +894,7 @@ export async function stashFilePatch(
   displayPath: string,
   files?: CommitFile[],
   cwd = repoRoot,
-): Promise<{ ok: true; patch: string } | { ok: false; stderr: string }> {
+): Promise<FilePatchResult> {
   const stash = await findDumbgitPreviewStash(ref, cwd)
   if (!stash) return { ok: false, stderr: 'stash not found' }
   if (!files) {
@@ -844,6 +904,11 @@ export async function stashFilePatch(
   }
   const file = files.find((f) => f.path === displayPath)
   if (!file) return { ok: false, stderr: 'path not in stash file list' }
+
+  const deleted = file.status === 'D'
+  const image = await imagePreview(gitDiffPath(displayPath),
+    deleted ? [`${stash.ref}^1`] : [stash.ref, `${stash.ref}^3`], cwd, deleted)
+  if (image) return { ok: true, patch: '', image }
 
   // Include both sides of a rename so Git preserves the rename in the patch.
   const paths = file.status.startsWith('R') ? displayPath.split(' → ') : [displayPath]
@@ -940,7 +1005,7 @@ export async function workTreeFilePatch(
   kind: WorkTreeChangeKind,
   displayPath: string,
   cwd = repoRoot,
-): Promise<{ ok: true; patch: string } | { ok: false; stderr: string }> {
+): Promise<FilePatchResult> {
   const wt = await workTreeSummary(cwd)
   const bucket =
     kind === 'staged' ? wt.staged : kind === 'unstaged' ? wt.unstaged : wt.untracked
@@ -956,6 +1021,11 @@ export async function workTreeFilePatch(
 
   const rel = await strictRepoRelative(raw, cwd)
   if (!rel) return { ok: false, stderr: 'invalid path' }
+
+  const deleted = bucket.find((e) => e.path === displayPath)?.mark === 'D'
+  const refs = kind === 'staged' ? [deleted ? 'HEAD' : ''] : deleted ? [''] : null
+  const image = await imagePreview(rel, refs, cwd, deleted)
+  if (image) return { ok: true, patch: '', image }
 
   if (kind === 'untracked') {
     const r = await spawnGit([

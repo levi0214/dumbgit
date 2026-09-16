@@ -1176,6 +1176,24 @@ body.main-grid-dragging {
   padding: 10px 12px 12px;
   border-top: 1px solid var(--border);
 }
+.image-preview {
+  padding: 20px;
+  text-align: center;
+}
+.image-preview img {
+  display: block;
+  max-width: 100%;
+  max-height: 65vh;
+  width: auto;
+  height: auto;
+  margin: 0 auto;
+  object-fit: contain;
+  background: repeating-conic-gradient(#303030 0% 25%, #252525 0% 50%) 0 / 16px 16px;
+}
+.image-preview-note {
+  color: var(--muted);
+  margin-bottom: 12px;
+}
 .diff-patch-pre {
   margin: 0 !important;
   padding: 0 !important;

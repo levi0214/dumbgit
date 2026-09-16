@@ -581,7 +581,7 @@ app.get('/workspace/commit/file', async (c) => {
       200,
     )
   }
-  return c.html(<WorkspacePatch patch={patch.patch} />, 200)
+  return c.html(<WorkspacePatch patch={patch.patch} image={patch.image} />, 200)
 })
 
 app.get('/workspace/worktree', async (c) => {
@@ -633,7 +633,7 @@ app.get('/workspace/worktree/file', async (c) => {
       200,
     )
   }
-  return c.html(<WorkspacePatch patch={patch.patch} />, 200)
+  return c.html(<WorkspacePatch patch={patch.patch} image={patch.image} />, 200)
 })
 
 async function requireWorkspaceRepo(c: Context<AppEnv>, next: Next) {
@@ -760,6 +760,7 @@ app.get('/api/worktree/file', async (c) => {
       displayPath={filePath}
       absolutePath={path.resolve(repoPath, rel)}
       patch={r.patch}
+      image={r.image}
     />,
     200,
   )
@@ -935,13 +936,13 @@ app.get('/api/commit/:sha/file', async (c) => {
       200,
     )
   }
-  if (!r.patch.trim()) {
+  if (!r.patch.trim() && !r.image) {
     return c.html(
       <pre class="diff-body diff-patch-empty">(no diff)</pre>,
       200,
     )
   }
-  return c.html(<DiffPatchBody text={r.patch} />, 200)
+  return c.html(<DiffPatchBody text={r.patch} image={r.image} />, 200)
 })
 
 app.get('/api/stash', async (c) => {
@@ -987,7 +988,7 @@ app.get('/api/stash/file', async (c) => {
   if (!r.ok) {
     return c.html(<pre class="diff-body diff-patch-error">{r.stderr}</pre>, 200)
   }
-  return c.html(<DiffPatchBody text={r.patch} />, 200)
+  return c.html(<DiffPatchBody text={r.patch} image={r.image} />, 200)
 })
 
 app.post('/api/branch/create', async (c) => {

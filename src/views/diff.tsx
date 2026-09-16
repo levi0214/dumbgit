@@ -2,6 +2,7 @@
 import { raw } from 'hono/html'
 import type {
   CommitFile,
+  ImagePreview,
   CommitSummary,
   TagInfo,
   WorkTreeActionOp,
@@ -324,7 +325,20 @@ function DiffTag(props: { tag: TagInfo }) {
 }
 
 /** Unified diff body: line numbers plus word-level highlights on changed lines. */
-export function DiffPatchBody(props: { text: string }) {
+export function DiffPatchBody(props: { text: string; image?: ImagePreview }) {
+  if (props.image) {
+    return <div class="image-preview">
+      {props.image.previous ? <div class="image-preview-note">Deleted image · previous version</div> : null}
+      {props.image.src ? <>
+        <img
+          src={props.image.src}
+          alt="Image preview"
+          onerror="this.style.display='none';this.nextElementSibling.hidden=false"
+        />
+        <div class="image-preview-note" role="status" hidden>Unable to preview this image</div>
+      </> : <div class="image-preview-note">{props.image.message}</div>}
+    </div>
+  }
   const rows = parseDiff(props.text)
   if (rows.length === 0) {
     return <pre class="diff-body diff-patch-empty">(no diff)</pre>
@@ -362,6 +376,7 @@ export type WorkTreeDiffPanelProps =
       displayPath: string
       absolutePath: string
       patch: string
+      image?: ImagePreview
     }
   | { ok: false; stderr: string }
 
@@ -435,8 +450,8 @@ export function WorkTreeDiffPanel(props: WorkTreeDiffPanelProps) {
         </div>
       </div>
       <div id="diff-patch-slot" class="diff-patch-slot diff-patch-slot-inline">
-        {patch ? (
-          <DiffPatchBody text={props.patch} />
+        {patch || props.image ? (
+          <DiffPatchBody text={props.patch} image={props.image} />
         ) : (
           <pre class="diff-body diff-patch-empty">(no diff)</pre>
         )}

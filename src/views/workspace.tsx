@@ -3,6 +3,7 @@ import os from 'node:os'
 import path from 'node:path'
 import type {
   CommitSummary,
+  ImagePreview,
   GraphRow,
   HeadInfo,
   WorkTreeChangeKind,
@@ -551,9 +552,9 @@ export function WorkspaceWorktreeInspector(props: {
   )
 }
 
-export function WorkspacePatch(props: { patch: string }) {
-  if (!props.patch.trim()) {
+export function WorkspacePatch(props: { patch: string; image?: ImagePreview }) {
+  if (!props.patch.trim() && !props.image) {
     return <pre class="diff-body diff-patch-empty">(no diff)</pre>
   }
-  return <DiffPatchBody text={props.patch} />
+  return <DiffPatchBody text={props.patch} image={props.image} />
 }
