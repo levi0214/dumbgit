@@ -2,7 +2,7 @@
 
 A tiny local Git GUI for macOS.
 
-![dumbgit workspace](docs/workspace.png)
+![dumbgit workspace](docs/workspace-4-columns.png)
 
 ## Install
 
