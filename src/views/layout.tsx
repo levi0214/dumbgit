@@ -1328,7 +1328,7 @@ body.main-grid-dragging {
 /* Quiet cards dim and lose color until hovered or keyboard-focused. */
 .workspace-repo-card.workspace-repo-inactive:not(:hover):not(:focus-within) {
   filter: grayscale(1);
-  opacity: .6;
+  opacity: .68;
   border-color: var(--border);
 }
 .workspace-repo-card.workspace-repo-inactive:not(:hover):not(:focus-within) .workspace-card-head {
