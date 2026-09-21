@@ -7,9 +7,11 @@ import {
 } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import type { RepoActivity } from './activity'
 
 export type RememberedRepo = {
   repoPath: string
+  activity?: RepoActivity
 }
 
 type HistoryFile = {
@@ -41,7 +43,12 @@ export function readRepoHistory(): RememberedRepo[] {
         (entry): entry is RememberedRepo =>
           !!entry && typeof entry.repoPath === 'string',
       )
-      .map((entry) => ({ repoPath: entry.repoPath }))
+      .map((entry) => ({
+        repoPath: entry.repoPath,
+        ...(typeof entry.activity?.token === 'string' &&
+          Number.isFinite(entry.activity.lastActiveAt) && entry.activity.lastActiveAt >= 0
+          ? { activity: entry.activity } : {}),
+      }))
   } catch {
     return []
   }
@@ -114,5 +121,21 @@ export function reorderRepoHistory(repoPaths: string[]): void {
     writeRepoHistory(reordered)
   } catch {
     // Reordering is a convenience; keep the existing history on failure.
+  }
+}
+
+/** Merge into the latest bookmarks so concurrent reads cannot undo reordering. */
+export function saveRepoActivities(activities: Map<string, RepoActivity>): void {
+  const repos = readRepoHistory()
+  let changed = false
+  for (const repo of repos) {
+    const activity = activities.get(repo.repoPath)
+    if (!activity || (repo.activity?.token === activity.token &&
+      repo.activity.lastActiveAt === activity.lastActiveAt)) continue
+    repo.activity = activity
+    changed = true
+  }
+  if (changed) {
+    try { writeRepoHistory(repos) } catch { /* Keep the workspace usable if storage is unavailable. */ }
   }
 }

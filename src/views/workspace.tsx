@@ -1,5 +1,6 @@
 /** @jsxImportSource hono/jsx */
 import os from 'node:os'
+import { isRepoActive } from '../activity'
 import path from 'node:path'
 import type {
   CommitSummary,
@@ -17,6 +18,7 @@ export type WorkspaceRepoSnapshot =
   | {
       ok: true
       repoPath: string
+      lastActiveAt?: number
       head: HeadInfo
       rows: GraphRow[]
       worktree: WorkTreeSummary
@@ -24,6 +26,7 @@ export type WorkspaceRepoSnapshot =
   | {
       ok: false
       repoPath: string
+      lastActiveAt?: number
       stderr: string
     }
 
@@ -140,6 +143,7 @@ function WorkspaceDepthToggle(props: { limit: number }) {
 
 function WorkspaceRepoCard(props: {
   repo: WorkspaceRepoSnapshot
+  inactive?: boolean
   limit: number
 }) {
   const name = path.basename(props.repo.repoPath)
@@ -158,7 +162,7 @@ function WorkspaceRepoCard(props: {
     const repoUrl = `/repo?repo=${repoQuery(props.repo.repoPath)}`
     return (
       <article
-        class="workspace-repo-card workspace-repo-error"
+        class={`workspace-repo-card workspace-repo-error${props.inactive ? ' workspace-repo-inactive' : ''}`}
         data-workspace-repo={props.repo.repoPath}
       >
         {dragHandle}
@@ -200,7 +204,7 @@ function WorkspaceRepoCard(props: {
 
   return (
     <article
-      class={`workspace-repo-card${dirty ? ' workspace-repo-dirty' : ''}`}
+      class={`workspace-repo-card${dirty ? ' workspace-repo-dirty' : ''}${props.inactive ? ' workspace-repo-inactive' : ''}`}
       data-workspace-repo={repo.repoPath}
     >
       {dragHandle}
@@ -297,6 +301,7 @@ export function WorkspaceBoard(props: {
   repos: WorkspaceRepoSnapshot[]
   limit: number
 }) {
+  const now = Date.now()
   return (
     <section
       id="workspace-board"
@@ -304,13 +309,14 @@ export function WorkspaceBoard(props: {
       aria-label="Repositories"
       data-workspace-limit={String(props.limit)}
     >
-      {props.repos.map((repo) => (
-        <WorkspaceRepoCard
-          key={repo.repoPath}
-          repo={repo}
-          limit={props.limit}
-        />
-      ))}
+      {[true, false].map((active) =>
+        props.repos
+          .filter((repo) => isRepoActive(repo.lastActiveAt ?? 0, now) === active)
+          .map((repo) => (
+            <WorkspaceRepoCard key={repo.repoPath} repo={repo} limit={props.limit} inactive={!active} />
+          )),
+      )}
+      {!props.repos.length ? <p class="workspace-empty">Open a repository with dg to add it here.</p> : null}
     </section>
   )
 }

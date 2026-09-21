@@ -39,7 +39,9 @@ graph itself. That is how dumbgit became what it is today.
 
 ## What it does
 
-- Shows all your repos in one page.
+- Shows all your repos in one page. Repos with local activity in the last 12 hours
+  appear first in the same list; quieter repos follow with dimmer cards. Edits, staging,
+  discards, and HEAD changes count as activity; background fetches do not.
 - Shows branches, remotes, tags, stashes, commits, and local edits.
 - Opens diffs and stages, unstages, or discards changes.
 - Switches and creates branches, checks out commits, and pushes or pulls (fast-forward only).

@@ -1305,6 +1305,11 @@ body.main-grid-dragging {
   gap: 10px;
   scrollbar-gutter: stable;
 }
+.workspace-empty { color: var(--muted); font-size: 12px; }
+.workspace-repo-inactive .workspace-timeline { opacity: .6; }
+.workspace-repo-card.workspace-repo-inactive .workspace-repo-name { color: var(--muted); }
+.workspace-repo-inactive:hover .workspace-timeline,
+.workspace-repo-inactive:focus-within .workspace-timeline { opacity: 1; }
 .workspace-repo-card {
   min-width: 0;
   overflow: hidden;
@@ -1323,6 +1328,15 @@ body.main-grid-dragging {
 .workspace-repo-card.workspace-repo-dirty .workspace-card-head {
   background: color-mix(in srgb, var(--modified) 15%, #2a2a2c);
   border-bottom-color: var(--dirty-border);
+}
+.workspace-repo-card.workspace-repo-inactive {
+  background: #202021;
+  border-color: #333335;
+  box-shadow: none;
+}
+.workspace-repo-card.workspace-repo-inactive .workspace-card-head {
+  background: #242426;
+  border-bottom-color: #333335;
 }
 .workspace-card-head {
   min-height: 44px;
@@ -2267,6 +2281,30 @@ setInterval(async function () {
 `
 
 const WORKSPACE_POLL_SCRIPT = `
+// Keep the arrangement steady while reading a diff or interacting with a card.
+// Fresh contents still arrive; reorder on the next idle poll.
+document.body.addEventListener('htmx:beforeSwap', function (event) {
+  if (event.detail.target.id !== 'workspace-board') return;
+  var board = document.getElementById('workspace-board');
+  var inspector = document.getElementById('workspace-inspector');
+  if (!board || !(board.matches(':hover') || board.contains(document.activeElement) ||
+      (inspector && !inspector.hidden))) return;
+  var template = document.createElement('template');
+  template.innerHTML = event.detail.serverResponse;
+  var next = template.content.querySelector('#workspace-board');
+  if (!next) return;
+  var ordered = document.createDocumentFragment();
+  var cards = Array.from(next.querySelectorAll('.workspace-repo-card'));
+  board.querySelectorAll('.workspace-repo-card').forEach(function (oldCard) {
+    var card = cards.find(function (candidate) {
+      return candidate.dataset.workspaceRepo === oldCard.dataset.workspaceRepo;
+    });
+    if (card) ordered.appendChild(card);
+  });
+  next.prepend(ordered);
+  event.detail.serverResponse = next.outerHTML;
+});
+
 setInterval(function () {
   if (document.visibilityState !== 'visible') return;
   if (typeof htmx === 'undefined') return;
@@ -2323,6 +2361,8 @@ const WORKSPACE_REORDER_SCRIPT = `
     if (!target || target === draggedCard) return;
     var board = target.closest('#workspace-board');
     if (!board || draggedCard.closest('#workspace-board') !== board) return;
+    if (target.classList.contains('workspace-repo-inactive') !==
+        draggedCard.classList.contains('workspace-repo-inactive')) return;
 
     event.preventDefault();
     if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';

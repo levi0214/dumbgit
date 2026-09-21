@@ -27,10 +27,12 @@ import {
   workTreeSummary,
   workspaceRepoFingerprint,
 } from './git'
+import { initialActivityTime, readLocalActivity, nextActivity, type RepoActivity } from './activity'
 import { createIdleExit } from './idle-exit'
 import {
   readRepoHistory,
   reorderRepoHistory,
+  saveRepoActivities,
 } from './history'
 import { watchGitRefs } from './watch'
 import { GraphFragment, GraphLogFragment } from './views/graph'
@@ -168,6 +170,7 @@ async function loadGraph(
 type WorkspaceRepoSource = {
   repoPath: string
   revision?: number
+  activity?: RepoActivity
 }
 
 function clampWorkspaceCommitLimit(raw?: string): number {
@@ -202,6 +205,7 @@ async function syncRepoWatchers(): Promise<void> {
 async function discoverWorkspaceRepos(): Promise<WorkspaceRepoSource[]> {
   const repos = readRepoHistory().map((entry) => ({
     repoPath: entry.repoPath,
+    activity: entry.activity,
     revision: state.repoRevisions.get(entry.repoPath),
   }))
   await syncRepoWatchers()
@@ -215,7 +219,8 @@ async function loadWorkspace(
   } = {},
 ): Promise<WorkspaceRepoSnapshot[]> {
   const repos = await discoverWorkspaceRepos()
-  return Promise.all(
+  const activities = new Map<string, RepoActivity>()
+  const snapshots = await Promise.all(
     repos.map(async (source): Promise<WorkspaceRepoSnapshot> => {
       const cached = state.workspaceSnapshots.get(source.repoPath)
 
@@ -224,6 +229,16 @@ async function loadWorkspace(
         fingerprint = await workspaceRepoFingerprint(source.repoPath)
       } catch {
         // Fall through to the full read so its existing error UI is used.
+      }
+      let lastActiveAt = source.activity?.lastActiveAt ?? 0
+      if (fingerprint !== undefined) {
+        try {
+          const token = await readLocalActivity(source.repoPath, fingerprint)
+          const initial = source.activity ? 0 : await initialActivityTime(source.repoPath, fingerprint)
+          const activity = nextActivity(source.activity, token, initial)
+          activities.set(source.repoPath, activity)
+          lastActiveAt = activity.lastActiveAt
+        } catch { /* An unavailable repository must not look newly active. */ }
       }
       if (
         !options.forceRefresh &&
@@ -234,6 +249,7 @@ async function loadWorkspace(
       ) {
         return {
           ...cached.snapshot,
+          lastActiveAt,
           repoPath: source.repoPath,
         }
       }
@@ -259,6 +275,7 @@ async function loadWorkspace(
           stderr: error instanceof Error ? error.message : String(error),
         }
       }
+      snapshot.lastActiveAt = lastActiveAt
       state.workspaceSnapshots.set(source.repoPath, {
         limit,
         snapshot,
@@ -268,6 +285,8 @@ async function loadWorkspace(
       return snapshot
     }),
   )
+  saveRepoActivities(activities)
+  return snapshots
 }
 
 /**

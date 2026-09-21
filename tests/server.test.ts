@@ -96,6 +96,20 @@ test('Workspace routes repository pages and guards git fragments', async () => {
     expect(workspacePage).toContain(`title="${repo}"`)
     expect(workspacePage).not.toContain('/workspace/repo/terminal')
 
+    // A cached dirty/clean snapshot must still age out, then wake on an edit.
+    const history = JSON.parse(readFileSync(historyFile, 'utf8'))
+    history.repos[0].activity.lastActiveAt = Date.now() - 13 * 60 * 60 * 1000
+    writeFileSync(historyFile, JSON.stringify(history))
+    const quiet = await (await request('/fragment/workspace')).text()
+    expect(quiet).toContain('workspace-repo-inactive')
+    writeFileSync(path.join(repo, 'README.md'), 'example\nnew local activity\n')
+    const active = await (await request('/fragment/workspace')).text()
+    expect(active).not.toContain('workspace-repo-inactive')
+    const observedAt = JSON.parse(readFileSync(historyFile, 'utf8')).repos[0].activity.lastActiveAt
+    await request('/fragment/workspace')
+    expect(JSON.parse(readFileSync(historyFile, 'utf8')).repos[0].activity.lastActiveAt).toBe(observedAt)
+    writeFileSync(path.join(repo, 'README.md'), 'example\n')
+
     const repoPage = await request(`/repo?${query}`)
     expect(repoPage.status).toBe(200)
     const page = await repoPage.text()
