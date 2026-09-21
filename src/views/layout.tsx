@@ -1306,10 +1306,6 @@ body.main-grid-dragging {
   scrollbar-gutter: stable;
 }
 .workspace-empty { color: var(--muted); font-size: 12px; }
-.workspace-repo-inactive .workspace-timeline { opacity: .6; }
-.workspace-repo-card.workspace-repo-inactive .workspace-repo-name { color: var(--muted); }
-.workspace-repo-inactive:hover .workspace-timeline,
-.workspace-repo-inactive:focus-within .workspace-timeline { opacity: 1; }
 .workspace-repo-card {
   min-width: 0;
   overflow: hidden;
@@ -1329,14 +1325,15 @@ body.main-grid-dragging {
   background: color-mix(in srgb, var(--modified) 15%, #2a2a2c);
   border-bottom-color: var(--dirty-border);
 }
-.workspace-repo-card.workspace-repo-inactive {
-  background: #202021;
-  border-color: #333335;
-  box-shadow: none;
+/* Quiet cards dim and lose color until hovered or keyboard-focused. */
+.workspace-repo-card.workspace-repo-inactive:not(:hover):not(:focus-within) {
+  filter: grayscale(1);
+  opacity: .6;
+  border-color: var(--border);
 }
-.workspace-repo-card.workspace-repo-inactive .workspace-card-head {
-  background: #242426;
-  border-bottom-color: #333335;
+.workspace-repo-card.workspace-repo-inactive:not(:hover):not(:focus-within) .workspace-card-head {
+  background: #2a2a2c;
+  border-bottom-color: var(--border);
 }
 .workspace-card-head {
   min-height: 44px;
