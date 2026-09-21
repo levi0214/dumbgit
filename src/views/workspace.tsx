@@ -301,6 +301,11 @@ export function WorkspaceBoard(props: {
   repos: WorkspaceRepoSnapshot[]
   limit: number
 }) {
+  // TODO: Revisit automatic activity ordering vs. manual drag ordering. This
+  // continuous list suggests free placement, but dragging is limited to repos
+  // with the same activity state, and state changes can move cards afterward.
+  // Consider removing drag ordering while keeping active repos first and the
+  // remembered order within each state. Leave current behavior until decided.
   const now = Date.now()
   return (
     <section
