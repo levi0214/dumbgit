@@ -1,6 +1,6 @@
 import { createHighlighterCoreSync } from 'shiki/core'
 import { createJavaScriptRegexEngine } from 'shiki/engine/javascript'
-import darkPlus from 'shiki/themes/dark-plus.mjs'
+import monokai from 'shiki/themes/monokai.mjs'
 import solidity from 'shiki/langs/solidity.mjs'
 import typescript from 'shiki/langs/typescript.mjs'
 import tsx from 'shiki/langs/tsx.mjs'
@@ -38,11 +38,11 @@ export function highlightLines(lines: string[], path: string): SyntaxToken[][] |
   if (code.length > 100_000) return
   try {
     highlighter ??= createHighlighterCoreSync({
-      themes: [darkPlus],
+      themes: [monokai],
       langs: [solidity, typescript, tsx, javascript, jsx, json, css, html, markdown, yaml, shell, python, rust, go, toml],
       engine: createJavaScriptRegexEngine(),
     })
-    const { tokens } = highlighter.codeToTokens(code, { lang, theme: 'dark-plus' })
+    const { tokens } = highlighter.codeToTokens(code, { lang, theme: 'monokai' })
     if (tokens.reduce((count, line) => count + line.length, 0) > 20_000) return
     return tokens
   } catch {

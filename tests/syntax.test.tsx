@@ -27,8 +27,8 @@ test('each side keeps its own multiline comment state through unchanged rows', (
   expect(code).toHaveLength(8)
   expect(text(code[2]!)).toBe('address owner;')
   expect(text(code[3]!)).toBe('address owner;')
-  expect(code[2]).toContain('color:#6A9955')
-  expect(code[3]).toContain('color:#4EC9B0')
+  expect(code[2]).toContain('color:#88846F')
+  expect(code[3]).toContain('color:#66D9EF')
   expect(code[6]).toBe(code[7])
 })
 
@@ -40,7 +40,7 @@ test('syntax and word-diff boundaries can cross, with neither text nor change ra
   expect(spans.filter(span => span.changed).map(span => span.text).join('')).toBe('(bar')
   expect(spans.map(span => span.color)).toEqual(['red', 'red', 'blue', 'blue'])
   const code = cells(render('@@ -1 +1 @@\n-address owner;\n+address recipient;\n'))
-  expect(code[0]).toContain('color:#4EC9B0')
+  expect(code[0]).toContain('color:#66D9EF')
   expect(code[1]).toContain('class="diff-word-chg">recipient;</span>')
 })
 
@@ -60,7 +60,7 @@ test('renames choose each side’s language; added and deleted files preserve al
     ['@@ -1 +0,0 @@\n-address owner;\n', 0],
   ] as const) {
     const code = cells(render(patch))
-    expect(code[index]).toContain('color:#4EC9B0')
+    expect(code[index]).toContain('color:#66D9EF')
     expect(code[1 - index]).toBe('')
   }
 })
