@@ -22,8 +22,10 @@ const CSS = `
 .compare-files { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
 .compare-files-controls { flex-shrink: 0; border-bottom: 1px solid var(--border); }
 .compare-file-list { overflow: auto; min-height: 0; }
-.compare-files-resizer { cursor: col-resize; touch-action: none; border-inline: 1px solid var(--border); }
-.compare-files-resizer:hover, .compare-files-resizer:focus-visible { background: var(--accent); outline: none; }
+.compare-files-resizer { position: relative; cursor: col-resize; touch-action: none; }
+.compare-files-resizer::after { content: ''; position: absolute; top: 0; bottom: 0; left: 50%; width: 1px; background: var(--border); }
+.compare-files-resizer:focus-visible { outline: none; }
+.compare-files-resizer:hover::after, .compare-files-resizer:focus-visible::after, .compare-resizing .compare-files-resizer::after { width: 2px; background: var(--accent); }
 .compare-resizing { user-select: none; cursor: col-resize; }
 .compare-files-heading { padding: 12px; color: var(--muted); }
 .compare-files .compare-file-link { display: flex; gap: 8px; padding: 6px 12px; color: var(--fg); }
@@ -47,7 +49,12 @@ const CSS = `
 .compare-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
 .compare-labels { color: var(--muted); border-bottom: 1px solid var(--border); }
 .compare-reader:has(.compare-overview) .compare-labels { padding-right: calc(20px + var(--compare-scrollbar-width, 0px)); }
-.compare-labels label { padding: 8px 12px; min-width: 0; }
+.compare-labels label { position: relative; padding: 8px 12px; min-width: 0; }
+.compare-labels label::after { content: ''; position: absolute; right: 24px; top: calc(50% - 4px); width: 6px; height: 6px; border-right: 1px solid var(--muted); border-bottom: 1px solid var(--muted); transform: rotate(45deg); pointer-events: none; }
+.compare-labels select { appearance: none; -webkit-appearance: none; background: transparent; border: 0; padding-right: 30px; text-overflow: ellipsis; }
+.compare-labels select:hover, .compare-labels select:focus-visible { background: #2b2b2b; }
+.compare-labels select:focus-visible { outline: 1px solid var(--accent); outline-offset: 1px; }
+.compare-labels option { background: var(--bg); color: var(--fg); }
 .compare-document { display: flex; flex: 1; min-height: 0; }
 .compare-document .compare-scroll { min-width: 0; }
 .compare-overview { position: relative; flex: 0 0 20px; background: #252526; border-left: 1px solid var(--border); overflow: hidden; }
