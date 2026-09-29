@@ -269,6 +269,19 @@ export function CompareView(props: { repo: string; name: string; scope: string; 
     parent.files.push(file)
   }
   const url = (file: string, scope = props.scope) => '/compare?' + new URLSearchParams({ repo: props.repo, base: r!.base, target: r!.target, scope, file })
+  function branchOptions(selected: string | undefined, workingTree = false) {
+    const refs = r?.refs ?? []
+    const option = (ref: CompareResult['refs'][number]) => <option value={ref.value} selected={ref.value === selected}>{ref.label}{ref.current ? ' (current)' : ''}</option>
+    const local = refs.filter(ref => !ref.current && ref.value.startsWith('refs/heads/'))
+    const remote = refs.filter(ref => ref.value.startsWith('refs/remotes/'))
+    return <>
+      {refs.filter(ref => ref.current).map(option)}
+      {workingTree && <option value="worktree" selected={selected === 'worktree'}>Working tree</option>}
+      {local.length > 0 && <optgroup label="Local branches · recent commits">{local.map(option)}</optgroup>}
+      {remote.length > 0 && <optgroup label="Remote branches · recent commits">{remote.map(option)}</optgroup>}
+      {refs.filter(ref => !ref.current && ref.value === 'HEAD').map(option)}
+    </>
+  }
   function renderChildren(node: Directory, depth: number): JSX.Element {
     return <>{[...node.directories.values()].map(child => {
       let directory = child
@@ -320,8 +333,8 @@ export function CompareView(props: { repo: string; name: string; scope: string; 
         aria-label="Resize file list" tabindex={0} title="Drag to resize · double-click to reset" />
       <section id="compare-reader" class="compare-reader" data-file={r?.selected?.path}>
         <div class="compare-row compare-labels">
-          <label><select name="base" aria-label="Base version">{r?.refs.map(ref => <option value={ref.value} selected={ref.value === r.base}>{ref.label}</option>)}</select></label>
-          <label><select name="target" aria-label="Target version" title="Working tree includes staged and unstaged tracked changes; untracked files are excluded.">{r?.refs.map(ref => <option value={ref.value} selected={ref.value === r.target}>{ref.label}</option>)}<option value="worktree" selected={r?.target === 'worktree'}>Working tree</option></select></label>
+          <label><select name="base" aria-label="Base version">{branchOptions(r?.base)}</select></label>
+          <label><select name="target" aria-label="Target version" title="Working tree includes staged and unstaged tracked changes; untracked files are excluded.">{branchOptions(r?.target, true)}</select></label>
         </div>
         {props.error ? <pre class="compare-message" role="alert">{props.error}</pre> : r?.selected ? <><div class="compare-file-head"><span>{r.selected.oldPath ? `${r.selected.oldPath} → ` : ''}{r.selected.path}</span></div><SplitDiff patch={r.patch} /></> : <p class="compare-message">No differences{props.scope ? ' in this path' : ''}.</p>}
       </section>

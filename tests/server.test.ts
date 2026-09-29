@@ -93,6 +93,13 @@ test('Workspace routes repository pages and guards git fragments', async () => {
     expect(await invalidComparison.text()).toContain('Unknown comparison branch')
     writeFileSync(path.join(repo, 'README.md'), 'changed for compare\n')
     const workingComparison = await request(`/compare?${query}&target=worktree&scope=README.md&file=README.md`, { headers: { 'HX-Request': 'true' } })
+    const savedPair = workingComparison.headers.get('set-cookie')!.split(';')[0]!
+    const restored = await request(`/compare?${query}`, { headers: { Cookie: savedPair } })
+    expect(await restored.text()).toContain('<option value="worktree" selected')
+    const explicit = await request(`/compare?${query}&target=HEAD`, { headers: { Cookie: savedPair } })
+    expect(await explicit.text()).not.toContain('<option value="worktree" selected')
+    const malformed = await request(`/compare?${query}`, { headers: { Cookie: savedPair.split('=')[0] + '=broken' } })
+    expect(await malformed.text()).not.toContain('role="alert"')
     const comparisonHtml = await workingComparison.text()
     expect(comparisonHtml).toContain('id="compare-reader"')
     expect(comparisonHtml.replace(/<[^>]*>/g, '')).toContain('changed for compare')

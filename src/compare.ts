@@ -9,7 +9,7 @@ export type CompareFile = {
   binary?: boolean
 }
 export type CompareResult = {
-  refs: { value: string; label: string }[]
+  refs: { value: string; label: string; current?: boolean }[]
   base: string
   target: string
   files: CompareFile[]
@@ -24,18 +24,26 @@ async function git(cwd: string, args: string[]) {
 }
 
 export async function comparisonRefs(cwd: string) {
-  const refs = (await git(cwd, ['for-each-ref', '--format=%(refname)', 'refs/heads', 'refs/remotes']))
-    .trim().split('\n').filter(Boolean).filter(r => !r.endsWith('/HEAD'))
-    .map(value => ({ value, label: value.replace(/^refs\/(heads|remotes)\//, '') }))
-  refs.push({ value: 'HEAD', label: 'HEAD' })
-  return refs
+  const [output, current] = await Promise.all([
+    git(cwd, ['for-each-ref', '--sort=refname', '--sort=-committerdate', '--format=%(refname)', 'refs/heads', 'refs/remotes']),
+    spawnGit(['symbolic-ref', '-q', 'HEAD'], cwd),
+  ])
+  const currentRef = current.code === 0 ? current.stdout.trim() : 'HEAD'
+  const refs = output.trim().split('\n').filter(Boolean).filter(r => !r.endsWith('/HEAD'))
+    .map(value => ({ value, label: value.replace(/^refs\/(heads|remotes)\//, ''), current: value === currentRef }))
+  refs.push({ value: 'HEAD', label: 'HEAD', current: currentRef === 'HEAD' })
+  return refs.sort((a, b) => Number(b.current) - Number(a.current))
 }
 
-export async function compare(cwd: string, options: { base?: string; target?: string; scope?: string; file?: string }): Promise<CompareResult> {
+export async function compare(cwd: string, options: { base?: string; target?: string; scope?: string; file?: string; previous?: { base: string; target: string } }): Promise<CompareResult> {
   const refs = await comparisonRefs(cwd)
-  const current = await spawnGit(['symbolic-ref', '-q', 'HEAD'], cwd)
-  const base = options.base ?? refs.find(r => r.value === 'refs/heads/main')?.value ?? 'HEAD'
-  const target = options.target ?? (current.code === 0 ? current.stdout.trim() : 'HEAD')
+  // Explicit links take precedence. Forget a saved pair if either branch disappeared.
+  const previous = !options.base && !options.target && options.previous
+    && refs.some(r => r.value === options.previous!.base)
+    && (options.previous.target === 'worktree' || refs.some(r => r.value === options.previous!.target))
+    ? options.previous : undefined
+  const base = options.base ?? previous?.base ?? refs.find(r => r.value === 'refs/heads/main')?.value ?? 'HEAD'
+  const target = options.target ?? previous?.target ?? refs.find(r => r.current)?.value ?? 'HEAD'
   const resolve = async (ref: string) => {
     if (!refs.some(r => r.value === ref)) throw new Error('Unknown comparison branch')
     return (await git(cwd, ['rev-parse', '--verify', '--end-of-options', `${ref}^{commit}`])).trim()

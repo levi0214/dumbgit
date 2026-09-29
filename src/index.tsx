@@ -3,6 +3,7 @@ import { compare, comparisonRefs } from './compare'
 import { CompareView } from './views/compare'
 import { Fragment } from 'hono/jsx'
 import { Hono, type Context, type Next } from 'hono'
+import { getCookie, setCookie } from 'hono/cookie'
 import { streamSSE } from 'hono/streaming'
 import { realpathSync } from 'node:fs'
 import path from 'node:path'
@@ -493,10 +494,19 @@ app.get('/compare', async (c) => {
   const repo = resolveWorkspaceRepo(c.req.query('repo'))
   if (!repo) return c.redirect('/')
   const scope = c.req.query('scope') ?? ''
+  const preferenceKey = 'compare-' + Bun.hash(repo).toString(16)
+  let previous: { base: string; target: string } | undefined
+  try {
+    const saved = JSON.parse(getCookie(c, preferenceKey) ?? 'null')
+    if (typeof saved?.base === 'string' && typeof saved?.target === 'string') previous = saved
+  } catch {}
   let result
   let error: string | undefined
   try {
-    result = await compare(repo, { base: c.req.query('base'), target: c.req.query('target'), scope, file: c.req.query('file') })
+    result = await compare(repo, { base: c.req.query('base'), target: c.req.query('target'), scope, file: c.req.query('file'), previous })
+    setCookie(c, preferenceKey, JSON.stringify({ base: result.base, target: result.target }), {
+      path: '/compare', maxAge: 365 * 24 * 60 * 60, httpOnly: true, sameSite: 'Strict',
+    })
   } catch (e) {
     error = e instanceof Error ? e.message : 'Could not load comparison'
     result = { refs: await comparisonRefs(repo).catch(() => []), base: c.req.query('base') ?? 'refs/heads/main', target: c.req.query('target') ?? 'HEAD', files: [], patch: '' }

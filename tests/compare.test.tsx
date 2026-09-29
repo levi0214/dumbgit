@@ -3,7 +3,7 @@ import { runInNewContext } from 'node:vm'
 import { mkdtempSync, mkdirSync, writeFileSync, renameSync, rmSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { compare } from '../src/compare'
+import { compare, comparisonRefs } from '../src/compare'
 import { CompareView, splitRows } from '../src/views/compare'
 
 function git(cwd: string, ...args: string[]) {
@@ -329,4 +329,39 @@ test('file tree nests shared parents, compacts single-child directories and keep
   const list = html.slice(html.indexOf('class="compare-file-list"'), html.indexOf('</aside>'))
   expect(list.lastIndexOf('</details>')).toBeLessThan(list.indexOf('>README.md</span>'))
   expect(list.match(/<summary/g)?.length).toBe(3)
+})
+
+test('branches prioritize current and recent commits, and saved comparisons yield to explicit links or deleted branches', async () => {
+  const repo = mkdtempSync(path.join(os.tmpdir(), 'dg-compare-refs-'))
+  try {
+    git(repo, 'init', '-b', 'main')
+    git(repo, 'config', 'user.name', 'Test')
+    git(repo, 'config', 'user.email', 'test@example.test')
+    const commit = (date: string) => {
+      const result = Bun.spawnSync(['git', 'commit', '--allow-empty', '-m', 'test: dated commit'], {
+        cwd: repo, env: { ...process.env, GIT_AUTHOR_DATE: date, GIT_COMMITTER_DATE: date },
+      })
+      expect(result.exitCode).toBe(0)
+    }
+    commit('2020-01-01T00:00:00Z')
+    git(repo, 'switch', '-c', 'a-old')
+    commit('2021-01-01T00:00:00Z')
+    git(repo, 'switch', '-c', 'z-new')
+    commit('2022-01-01T00:00:00Z')
+    git(repo, 'update-ref', 'refs/remotes/origin/z-new', 'HEAD')
+    git(repo, 'switch', 'main')
+    const refs = await comparisonRefs(repo)
+    expect(refs[0]).toMatchObject({ value: 'refs/heads/main', current: true })
+    expect(refs.filter(ref => ref.value.startsWith('refs/heads/')).map(ref => ref.label)).toEqual(['main', 'z-new', 'a-old'])
+    const previous = { base: 'refs/heads/a-old', target: 'refs/heads/z-new' }
+    expect(await compare(repo, { previous })).toMatchObject(previous)
+    expect(await compare(repo, { previous, target: 'worktree' })).toMatchObject({ base: 'refs/heads/main', target: 'worktree' })
+    const html = CompareView({ repo, name: 'test', scope: '', result: await compare(repo, {}) }).toString()
+    expect(html).toContain('main (current)')
+    expect(html.indexOf('Local branches')).toBeLessThan(html.indexOf('Remote branches'))
+    git(repo, 'branch', '-D', 'z-new')
+    expect(await compare(repo, { previous })).toMatchObject({ base: 'refs/heads/main', target: 'refs/heads/main' })
+    git(repo, 'checkout', '--detach')
+    expect((await comparisonRefs(repo))[0]).toMatchObject({ value: 'HEAD', current: true })
+  } finally { rmSync(repo, { recursive: true, force: true }) }
 })
