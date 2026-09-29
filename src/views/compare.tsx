@@ -82,6 +82,25 @@ const COMPARE_SCRIPT = `
   var scroll;
   var viewport;
   var frame;
+  var paintFrame;
+  var codes = [];
+  var rowHeight = 21;
+  var horizontal = 0;
+  function paintScroll() {
+    paintFrame = null;
+    if (!scroll || !scroll.isConnected) return;
+    // Rows never wrap. Include one extra row at each edge for fractional scrolling.
+    var start = Math.max(0, Math.floor(scroll.scrollTop / rowHeight) - 1) * 2;
+    var end = Math.min(codes.length, (Math.ceil((scroll.scrollTop + scroll.clientHeight) / rowHeight) + 1) * 2);
+    var transform = 'translateX(' + -horizontal + 'px)';
+    for (var i = start; i < end; i++) {
+      if (codes[i].style.transform !== transform) codes[i].style.transform = transform;
+    }
+    updateViewport();
+  }
+  function schedulePaint() {
+    if (!paintFrame) paintFrame = requestAnimationFrame(paintScroll);
+  }
   var closedFolders = new Set();
   function updateViewport() {
     if (!scroll || !viewport) return;
@@ -101,28 +120,34 @@ const COMPARE_SCRIPT = `
       var rect = group.getBoundingClientRect();
       return { top: (rect.top - top) / height * 100, height: rect.height / height * 100 };
     });
-    scroll.closest('.compare-reader').style.setProperty('--compare-scrollbar-width', scrollbarWidth + 'px');
+    var reader = scroll.closest('.compare-reader');
+    var bars = reader.querySelectorAll('.compare-x-scroll');
+    var width = 0;
+    codes.forEach(function(code) {
+      width = Math.max(width, code.scrollWidth);
+    });
+    var gutter = scroll.querySelector('.compare-ln').getBoundingClientRect().width;
+    rowHeight = scroll.querySelector('.compare-code').getBoundingClientRect().height;
+    reader.style.setProperty('--compare-scrollbar-width', scrollbarWidth + 'px');
     markers.forEach(function(marker, i) {
       marker.style.top = 'min(' + positions[i].top + '%, calc(100% - 4px))';
       marker.style.height = positions[i].height + '%';
     });
-    var reader = scroll.closest('.compare-reader');
-    var bars = reader.querySelectorAll('.compare-x-scroll');
-    var width = 0;
-    scroll.querySelectorAll('.compare-code code').forEach(function(code) {
-      width = Math.max(width, code.scrollWidth);
-    });
-    var gutter = scroll.querySelector('.compare-ln').getBoundingClientRect().width;
     bars.forEach(function(bar) {
       bar.firstElementChild.style.width = (width + gutter + 12) + 'px';
       bar.onscroll = function() {
-        reader.style.setProperty('--compare-x', -bar.scrollLeft + 'px');
+        var left = bar.scrollLeft;
+        // The other scrollbar emits an event too; don't feed it back.
+        if (left === horizontal) return;
+        horizontal = left;
         bars.forEach(function(other) {
-          if (other.scrollLeft !== bar.scrollLeft) other.scrollLeft = bar.scrollLeft;
+          if (other !== bar) other.scrollLeft = left;
         });
+        schedulePaint();
       };
     });
     if (bars.length) bars[0].onscroll();
+    schedulePaint();
     updateViewport();
   }
   function scheduleMeasure() {
@@ -130,13 +155,18 @@ const COMPARE_SCRIPT = `
   }
   function attach(reveal, restoreTop) {
     if (observer) observer.disconnect();
-    if (scroll) scroll.removeEventListener('scroll', updateViewport);
+    if (scroll) scroll.removeEventListener('scroll', schedulePaint);
     scroll = document.querySelector('.compare-scroll');
     viewport = document.querySelector('.compare-viewport');
     if (frame) cancelAnimationFrame(frame);
     frame = null;
+    if (paintFrame) cancelAnimationFrame(paintFrame);
+    paintFrame = null;
+    codes = [];
+    horizontal = 0;
     if (!scroll) return;
-    scroll.addEventListener('scroll', updateViewport, { passive: true });
+    codes = Array.from(scroll.querySelectorAll('.compare-code code'));
+    scroll.addEventListener('scroll', schedulePaint, { passive: true });
     observer = new ResizeObserver(scheduleMeasure);
     observer.observe(scroll);
     if (frame) cancelAnimationFrame(frame);

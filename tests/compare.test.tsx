@@ -158,6 +158,8 @@ function readerController(firstTop: number, navigationType = 'navigate', savedTo
   const events = new Map<string, (event: any) => void>()
   let nextFrame = 0
   const offsets: Record<string, string> = {}
+  const codes = Array.from({ length: 10000 }, () => ({ scrollWidth: 900, style: { transform: '' } }))
+  const scrollEvents = new Map<string, () => void>()
   const bars = ['left', 'right'].map(side => ({
     dataset: { side }, scrollLeft: 0, firstElementChild: { style: { width: '' } },
     onscroll: () => {},
@@ -172,8 +174,9 @@ function readerController(firstTop: number, navigationType = 'navigate', savedTo
     scrollTop: 0, scrollHeight: 2000, clientHeight: 300,
     offsetWidth: 800, clientWidth: 785, isConnected: true,
     getBoundingClientRect: () => ({ top: 0, bottom: 300 }),
-    querySelector: () => first, querySelectorAll: () => [first], closest: () => reader,
-    addEventListener() {}, removeEventListener() {},
+    querySelector: () => first, querySelectorAll: (selector: string) => selector === '.compare-code code' ? codes : [first], closest: () => reader,
+    addEventListener(name: string, callback: () => void) { scrollEvents.set(name, callback) },
+    removeEventListener(name: string) { scrollEvents.delete(name) },
   }
   const script = [...renderPatch('@@ -1 +1 @@\n-old\n+new\n').matchAll(/<script>([\s\S]*?)<\/script>/g)].at(-1)![1]!
   runInNewContext(script, {
@@ -192,7 +195,8 @@ function readerController(firstTop: number, navigationType = 'navigate', savedTo
   })
   const paint = () => { const pending = [...callbacks.values()]; callbacks.clear(); pending.forEach(callback => callback()) }
   paint()
-  return { scroll, reader, events, paint, bars, offsets }
+  paint()
+  return { scroll, reader, events, paint, bars, offsets, codes, scrollEvents, callbacks }
 }
 
 test('first change stays at the top when already visible, otherwise opens with three context lines', () => {
@@ -242,17 +246,53 @@ test('file list resizing supports the keyboard and clamps width to half the page
 })
 
 test('horizontal scrolling keeps both sides aligned and includes the fixed gutter in its range', () => {
-  const { bars, offsets, scroll } = readerController(1000)
+  const { bars, offsets, scroll, paint, codes } = readerController(1000)
   expect(bars[0]!.firstElementChild.style.width).toBe('952px')
   bars[0]!.scrollLeft = 180
   bars[0]!.onscroll()
-  expect(offsets['--compare-x']).toBe('-180px')
+  paint()
+  expect(codes[90]!.style.transform).toBe('translateX(-180px)')
+  expect(offsets['--compare-x']).toBeUndefined()
   expect(bars[1]!.scrollLeft).toBe(180)
   bars[1]!.scrollLeft = 90
   bars[1]!.onscroll()
-  expect(offsets['--compare-x']).toBe('-90px')
+  paint()
+  expect(codes[90]!.style.transform).toBe('translateX(-90px)')
   expect(bars[0]!.scrollLeft).toBe(90)
   expect(scroll.scrollTop).toBe(937)
+})
+
+test('horizontal updates coalesce, ignore sync feedback, and only touch visible rows', () => {
+  const { bars, codes, scroll, scrollEvents, paint, callbacks, events } = readerController(0)
+  for (let left = 1; left <= 100; left++) {
+    bars[0]!.scrollLeft = left
+    bars[0]!.onscroll()
+    bars[1]!.onscroll() // Browser event from the synchronized bar.
+  }
+  expect(callbacks.size).toBe(1)
+  expect(codes[0]!.style.transform).toBe('translateX(0px)')
+  paint()
+  expect(codes.filter(code => code.style.transform === 'translateX(-100px)').length).toBe(32)
+  expect(codes[9999]!.style.transform).toBe('')
+  scroll.scrollTop = 2100
+  scrollEvents.get('scroll')!()
+  paint()
+  expect(codes[200]!.style.transform).toBe('translateX(-100px)')
+  bars[1]!.scrollLeft = 20
+  bars[1]!.onscroll()
+  scroll.scrollTop = 0
+  scrollEvents.get('scroll')!()
+  paint()
+  expect(codes[0]!.style.transform).toBe('translateX(-20px)')
+  expect(bars[0]!.scrollLeft).toBe(20)
+  // A swap cancels pending work against the previous document.
+  bars[0]!.scrollLeft = 50
+  bars[0]!.onscroll()
+  events.get('htmx:historyRestore')!({})
+  expect(callbacks.size).toBe(1)
+  paint()
+  paint()
+  expect(codes[0]!.style.transform).toBe('translateX(-50px)')
 })
 
 test('line number gutters use the largest actual line number on either side', () => {
