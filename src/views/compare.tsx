@@ -1,4 +1,5 @@
 /** @jsxImportSource hono/jsx */
+import type { JSX } from 'hono/jsx/jsx-runtime'
 import { raw } from 'hono/html'
 import type { CompareFile, CompareResult } from '../compare'
 import { parseDiff, type DiffRow } from './diff'
@@ -81,6 +82,7 @@ const COMPARE_SCRIPT = `
   var scroll;
   var viewport;
   var frame;
+  var closedFolders = new Set();
   function updateViewport() {
     if (!scroll || !viewport) return;
     viewport.style.top = (scroll.scrollTop / scroll.scrollHeight * 100) + '%';
@@ -206,8 +208,19 @@ const COMPARE_SCRIPT = `
     var handle = e.target.closest('.compare-files-resizer');
     if (handle) handle.closest('.compare-page').style.removeProperty('--compare-files-width');
   });
+  document.addEventListener('htmx:beforeSwap', function(e) {
+    if (e.detail.target.id !== 'compare-results') return;
+    closedFolders = new Set(Array.from(document.querySelectorAll('.compare-folder:not([open])'), function(folder) {
+      return folder.dataset.directory;
+    }));
+  });
   document.addEventListener('htmx:afterSwap', function(e) {
     if (!['compare-reader', 'compare-results'].includes(e.detail.target.id)) return;
+    if (e.detail.target.id === 'compare-results') {
+      document.querySelectorAll('.compare-folder').forEach(function(folder) {
+        if (closedFolders.has(folder.dataset.directory)) folder.open = false;
+      });
+    }
     var reader = document.querySelector('#compare-reader');
     if (reader) {
       var selected = reader.dataset.file;
@@ -242,14 +255,46 @@ function compareFileTitle(file: CompareFile): string {
 
 export function CompareView(props: { repo: string; name: string; scope: string; result?: CompareResult; error?: string }) {
   const { result: r } = props
-  const groups = new Map<string, CompareFile[]>()
+  type Directory = { path: string; name: string; directories: Map<string, Directory>; files: CompareFile[] }
+  const root: Directory = { path: '', name: '', directories: new Map(), files: [] }
   for (const file of r?.files ?? []) {
-    const slash = file.path.lastIndexOf('/')
-    const directory = slash < 0 ? '' : file.path.slice(0, slash)
-    if (!groups.has(directory)) groups.set(directory, [])
-    groups.get(directory)!.push(file)
+    const parts = file.path.split('/')
+    let parent = root
+    for (const name of parts.slice(0, -1)) {
+      if (!parent.directories.has(name)) parent.directories.set(name, {
+        name, path: parent.path ? parent.path + '/' + name : name, directories: new Map(), files: [],
+      })
+      parent = parent.directories.get(name)!
+    }
+    parent.files.push(file)
   }
   const url = (file: string, scope = props.scope) => '/compare?' + new URLSearchParams({ repo: props.repo, base: r!.base, target: r!.target, scope, file })
+  function renderChildren(node: Directory, depth: number): JSX.Element {
+    return <>{[...node.directories.values()].map(child => {
+      let directory = child
+      let label = child.name
+      while (!directory.files.length && directory.directories.size === 1) {
+        directory = directory.directories.values().next().value!
+        label += '/' + directory.name
+      }
+      const href = url(r?.selected?.path ?? '', directory.path + '/')
+      return <details class="compare-folder" data-directory={directory.path} open>
+        <summary class="compare-directory" style={`padding-left: ${12 + depth * 14}px`}>
+          <span title={directory.path}>{label}</span>
+          <a class="compare-directory-filter" title={`Show changes in ${directory.path}/`} aria-label={`Filter to ${directory.path}/`}
+            href={href} hx-get={href}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4h18l-7 8v7l-4 2v-9z" /></svg>
+          </a>
+        </summary>
+        {renderChildren(directory, depth + 1)}
+      </details>
+    })}{node.files.map(file => <a class="compare-file-link" style={`padding-left: ${12 + depth * 14}px`} href={url(file.path)} hx-get={url(file.path)} hx-select="#compare-reader" hx-target="#compare-reader" hx-swap="outerHTML" hx-sync="closest .compare-page:replace" hx-push-url="true" aria-current={r?.selected?.path === file.path ? 'true' : undefined} title={compareFileTitle(file)}>
+        <span class="compare-file-path">{file.path.slice(file.path.lastIndexOf('/') + 1)}</span>
+        <span class="compare-file-stats">{file.binary ? <span class="file-num-binary">binary</span> : <>
+          {file.added !== undefined ? <span class="file-num-add">+{file.added}</span> : null}
+          {file.deleted !== undefined ? <span class="file-num-del">−{file.deleted}</span> : null}
+        </>}</span></a>)}</>
+  }
   return <main class="compare-page">
     <form class="compare-form" action="/compare"
       hx-get="/compare" hx-trigger="submit, change[event.target.tagName === 'SELECT']"
@@ -270,20 +315,7 @@ export function CompareView(props: { repo: string; name: string; scope: string; 
             <span title={props.scope}>{props.scope}</span>
             <a href={url(r?.selected?.path ?? '', '')} hx-get={url(r?.selected?.path ?? '', '')}>All files</a>
           </div>}
-        </div><div class="compare-file-list">{[...groups].map(([directory, files]) => <section class="compare-file-group">
-        {directory && <div class="compare-directory">
-          <span title={directory}>{directory}</span>
-          <a class="compare-directory-filter" title={`Show changes in ${directory}/`} aria-label={`Filter to ${directory}/`}
-            href={url(r?.selected?.path ?? '', directory + '/')} hx-get={url(r?.selected?.path ?? '', directory + '/')}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4h18l-7 8v7l-4 2v-9z" /></svg>
-          </a>
-        </div>}
-        {files.map(file => <a class="compare-file-link" href={url(file.path)} hx-get={url(file.path)} hx-select="#compare-reader" hx-target="#compare-reader" hx-swap="outerHTML" hx-sync="closest .compare-page:replace" hx-push-url="true" aria-current={r?.selected?.path === file.path ? 'true' : undefined} title={compareFileTitle(file)}>
-        <span class="compare-file-path">{file.path.slice(file.path.lastIndexOf('/') + 1)}</span>
-        <span class="compare-file-stats">{file.binary ? <span class="file-num-binary">binary</span> : <>
-          {file.added !== undefined ? <span class="file-num-add">+{file.added}</span> : null}
-          {file.deleted !== undefined ? <span class="file-num-del">−{file.deleted}</span> : null}
-        </>}</span></a>)}</section>)}</div></aside>
+        </div><div class="compare-file-list">{renderChildren(root, 0)}</div></aside>
       <div class="compare-files-resizer" role="separator" aria-orientation="vertical"
         aria-label="Resize file list" tabindex={0} title="Drag to resize · double-click to reset" />
       <section id="compare-reader" class="compare-reader" data-file={r?.selected?.path}>

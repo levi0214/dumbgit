@@ -28,13 +28,16 @@ const CSS = `
 .compare-files-heading { padding: 12px; color: var(--muted); }
 .compare-files .compare-file-link { display: flex; gap: 8px; padding: 6px 12px; color: var(--fg); }
 .compare-file-path { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.compare-files .compare-directory { display: flex; align-items: center; gap: 8px; padding: 8px 12px 0; color: var(--muted); font-size: 12px; }
+.compare-files .compare-directory { display: flex; align-items: center; gap: 6px; padding: 2px 12px; color: var(--fg); cursor: pointer; list-style: none; }
+.compare-directory::-webkit-details-marker { display: none; }
+.compare-directory::before { content: '›'; width: 10px; flex-shrink: 0; text-align: center; color: var(--muted); }
+.compare-folder[open] > .compare-directory::before { transform: rotate(90deg); }
+.compare-directory:hover { background: #2b2b2b; }
 .compare-directory > span { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .compare-directory .compare-directory-filter { display: flex; align-items: center; justify-content: center; flex: 0 0 24px; height: 24px; border-radius: 4px; color: var(--muted); opacity: 0; pointer-events: none; }
 .compare-directory:hover .compare-directory-filter, .compare-directory:focus-within .compare-directory-filter { opacity: 1; pointer-events: auto; }
 .compare-directory .compare-directory-filter:hover, .compare-directory-filter:focus-visible { color: var(--fg); background: #333; }
 @media (hover: none) { .compare-directory .compare-directory-filter { opacity: 1; pointer-events: auto; } }
-.compare-file-group:has(.compare-directory) .compare-file-link { padding-left: 20px; }
 .compare-file-stats { display: flex; gap: 5px; flex-shrink: 0; white-space: nowrap; font-size: 11px; padding-top: 2px; }
 .compare-files a:hover { background: #2b2b2b; }
 .compare-file-link[aria-current=true] { background: #18364a; }

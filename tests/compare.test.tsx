@@ -312,3 +312,21 @@ test('folder links set a directory scope and All files clears it without changin
   expect(all.searchParams.get('base')).toBe('refs/heads/main')
   expect(all.searchParams.get('target')).toBe('worktree')
 })
+
+test('file tree nests shared parents, compacts single-child directories and keeps root files outside folders', () => {
+  const html = CompareView({ repo: '/tmp/example', name: 'example', scope: '',
+    result: { refs: [], base: 'HEAD', target: 'worktree', patch: '',
+      files: ['contracts/src/deep/a.sol', 'contracts/test/a.sol', 'README.md'].map(path => ({ status: 'M', path })),
+    },
+  }).toString()
+  expect(html.match(/class="compare-folder"/g)?.length).toBe(3)
+  expect(html).toContain('data-directory="contracts" open')
+  expect(html).toContain('data-directory="contracts/src/deep" open')
+  expect(html).toContain('<span title="contracts/src/deep">src/deep</span>')
+  expect(html).toContain('aria-label="Filter to contracts/"')
+  expect(html).toContain('aria-label="Filter to contracts/src/deep/"')
+  expect(html.indexOf('data-directory="contracts"')).toBeLessThan(html.indexOf('data-directory="contracts/src/deep"'))
+  const list = html.slice(html.indexOf('class="compare-file-list"'), html.indexOf('</aside>'))
+  expect(list.lastIndexOf('</details>')).toBeLessThan(list.indexOf('>README.md</span>'))
+  expect(list.match(/<summary/g)?.length).toBe(3)
+})
