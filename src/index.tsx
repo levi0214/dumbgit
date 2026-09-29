@@ -1,4 +1,6 @@
 /** @jsxImportSource hono/jsx */
+import { compare, comparisonRefs } from './compare'
+import { CompareView } from './views/compare'
 import { Fragment } from 'hono/jsx'
 import { Hono, type Context, type Next } from 'hono'
 import { streamSSE } from 'hono/streaming'
@@ -469,6 +471,7 @@ app.get('/repo', async (c) => {
   return c.html(
     <Layout title={`dumbgit: ${path.basename(repoPath)}`} repoPath={repoPath}>
       <div class="page">
+        <a class="repo-compare-link" href={'/compare?repo=' + encodeURIComponent(repoPath)}>Compare branches →</a>
         <div id="status" class="status-slot"></div>
         <div class="main-grid">
           <GraphFragment {...graph} />
@@ -484,6 +487,22 @@ app.get('/repo', async (c) => {
     </Layout>,
     200,
   )
+})
+
+app.get('/compare', async (c) => {
+  c.header('Cache-Control', 'no-store')
+  const repo = resolveWorkspaceRepo(c.req.query('repo'))
+  if (!repo) return c.redirect('/')
+  const scope = c.req.query('scope') ?? ''
+  let result
+  let error: string | undefined
+  try {
+    result = await compare(repo, { base: c.req.query('base'), target: c.req.query('target'), scope, file: c.req.query('file') })
+  } catch (e) {
+    error = e instanceof Error ? e.message : 'Could not load comparison'
+    result = { refs: await comparisonRefs(repo).catch(() => []), base: c.req.query('base') ?? 'refs/heads/main', target: c.req.query('target') ?? 'HEAD', files: [], patch: '' }
+  }
+  return c.html(<Layout title={`Compare · ${path.basename(repo)}`}><CompareView repo={repo} name={path.basename(repo)} scope={scope} result={result} error={error} /></Layout>)
 })
 
 app.get('/workspace', (c) => {

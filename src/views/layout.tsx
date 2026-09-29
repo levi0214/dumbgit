@@ -3,6 +3,42 @@ import { raw } from 'hono/html'
 import HTMX_SCRIPT from '../vendor/htmx-2.0.10.min.txt' with { type: 'text' }
 
 const CSS = `
+.repo-compare-link { display: block; align-self: flex-start; color: var(--accent); padding: 4px 0 8px; }
+.compare-page { height: 100%; display: flex; flex-direction: column; }
+.compare-toolbar { display: flex; align-items: center; gap: 18px; padding: 12px 18px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+.compare-page a { color: var(--accent); text-decoration: none; }
+.compare-page button, .compare-page select, .compare-page input { font: inherit; color: var(--fg); background: #272727; border: 1px solid #484848; border-radius: 4px; padding: 6px 8px; }
+.compare-page button, .compare-page select { cursor: pointer; }
+.compare-page select { max-width: 240px; }
+.compare-page label { display: flex; align-items: center; gap: 8px; }
+.compare-scope { flex: 1; }
+.compare-scope input { width: 100%; min-width: 160px; }
+.compare-note { padding: 8px 18px; color: var(--muted); font-size: 12px; }
+.compare-content { display: grid; grid-template-columns: 240px minmax(0, 1fr); flex: 1; min-height: 0; border-top: 1px solid var(--border); }
+.compare-files { overflow: auto; border-right: 1px solid var(--border); }
+.compare-files-heading { padding: 12px; color: var(--muted); }
+.compare-files a { display: flex; gap: 8px; padding: 8px 12px; color: var(--fg); overflow-wrap: anywhere; }
+.compare-files a:hover { background: #2b2b2b; }
+.compare-files a[aria-current=true] { background: #18364a; }
+.compare-reader { min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+.compare-file-head { padding: 8px 12px; display: flex; align-items: center; gap: 6px; border-bottom: 1px solid var(--border); }
+.compare-file-head > span { flex: 1; overflow-wrap: anywhere; }
+.compare-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.compare-labels { color: var(--muted); border-bottom: 1px solid var(--border); }
+.compare-labels span { padding: 8px 12px; overflow-wrap: anywhere; }
+.compare-scroll { overflow: auto; flex: 1; min-height: 0; scroll-padding: 20px; }
+.compare-code { display: flex; min-width: 0; padding-right: 12px; line-height: 21px; min-height: 21px; }
+.compare-code:first-child, .compare-labels span:first-child { border-right: 1px solid var(--border); }
+.compare-code code { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; min-width: 0; }
+.compare-ln { color: var(--muted); user-select: none; flex: 0 0 56px; text-align: right; padding-right: 12px; font-size: 11px; }
+.compare-code.del { background: #402626; }
+.compare-code.add { background: #24392a; }
+.compare-code.blank { background: #242424; }
+.compare-code .diff-word-chg { background: #ffffff18; }
+.compare-context summary { cursor: pointer; padding: 7px 16px; color: var(--accent); background: #252c32; border-block: 1px solid var(--border); }
+.compare-message { padding: 20px; white-space: pre-wrap; overflow-wrap: anywhere; overflow: auto; }
+@media (max-width: 800px) { .compare-content { grid-template-columns: 170px minmax(0, 1fr); } .compare-toolbar { gap: 10px; } .compare-ln { flex-basis: 38px; padding-right: 6px; } }
+
 :root {
   --bg: #1e1e1e;
   --fg: #e8e8e8;

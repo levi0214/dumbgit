@@ -156,7 +156,7 @@ function annotateWordDiffs(rows: DiffRow[]): void {
 }
 
 /** Parse a unified diff into rows with old/new line numbers; del/add runs are paired for word-level highlighting. */
-export function parseDiff(text: string): DiffRow[] {
+export function parseDiff(text: string, preserveContext = false): DiffRow[] {
   const rows: DiffRow[] = []
   let oldNo: number | undefined
   let newNo: number | undefined
@@ -195,7 +195,7 @@ export function parseDiff(text: string): DiffRow[] {
       rows.push({ kind: 'meta', text: line })
     }
   }
-  const isBlank = (r: DiffRow) => r.text.trim() === '' && (r.kind === 'ctx' || r.kind === 'meta')
+  const isBlank = (r: DiffRow) => r.text.trim() === '' && ((r.kind === 'ctx' && !preserveContext) || r.kind === 'meta')
   while (rows.length > 0 && isBlank(rows[0]!)) rows.shift()
   while (rows.length > 0 && isBlank(rows[rows.length - 1]!)) rows.pop()
   annotateWordDiffs(rows)
