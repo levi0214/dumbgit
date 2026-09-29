@@ -103,17 +103,43 @@ const COMPARE_SCRIPT = `
   function scheduleMeasure() {
     if (!frame) frame = requestAnimationFrame(measure);
   }
-  function attach() {
+  function attach(reveal, restoreTop) {
     if (observer) observer.disconnect();
     if (scroll) scroll.removeEventListener('scroll', updateViewport);
     scroll = document.querySelector('.compare-scroll');
     viewport = document.querySelector('.compare-viewport');
+    if (frame) cancelAnimationFrame(frame);
+    frame = null;
     if (!scroll) return;
     scroll.addEventListener('scroll', updateViewport, { passive: true });
     observer = new ResizeObserver(scheduleMeasure);
     observer.observe(scroll);
-    scheduleMeasure();
+    if (frame) cancelAnimationFrame(frame);
+    frame = requestAnimationFrame(function() {
+      measure();
+      if (restoreTop != null) {
+        scroll.scrollTop = restoreTop;
+      } else if (reveal) {
+        var first = scroll.querySelector('.compare-change');
+        if (first) {
+          var view = scroll.getBoundingClientRect();
+          var changeTop = first.getBoundingClientRect().top;
+          var lineHeight = parseFloat(getComputedStyle(first.querySelector('.compare-code')).lineHeight) || 21;
+          if (changeTop < view.top || changeTop + lineHeight > view.bottom) {
+            scroll.scrollTop += changeTop - view.top - 3 * lineHeight;
+          }
+          scroll.closest('.compare-reader').dataset.changeIndex = '0';
+        }
+      }
+      updateViewport();
+    });
   }
+  document.addEventListener('htmx:beforeRequest', function(e) {
+    var elt = e.detail.elt;
+    if (elt && elt.matches('[data-compare-refresh]') && scroll) {
+      elt.dataset.scrollTop = String(scroll.scrollTop);
+    }
+  });
   document.addEventListener('click', function(e) {
     var button = e.target.closest('[data-compare-jump], [data-compare-change]');
     if (!button) return;
@@ -142,10 +168,20 @@ const COMPARE_SCRIPT = `
         else a.removeAttribute('aria-current');
       });
     }
-    attach();
+    var source = e.detail.requestConfig && e.detail.requestConfig.elt;
+    var refreshing = source && source.matches('[data-compare-refresh]');
+    attach(!refreshing, refreshing ? Number(source.dataset.scrollTop || 0) : undefined);
   });
-  document.addEventListener('htmx:historyRestore', attach);
-  attach();
+  document.addEventListener('htmx:historyRestore', function() { attach(false); });
+  window.addEventListener('pagehide', function() {
+    if (!scroll) return;
+    try { sessionStorage.setItem('compare-reading-position', JSON.stringify({ url: location.href, top: scroll.scrollTop })); } catch (_) {}
+  });
+  var navigation = performance.getEntriesByType('navigation')[0];
+  var restoring = navigation && ['reload', 'back_forward'].includes(navigation.type);
+  var saved;
+  try { saved = JSON.parse(sessionStorage.getItem('compare-reading-position')); } catch (_) {}
+  attach(!restoring, restoring && saved && saved.url === location.href ? saved.top : undefined);
 })();
 `
 
@@ -166,9 +202,16 @@ export function CompareView(props: { repo: string; name: string; scope: string; 
       <label class="compare-scope">Path <input name="scope" value={props.scope} placeholder="All files, or contracts/src/" /></label>
     </form>
     <div id="compare-results">
-    <div class="compare-note">Direct comparison of two versions.{r?.target === 'worktree' ? ' Working tree includes staged and unstaged tracked changes; untracked files are excluded.' : ''} <a href="" title="Reload this comparison manually">Refresh</a></div>
+    <div class="compare-note">Direct comparison of two versions.{r?.target === 'worktree' ? ' Working tree includes staged and unstaged tracked changes; untracked files are excluded.' : ''} <a href={url(r?.selected?.path ?? '')} hx-get={url(r?.selected?.path ?? '')}
+      hx-select="#compare-results" hx-target="#compare-results" hx-swap="outerHTML"
+      hx-sync="closest .compare-page:replace" data-compare-refresh title="Reload this comparison manually">Refresh</a></div>
     {props.error ? <pre class="compare-message" role="alert">{props.error}</pre> : <div class="compare-content">
-      <aside class="compare-files"><div class="compare-files-heading">Changed files · {r?.files.length}</div>{r?.files.map(file => <a href={url(file.path)} hx-get={url(file.path)} hx-select="#compare-reader" hx-target="#compare-reader" hx-swap="outerHTML" hx-sync="closest .compare-page:replace" hx-push-url="true" aria-current={r.selected?.path === file.path ? 'true' : undefined} title={file.oldPath ? `${file.oldPath} → ${file.path}` : file.path}><span class={`file-status file-${file.status[0]}`}>{file.status[0]}</span><span>{file.path}</span></a>)}</aside>
+      <aside class="compare-files"><div class="compare-files-heading">Changed files · {r?.files.length}</div>{r?.files.map(file => <a href={url(file.path)} hx-get={url(file.path)} hx-select="#compare-reader" hx-target="#compare-reader" hx-swap="outerHTML" hx-sync="closest .compare-page:replace" hx-push-url="true" aria-current={r.selected?.path === file.path ? 'true' : undefined} title={file.oldPath ? `${file.oldPath} → ${file.path}` : file.path}>{file.status[0] !== 'M' ? <span class={`file-status file-${file.status[0]}`}>{file.status[0]}</span> : null}
+        <span class="compare-file-path">{file.path}</span>
+        <span class="compare-file-stats">{file.binary ? <span class="file-num-binary">binary</span> : <>
+          {file.added !== undefined ? <span class="file-num-add">+{file.added}</span> : null}
+          {file.deleted !== undefined ? <span class="file-num-del">−{file.deleted}</span> : null}
+        </>}</span></a>)}</aside>
       <section id="compare-reader" class="compare-reader" data-file={r?.selected?.path}>
         {r?.selected ? <><div class="compare-file-head"><span>{r.selected.oldPath ? `${r.selected.oldPath} → ` : ''}{r.selected.path}</span><button type="button" data-compare-jump="-1" aria-label="Previous change">↑</button><button type="button" data-compare-jump="1" aria-label="Next change">↓</button></div><div class="compare-row compare-labels"><span>{label(r.base)}</span><span>{label(r.target)}</span></div><SplitDiff patch={r.patch} /></> : <p class="compare-message">No differences{props.scope ? ' in this path' : ''}.</p>}
       </section>

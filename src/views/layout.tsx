@@ -20,6 +20,8 @@ const CSS = `
 .compare-files { overflow: auto; border-right: 1px solid var(--border); }
 .compare-files-heading { padding: 12px; color: var(--muted); }
 .compare-files a { display: flex; gap: 8px; padding: 8px 12px; color: var(--fg); overflow-wrap: anywhere; }
+.compare-file-path { flex: 1; min-width: 0; }
+.compare-file-stats { display: flex; gap: 5px; flex-shrink: 0; white-space: nowrap; font-size: 11px; padding-top: 2px; }
 .compare-files a:hover { background: #2b2b2b; }
 .compare-files a[aria-current=true] { background: #18364a; }
 .compare-reader { min-width: 0; min-height: 0; display: flex; flex-direction: column; }

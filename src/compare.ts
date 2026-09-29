@@ -1,6 +1,13 @@
 import { spawnGit } from './git'
 
-export type CompareFile = { status: string; path: string; oldPath?: string }
+export type CompareFile = {
+  status: string
+  path: string
+  oldPath?: string
+  added?: number
+  deleted?: number
+  binary?: boolean
+}
 export type CompareResult = {
   refs: { value: string; label: string }[]
   base: string
@@ -38,13 +45,41 @@ export async function compare(cwd: string, options: { base?: string; target?: st
   const args = ['--literal-pathspecs', 'diff', '--no-ext-diff', '--no-textconv', '--no-color', '--find-renames', left, ...(right ? [right] : [])]
   const scope = options.scope ?? ''
   if (scope.startsWith('/') || scope.split('/').includes('..')) throw new Error('Use a path relative to the repository')
-  const names = (await git(cwd, [...args, '--name-status', '-z', '--', ...(scope ? [scope] : [])])).split('\0')
+  const paths = scope ? [scope] : []
+  const [nameOutput, statOutput] = await Promise.all([
+    git(cwd, [...args, '--name-status', '-z', '--', ...paths]),
+    git(cwd, [...args, '--numstat', '-z', '--', ...paths]),
+  ])
+  const names = nameOutput.split('\0')
   const files: CompareFile[] = []
   for (let i = 0; i < names.length && names[i];) {
     const status = names[i++]!
     const first = names[i++]!
     if (status.startsWith('R') || status.startsWith('C')) files.push({ status, oldPath: first, path: names[i++]! })
     else files.push({ status, path: first })
+  }
+  // With -z, renamed paths occupy two separate NUL-delimited fields.
+  // Only the first two tabs are separators; filenames may themselves contain tabs.
+  const stats = statOutput.split('\0')
+  const byPath = new Map(files.map(file => [file.path, file]))
+  for (let i = 0; i < stats.length && stats[i];) {
+    const record = stats[i++]!
+    const firstTab = record.indexOf('\t')
+    const secondTab = record.indexOf('\t', firstTab + 1)
+    const added = record.slice(0, firstTab)
+    const deleted = record.slice(firstTab + 1, secondTab)
+    let filePath = record.slice(secondTab + 1)
+    if (!filePath) {
+      i++ // old path
+      filePath = stats[i++]!
+    }
+    const file = byPath.get(filePath)
+    if (!file) continue
+    file.binary = added === '-' || deleted === '-'
+    if (!file.binary) {
+      file.added = Number(added)
+      file.deleted = Number(deleted)
+    }
   }
   const selected = files.find(f => f.path === options.file) ?? files[0]
   let patch = ''

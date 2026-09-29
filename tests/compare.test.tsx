@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test'
+import { runInNewContext } from 'node:vm'
 import { mkdtempSync, mkdirSync, writeFileSync, renameSync, rmSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -33,7 +34,12 @@ test('direct branch and working tree comparisons, literal paths, rename and bina
     const r = await compare(repo, {})
     expect(r.base).toBe('refs/heads/main')
     expect(r.target).toBe('refs/heads/feature')
-    expect(r.files.find(f => f.path === 'renamed.txt')?.oldPath).toBe('rename.txt')
+    expect(r.files.find(f => f.path === 'renamed.txt')).toMatchObject({ oldPath: 'rename.txt', added: 0, deleted: 0 })
+    expect(r.files.find(f => f.path === 'contracts/[a].txt')).toMatchObject({ added: 1, deleted: 1 })
+    expect(r.files.find(f => f.path === 'tab\tline\n.txt')).toMatchObject({ added: 1, deleted: 0 })
+    expect(r.files.find(f => f.path === 'deleted.txt')).toMatchObject({ added: 0, deleted: 1 })
+    expect(r.files.find(f => f.path === 'binary')).toMatchObject({ binary: true })
+    expect(r.files.find(f => f.path === 'binary')?.added).toBeUndefined()
     expect(r.files.some(f => f.path === 'tab\tline\n.txt')).toBe(true)
     expect(r.files.some(f => f.status === 'D')).toBe(true)
     const filtered = await compare(repo, { scope: 'contracts/[a].txt' })
@@ -45,6 +51,7 @@ test('direct branch and working tree comparisons, literal paths, rename and bina
     writeFileSync(path.join(repo, 'contracts', '[a].txt'), 'working\n')
     writeFileSync(path.join(repo, 'untracked'), 'invisible\n')
     const work = await compare(repo, { target: 'worktree', scope: 'contracts/' })
+    expect(work.files[0]).toMatchObject({ added: 1, deleted: 1 })
     expect(work.patch).toContain('+working')
     expect(work.patch).not.toContain('+staged')
     expect((await compare(repo, { target: 'worktree' })).files.some(f => f.path === 'untracked')).toBe(false)
@@ -115,4 +122,83 @@ test('large diffs remain selectable without rendering thousands of code rows', (
   expect(html).toContain('5,000-row display limit')
   expect(html).not.toContain('class="compare-code')
   expect(html).not.toContain('class="compare-marker"')
+})
+
+test('file list favors line counts while retaining rename and binary information', () => {
+  const files = [
+    { status: 'M', path: 'modified.ts', added: 12, deleted: 5 },
+    { status: 'R100', path: 'new.ts', oldPath: 'old.ts', added: 0, deleted: 0 },
+    { status: 'M', path: 'image.png', binary: true },
+  ]
+  const html = CompareView({ repo: '/tmp/example', name: 'example', scope: '', result: {
+    refs: [], base: 'HEAD', target: 'worktree', files, patch: '',
+  } }).toString()
+  const list = html.slice(html.indexOf('<aside'), html.indexOf('</aside>'))
+  expect(list).toContain('>+12</span>')
+  expect(list).toContain('>−5</span>')
+  expect(list).not.toContain('file-M')
+  expect(list).toContain('file-R')
+  expect(list).toContain('old.ts → new.ts')
+  expect(list).toContain('>binary</span>')
+})
+
+// Execute the actual page controller with geometry supplied by the test.
+// This checks initial positioning and the htmx refresh lifecycle together.
+function readerController(firstTop: number, navigationType = 'navigate', savedTop?: number) {
+  const callbacks = new Map<number, () => void>()
+  const events = new Map<string, (event: any) => void>()
+  let nextFrame = 0
+  const reader = { dataset: { file: 'a.txt' } as Record<string, string>, style: { setProperty() {} } }
+  const first = {
+    getBoundingClientRect: () => ({ top: firstTop - scroll.scrollTop, height: 21 }),
+    querySelector: () => ({}),
+  }
+  const scroll = {
+    scrollTop: 0, scrollHeight: 2000, clientHeight: 300,
+    offsetWidth: 800, clientWidth: 785, isConnected: true,
+    getBoundingClientRect: () => ({ top: 0, bottom: 300 }),
+    querySelector: () => first, querySelectorAll: () => [first], closest: () => reader,
+    addEventListener() {}, removeEventListener() {},
+  }
+  const script = [...renderPatch('@@ -1 +1 @@\n-old\n+new\n').matchAll(/<script>([\s\S]*?)<\/script>/g)].at(-1)![1]!
+  runInNewContext(script, {
+    window: { addEventListener() {} }, location: { href: 'http://local/compare' },
+    document: {
+      addEventListener: (name: string, callback: (event: any) => void) => events.set(name, callback),
+      querySelector: (selector: string) => selector === '.compare-scroll' ? scroll : selector === '.compare-viewport' ? { style: {} } : selector === '#compare-reader' ? reader : { value: '' },
+      querySelectorAll: () => [],
+    },
+    ResizeObserver: class { observe() {} disconnect() {} },
+    requestAnimationFrame: (callback: () => void) => { callbacks.set(++nextFrame, callback); return nextFrame },
+    cancelAnimationFrame: (id: number) => callbacks.delete(id),
+    getComputedStyle: () => ({ lineHeight: '21px' }),
+    performance: { getEntriesByType: () => [{ type: navigationType }] },
+    sessionStorage: { getItem: () => savedTop === undefined ? null : JSON.stringify({ url: 'http://local/compare', top: savedTop }) },
+  })
+  const paint = () => { const pending = [...callbacks.values()]; callbacks.clear(); pending.forEach(callback => callback()) }
+  paint()
+  return { scroll, reader, events, paint }
+}
+
+test('first change stays at the top when already visible, otherwise opens with three context lines', () => {
+  expect(readerController(150).scroll.scrollTop).toBe(0)
+  const distant = readerController(1000)
+  expect(distant.scroll.scrollTop).toBe(937)
+  expect(distant.reader.dataset.changeIndex).toBe('0')
+})
+
+test('manual refresh and browser reload retain reading position, file switches reveal the first change', () => {
+  const controller = readerController(1000)
+  controller.scroll.scrollTop = 1500
+  const refresh = { dataset: {} as Record<string, string>, matches: () => true }
+  controller.events.get('htmx:beforeRequest')!({ detail: { elt: refresh } })
+  controller.scroll.scrollTop = 0 // Newly swapped reader.
+  controller.events.get('htmx:afterSwap')!({ detail: { target: { id: 'compare-results' }, requestConfig: { elt: refresh } } })
+  controller.paint()
+  expect(controller.scroll.scrollTop).toBe(1500)
+  controller.scroll.scrollTop = 0
+  controller.events.get('htmx:afterSwap')!({ detail: { target: { id: 'compare-reader' }, requestConfig: { elt: { matches: () => false } } } })
+  controller.paint()
+  expect(controller.scroll.scrollTop).toBe(937)
+  expect(readerController(1000, 'reload', 1500).scroll.scrollTop).toBe(1500)
 })
