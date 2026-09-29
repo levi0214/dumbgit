@@ -50,9 +50,9 @@ const CSS = `
 .compare-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
 .compare-labels { flex-shrink: 0; color: var(--muted); border-bottom: 1px solid var(--border); }
 .compare-reader:has(.compare-overview) .compare-labels { padding-right: calc(20px + var(--compare-scrollbar-width, 0px)); }
-.compare-labels label { position: relative; padding: 8px 12px; min-width: 0; }
-.compare-labels label::after { content: ''; position: absolute; right: 24px; top: calc(50% - 4px); width: 6px; height: 6px; border-right: 1px solid var(--muted); border-bottom: 1px solid var(--muted); transform: rotate(45deg); pointer-events: none; }
-.compare-labels select { appearance: none; -webkit-appearance: none; background: transparent; border: 0; padding-left: 0; padding-right: 30px; text-overflow: ellipsis; }
+.compare-labels label { position: relative; padding: 8px 4px; min-width: 0; }
+.compare-labels label::after { content: ''; position: absolute; right: 16px; top: calc(50% - 4px); width: 6px; height: 6px; border-right: 1px solid var(--muted); border-bottom: 1px solid var(--muted); transform: rotate(45deg); pointer-events: none; }
+.compare-labels select { appearance: none; -webkit-appearance: none; background: transparent; border: 0; padding-left: 8px; padding-right: 30px; text-overflow: ellipsis; }
 .compare-labels select:hover, .compare-labels select:focus-visible { background: #2b2b2b; }
 .compare-labels select:focus-visible { outline: 1px solid var(--accent); outline-offset: 1px; }
 .compare-labels option { background: var(--bg); color: var(--fg); }
