@@ -160,7 +160,7 @@ function readerController(firstTop: number, navigationType = 'navigate', savedTo
   const reader = { querySelectorAll: () => bars, dataset: { file: 'a.txt' } as Record<string, string>, style: { setProperty(name: string, value: string) { offsets[name] = value } } }
   const first = {
     scrollWidth: 900,
-    getBoundingClientRect: () => ({ top: firstTop - scroll.scrollTop, height: 21 }),
+    getBoundingClientRect: () => ({ top: firstTop - scroll.scrollTop, height: 21, width: 40 }),
     querySelector: () => ({ getBoundingClientRect: () => ({ width: 40 }) }),
   }
   const scroll = {
@@ -236,17 +236,17 @@ test('file list resizing supports the keyboard and clamps width to half the page
   expect(width).toBe(320)
 })
 
-test('horizontal scrolling moves each side independently and includes the fixed gutter in its range', () => {
+test('horizontal scrolling keeps both sides aligned and includes the fixed gutter in its range', () => {
   const { bars, offsets, scroll } = readerController(1000)
   expect(bars[0]!.firstElementChild.style.width).toBe('952px')
   bars[0]!.scrollLeft = 180
   bars[0]!.onscroll()
-  expect(offsets['--compare-x-left']).toBe('-180px')
-  expect(offsets['--compare-x-right']).toBe('0px')
+  expect(offsets['--compare-x']).toBe('-180px')
+  expect(bars[1]!.scrollLeft).toBe(180)
   bars[1]!.scrollLeft = 90
   bars[1]!.onscroll()
-  expect(offsets['--compare-x-left']).toBe('-180px')
-  expect(offsets['--compare-x-right']).toBe('-90px')
+  expect(offsets['--compare-x']).toBe('-90px')
+  expect(bars[0]!.scrollLeft).toBe(90)
   expect(scroll.scrollTop).toBe(937)
 })
 

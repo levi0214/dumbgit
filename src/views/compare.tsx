@@ -67,7 +67,7 @@ function SplitDiff({ patch }: { patch: string }) {
     </nav>
   </div>
     <div class="compare-horizontal">
-      {(['left', 'right'] as const).map(side => <div class="compare-x-scroll" data-side={side} tabindex={0} role="region" aria-label={`Scroll ${side} code horizontally`}><div /></div>)}
+      {(['left', 'right'] as const).map(side => <div class="compare-x-scroll" data-side={side} tabindex={0} role="region" aria-label="Scroll both versions horizontally"><div /></div>)}
     </div>
   </>
 }
@@ -105,17 +105,22 @@ const COMPARE_SCRIPT = `
       marker.style.height = positions[i].height + '%';
     });
     var reader = scroll.closest('.compare-reader');
-    reader.querySelectorAll('.compare-x-scroll').forEach(function(bar, side) {
-      var width = 0;
-      scroll.querySelectorAll('.compare-code:' + (side === 0 ? 'first-child' : 'last-child') + ' code').forEach(function(code) {
-        width = Math.max(width, code.scrollWidth);
-      });
-      var cell = scroll.querySelector('.compare-code');
-      var gutter = cell.querySelector('.compare-ln').getBoundingClientRect().width;
-      bar.firstElementChild.style.width = (width + gutter + 12) + 'px';
-      bar.onscroll = function() { reader.style.setProperty('--compare-x-' + bar.dataset.side, -bar.scrollLeft + 'px'); };
-      bar.onscroll();
+    var bars = reader.querySelectorAll('.compare-x-scroll');
+    var width = 0;
+    scroll.querySelectorAll('.compare-code code').forEach(function(code) {
+      width = Math.max(width, code.scrollWidth);
     });
+    var gutter = scroll.querySelector('.compare-ln').getBoundingClientRect().width;
+    bars.forEach(function(bar) {
+      bar.firstElementChild.style.width = (width + gutter + 12) + 'px';
+      bar.onscroll = function() {
+        reader.style.setProperty('--compare-x', -bar.scrollLeft + 'px');
+        bars.forEach(function(other) {
+          if (other.scrollLeft !== bar.scrollLeft) other.scrollLeft = bar.scrollLeft;
+        });
+      };
+    });
+    if (bars.length) bars[0].onscroll();
     updateViewport();
   }
   function scheduleMeasure() {
