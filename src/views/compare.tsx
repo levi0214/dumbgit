@@ -340,7 +340,7 @@ export function CompareView(props: { repo: string; name: string; scope: string; 
         {renderChildren(directory, depth + 1)}
       </details>
     })}{node.files.map(file => <a class="compare-file-link" style={`padding-left: ${12 + depth * 14}px`} href={url(file.path)} hx-get={url(file.path)} hx-select="#compare-reader" hx-target="#compare-reader" hx-swap="outerHTML" hx-sync="closest .compare-page:replace" hx-push-url="true" aria-current={r?.selected?.path === file.path ? 'true' : undefined} title={compareFileTitle(file)}>
-        <span class="compare-file-path">{file.path.slice(file.path.lastIndexOf('/') + 1)}</span>
+        <span class="compare-file-path" data-status={file.status[0]}>{file.path.slice(file.path.lastIndexOf('/') + 1)}</span>
         <span class="compare-file-stats">{file.binary ? <span class="file-num-binary">binary</span> : <>
           {file.added !== undefined ? <span class="file-num-add">+{file.added}</span> : null}
           {file.deleted !== undefined ? <span class="file-num-del">−{file.deleted}</span> : null}

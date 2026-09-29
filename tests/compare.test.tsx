@@ -328,10 +328,10 @@ test('directory groups show filenames while preserving full paths in links and t
   expect(html).toContain('<span title="src">src</span>')
   expect(html).toContain('aria-label="Filter to src/"')
   expect(html).not.toContain('<a class="compare-directory"')
-  expect(html).toContain('class="compare-file-path">a.ts</span>')
+  expect(html).toContain('class="compare-file-path" data-status="M">a.ts</span>')
   expect(html).toContain('Modified · test/a.ts')
   expect(html).toContain('file=test%2Fa.ts')
-  expect(html).toContain('class="compare-file-path">README.md</span>')
+  expect(html).toContain('class="compare-file-path" data-status="M">README.md</span>')
 })
 
 test('folder links set a directory scope and All files clears it without changing versions', () => {
