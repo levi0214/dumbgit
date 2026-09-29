@@ -16,8 +16,11 @@ const CSS = `
 .compare-scope { flex: 1; }
 .compare-scope input { width: 100%; min-width: 160px; }
 .compare-note { padding: 8px 18px; color: var(--muted); font-size: 12px; }
-.compare-content { display: grid; grid-template-columns: 240px minmax(0, 1fr); flex: 1; min-height: 0; border-top: 1px solid var(--border); }
-.compare-files { overflow: auto; border-right: 1px solid var(--border); }
+.compare-content { display: grid; grid-template-columns: clamp(160px, var(--compare-files-width, 320px), 50%) 6px minmax(0, 1fr); flex: 1; min-height: 0; border-top: 1px solid var(--border); }
+.compare-files { overflow: auto; min-width: 0; }
+.compare-files-resizer { cursor: col-resize; touch-action: none; border-inline: 1px solid var(--border); }
+.compare-files-resizer:hover, .compare-files-resizer:focus-visible { background: var(--accent); outline: none; }
+.compare-resizing { user-select: none; cursor: col-resize; }
 .compare-files-heading { padding: 12px; color: var(--muted); }
 .compare-files a { display: flex; gap: 8px; padding: 8px 12px; color: var(--fg); overflow-wrap: anywhere; }
 .compare-file-path { flex: 1; min-width: 0; }
@@ -50,7 +53,7 @@ const CSS = `
 .compare-code.blank { background: #242424; }
 .compare-code .diff-word-chg { background: #ffffff18; }
 .compare-message { padding: 20px; white-space: pre-wrap; overflow-wrap: anywhere; overflow: auto; }
-@media (max-width: 800px) { .compare-content { grid-template-columns: 170px minmax(0, 1fr); } .compare-toolbar { gap: 10px; } .compare-ln { flex-basis: 38px; padding-right: 6px; } }
+@media (max-width: 800px) { .compare-page { --compare-files-width: 220px; } .compare-toolbar { gap: 10px; } .compare-ln { flex-basis: 38px; padding-right: 6px; } }
 
 :root {
   --bg: #1e1e1e;

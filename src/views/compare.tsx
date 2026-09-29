@@ -1,6 +1,6 @@
 /** @jsxImportSource hono/jsx */
 import { raw } from 'hono/html'
-import type { CompareResult } from '../compare'
+import type { CompareFile, CompareResult } from '../compare'
 import { parseDiff, type DiffRow } from './diff'
 
 type CodeRow = Extract<DiffRow, { kind: 'ctx' | 'add' | 'del' }>
@@ -128,7 +128,6 @@ const COMPARE_SCRIPT = `
           if (changeTop < view.top || changeTop + lineHeight > view.bottom) {
             scroll.scrollTop += changeTop - view.top - 3 * lineHeight;
           }
-          scroll.closest('.compare-reader').dataset.changeIndex = '0';
         }
       }
       updateViewport();
@@ -141,21 +140,39 @@ const COMPARE_SCRIPT = `
     }
   });
   document.addEventListener('click', function(e) {
-    var button = e.target.closest('[data-compare-jump], [data-compare-change]');
+    var button = e.target.closest('[data-compare-change]');
     if (!button) return;
-    var reader = document.querySelector('#compare-reader');
-    var changes = Array.from(reader.querySelectorAll('.compare-change'));
-    var current;
-    if (button.hasAttribute('data-compare-change')) {
-      current = Number(button.dataset.compareChange);
-    } else {
-      current = Number(reader.dataset.changeIndex || '-1');
-      current = Math.max(0, Math.min(changes.length - 1, current + Number(button.dataset.compareJump)));
-    }
-    if (changes[current]) {
-      reader.dataset.changeIndex = current;
-      changes[current].scrollIntoView({ block: 'center' });
-    }
+    var target = document.getElementById(button.getAttribute('aria-controls'));
+    if (target) target.scrollIntoView({ block: 'center' });
+  });
+  function resizeFiles(handle, width) {
+    var content = handle.closest('.compare-content');
+    width = Math.max(160, Math.min(width, content.clientWidth / 2));
+    handle.closest('.compare-page').style.setProperty('--compare-files-width', width + 'px');
+  }
+  document.addEventListener('pointerdown', function(e) {
+    var handle = e.target.closest('.compare-files-resizer');
+    if (!handle || e.button !== 0) return;
+    e.preventDefault();
+    var left = handle.closest('.compare-content').getBoundingClientRect().left;
+    handle.setPointerCapture(e.pointerId);
+    handle.closest('.compare-page').classList.add('compare-resizing');
+    handle.onpointermove = function(move) { resizeFiles(handle, move.clientX - left); };
+    handle.onlostpointercapture = function() {
+      handle.onpointermove = null;
+      handle.closest('.compare-page').classList.remove('compare-resizing');
+    };
+  });
+  document.addEventListener('keydown', function(e) {
+    var handle = e.target.closest('.compare-files-resizer');
+    if (!handle || !['ArrowLeft', 'ArrowRight', 'Home'].includes(e.key)) return;
+    e.preventDefault();
+    var width = handle.previousElementSibling.getBoundingClientRect().width;
+    resizeFiles(handle, e.key === 'Home' ? 320 : width + (e.key === 'ArrowRight' ? 20 : -20));
+  });
+  document.addEventListener('dblclick', function(e) {
+    var handle = e.target.closest('.compare-files-resizer');
+    if (handle) handle.closest('.compare-page').style.removeProperty('--compare-files-width');
   });
   document.addEventListener('htmx:afterSwap', function(e) {
     if (!['compare-reader', 'compare-results'].includes(e.detail.target.id)) return;
@@ -185,6 +202,12 @@ const COMPARE_SCRIPT = `
 })();
 `
 
+function compareFileTitle(file: CompareFile): string {
+  const status = ({ A: 'Added', D: 'Deleted', R: 'Renamed', C: 'Copied', M: 'Modified', T: 'Type changed' } as Record<string, string>)[file.status[0]!] ?? file.status
+  const path = file.oldPath ? `${file.oldPath} → ${file.path}` : file.path
+  return `${status} · ${path}`
+}
+
 export function CompareView(props: { repo: string; name: string; scope: string; result?: CompareResult; error?: string }) {
   const { result: r } = props
   const url = (file: string) => '/compare?' + new URLSearchParams({ repo: props.repo, base: r!.base, target: r!.target, scope: props.scope, file })
@@ -206,14 +229,16 @@ export function CompareView(props: { repo: string; name: string; scope: string; 
       hx-select="#compare-results" hx-target="#compare-results" hx-swap="outerHTML"
       hx-sync="closest .compare-page:replace" data-compare-refresh title="Reload this comparison manually">Refresh</a></div>
     {props.error ? <pre class="compare-message" role="alert">{props.error}</pre> : <div class="compare-content">
-      <aside class="compare-files"><div class="compare-files-heading">Changed files · {r?.files.length}</div>{r?.files.map(file => <a href={url(file.path)} hx-get={url(file.path)} hx-select="#compare-reader" hx-target="#compare-reader" hx-swap="outerHTML" hx-sync="closest .compare-page:replace" hx-push-url="true" aria-current={r.selected?.path === file.path ? 'true' : undefined} title={file.oldPath ? `${file.oldPath} → ${file.path}` : file.path}>{file.status[0] !== 'M' ? <span class={`file-status file-${file.status[0]}`}>{file.status[0]}</span> : null}
+      <aside class="compare-files"><div class="compare-files-heading">Changed files · {r?.files.length}</div>{r?.files.map(file => <a href={url(file.path)} hx-get={url(file.path)} hx-select="#compare-reader" hx-target="#compare-reader" hx-swap="outerHTML" hx-sync="closest .compare-page:replace" hx-push-url="true" aria-current={r.selected?.path === file.path ? 'true' : undefined} title={compareFileTitle(file)}>
         <span class="compare-file-path">{file.path}</span>
         <span class="compare-file-stats">{file.binary ? <span class="file-num-binary">binary</span> : <>
           {file.added !== undefined ? <span class="file-num-add">+{file.added}</span> : null}
           {file.deleted !== undefined ? <span class="file-num-del">−{file.deleted}</span> : null}
         </>}</span></a>)}</aside>
+      <div class="compare-files-resizer" role="separator" aria-orientation="vertical"
+        aria-label="Resize file list" tabindex={0} title="Drag to resize · double-click to reset" />
       <section id="compare-reader" class="compare-reader" data-file={r?.selected?.path}>
-        {r?.selected ? <><div class="compare-file-head"><span>{r.selected.oldPath ? `${r.selected.oldPath} → ` : ''}{r.selected.path}</span><button type="button" data-compare-jump="-1" aria-label="Previous change">↑</button><button type="button" data-compare-jump="1" aria-label="Next change">↓</button></div><div class="compare-row compare-labels"><span>{label(r.base)}</span><span>{label(r.target)}</span></div><SplitDiff patch={r.patch} /></> : <p class="compare-message">No differences{props.scope ? ' in this path' : ''}.</p>}
+        {r?.selected ? <><div class="compare-file-head"><span>{r.selected.oldPath ? `${r.selected.oldPath} → ` : ''}{r.selected.path}</span></div><div class="compare-row compare-labels"><span>{label(r.base)}</span><span>{label(r.target)}</span></div><SplitDiff patch={r.patch} /></> : <p class="compare-message">No differences{props.scope ? ' in this path' : ''}.</p>}
       </section>
     </div>}
     </div>

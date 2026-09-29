@@ -89,6 +89,8 @@ test('reader displays the full document and exposes change navigation', () => {
   expect(html).toContain('line 19')
   expect(html).toContain('input changed delay:350ms')
   expect(html).not.toContain('<button>Compare</button>')
+  expect(html).not.toContain('data-compare-jump')
+  expect(html).toContain('aria-label="Resize file list"')
   expect(html).toContain('compare-change-0')
   expect(html).toContain('&lt;script&gt;')
   expect(html).toContain('untracked files are excluded')
@@ -124,7 +126,7 @@ test('large diffs remain selectable without rendering thousands of code rows', (
   expect(html).not.toContain('class="compare-marker"')
 })
 
-test('file list favors line counts while retaining rename and binary information', () => {
+test('file list uses consistent counts and describes file status in tooltips', () => {
   const files = [
     { status: 'M', path: 'modified.ts', added: 12, deleted: 5 },
     { status: 'R100', path: 'new.ts', oldPath: 'old.ts', added: 0, deleted: 0 },
@@ -137,7 +139,9 @@ test('file list favors line counts while retaining rename and binary information
   expect(list).toContain('>+12</span>')
   expect(list).toContain('>−5</span>')
   expect(list).not.toContain('file-M')
-  expect(list).toContain('file-R')
+  expect(list).not.toContain('file-status')
+  expect(list).toContain('Renamed · old.ts → new.ts')
+  expect(list).toContain('Modified · modified.ts')
   expect(list).toContain('old.ts → new.ts')
   expect(list).toContain('>binary</span>')
 })
@@ -184,7 +188,6 @@ test('first change stays at the top when already visible, otherwise opens with t
   expect(readerController(150).scroll.scrollTop).toBe(0)
   const distant = readerController(1000)
   expect(distant.scroll.scrollTop).toBe(937)
-  expect(distant.reader.dataset.changeIndex).toBe('0')
 })
 
 test('manual refresh and browser reload retain reading position, file switches reveal the first change', () => {
@@ -201,4 +204,28 @@ test('manual refresh and browser reload retain reading position, file switches r
   controller.paint()
   expect(controller.scroll.scrollTop).toBe(937)
   expect(readerController(1000, 'reload', 1500).scroll.scrollTop).toBe(1500)
+})
+
+test('file list resizing supports the keyboard and clamps width to half the page', () => {
+  const controller = readerController(150)
+  let width = 320
+  const page = { style: {
+    setProperty: (_name: string, value: string) => { width = parseFloat(value) },
+    removeProperty: () => { width = 320 },
+  } }
+  const handle = {
+    closest: (selector: string) => selector === '.compare-page' ? page : { clientWidth: 1000 },
+    previousElementSibling: { getBoundingClientRect: () => ({ width }) },
+  }
+  const press = (key: string) => controller.events.get('keydown')!({
+    key, target: { closest: () => handle }, preventDefault() {},
+  })
+  press('ArrowRight')
+  expect(width).toBe(340)
+  for (let i = 0; i < 30; i++) press('ArrowRight')
+  expect(width).toBe(500)
+  for (let i = 0; i < 30; i++) press('ArrowLeft')
+  expect(width).toBe(160)
+  press('Home')
+  expect(width).toBe(320)
 })
