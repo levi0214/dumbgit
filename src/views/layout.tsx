@@ -28,7 +28,7 @@ const CSS = `
 .compare-files-heading { padding: 12px; color: var(--muted); }
 .compare-files .compare-file-link { display: flex; gap: 8px; padding: 6px 12px; color: var(--fg); }
 .compare-file-path { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.compare-files .compare-directory { display: flex; align-items: center; gap: 6px; padding: 2px 12px; color: var(--fg); cursor: pointer; list-style: none; }
+.compare-files .compare-directory { display: flex; align-items: center; gap: 6px; padding: 2px 12px; color: var(--muted); cursor: pointer; list-style: none; }
 .compare-directory::-webkit-details-marker { display: none; }
 .compare-directory::before { content: '›'; width: 10px; flex-shrink: 0; text-align: center; color: var(--muted); }
 .compare-folder[open] > .compare-directory::before { transform: rotate(90deg); }
