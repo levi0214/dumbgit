@@ -18,7 +18,7 @@ const CSS = `
 .compare-scope { display: flex; align-items: center; gap: 8px; padding: 0 12px 12px; font-size: 12px; }
 .compare-scope span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
 .compare-scope a { flex-shrink: 0; }
-.compare-content { display: grid; grid-template-columns: clamp(160px, var(--compare-files-width, 320px), 50%) 6px minmax(0, 1fr); flex: 1; min-height: 0; border-top: 1px solid var(--border); }
+.compare-content { display: grid; grid-template-columns: clamp(160px, var(--compare-files-width, 320px), 50%) 6px minmax(0, 1fr); flex: 1; min-height: 0; }
 .compare-files { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
 .compare-files-controls { flex-shrink: 0; border-bottom: 1px solid var(--border); }
 .compare-file-list { overflow: auto; min-height: 0; }
