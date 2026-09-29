@@ -81,7 +81,6 @@ const COMPARE_SCRIPT = `
   var scroll;
   var viewport;
   var frame;
-  var scopeSelection;
   function updateViewport() {
     if (!scroll || !viewport) return;
     viewport.style.top = (scroll.scrollTop / scroll.scrollHeight * 100) + '%';
@@ -207,24 +206,13 @@ const COMPARE_SCRIPT = `
     var handle = e.target.closest('.compare-files-resizer');
     if (handle) handle.closest('.compare-page').style.removeProperty('--compare-files-width');
   });
-  document.addEventListener('htmx:beforeSwap', function(e) {
-    var input = document.activeElement;
-    scopeSelection = e.detail.target.id === 'compare-results' && input && input.id === 'compare-scope'
-      ? [input.selectionStart, input.selectionEnd] : null;
-  });
   document.addEventListener('htmx:afterSwap', function(e) {
     if (!['compare-reader', 'compare-results'].includes(e.detail.target.id)) return;
-    if (scopeSelection) {
-      var input = document.getElementById('compare-scope');
-      input.focus({ preventScroll: true });
-      input.setSelectionRange(scopeSelection[0], scopeSelection[1]);
-      scopeSelection = null;
-    }
     var reader = document.querySelector('#compare-reader');
     if (reader) {
       var selected = reader.dataset.file;
       document.querySelector('.compare-form input[name=file]').value = selected || '';
-      document.querySelectorAll('.compare-files a').forEach(function(a) {
+      document.querySelectorAll('.compare-file-link').forEach(function(a) {
         if (new URL(a.href).searchParams.get('file') === selected) a.setAttribute('aria-current', 'true');
         else a.removeAttribute('aria-current');
       });
@@ -261,10 +249,10 @@ export function CompareView(props: { repo: string; name: string; scope: string; 
     if (!groups.has(directory)) groups.set(directory, [])
     groups.get(directory)!.push(file)
   }
-  const url = (file: string) => '/compare?' + new URLSearchParams({ repo: props.repo, base: r!.base, target: r!.target, scope: props.scope, file })
+  const url = (file: string, scope = props.scope) => '/compare?' + new URLSearchParams({ repo: props.repo, base: r!.base, target: r!.target, scope, file })
   return <main class="compare-page">
     <form class="compare-form" action="/compare"
-      hx-get="/compare" hx-trigger="submit, change[event.target.tagName === 'SELECT'], input[event.target.name === 'scope'] delay:350ms"
+      hx-get="/compare" hx-trigger="submit, change[event.target.tagName === 'SELECT']"
       hx-select="#compare-results" hx-target="#compare-results" hx-swap="outerHTML"
       hx-sync="closest .compare-page:replace" hx-push-url="true">
     <header class="compare-toolbar"><a href="/">← Workspace</a><a href={'/repo?repo=' + encodeURIComponent(props.repo)}>{props.name}</a><strong title="Direct comparison of two versions, using their tips rather than a merge base.">Compare</strong>
@@ -274,13 +262,18 @@ export function CompareView(props: { repo: string; name: string; scope: string; 
       <input type="hidden" name="file" value={r?.selected?.path ?? ''} />
       <input type="hidden" name="repo" value={props.repo} />
     <div id="compare-results">
+    <input type="hidden" name="scope" value={props.scope} />
     <div class="compare-content">
       <aside class="compare-files">
         <div class="compare-files-controls"><div class="compare-files-heading">Changed files · {r?.files.length ?? 0}</div>
-          <label class="compare-scope" for="compare-scope">Path <input id="compare-scope" hx-preserve name="scope" value={props.scope} placeholder="All files, or contracts/src/" /></label>
+          {props.scope && <div class="compare-scope">
+            <span title={props.scope}>{props.scope}</span>
+            <a href={url(r?.selected?.path ?? '', '')} hx-get={url(r?.selected?.path ?? '', '')}>All files</a>
+          </div>}
         </div><div class="compare-file-list">{[...groups].map(([directory, files]) => <section class="compare-file-group">
-        {directory && <div class="compare-directory" title={directory}>{directory}</div>}
-        {files.map(file => <a href={url(file.path)} hx-get={url(file.path)} hx-select="#compare-reader" hx-target="#compare-reader" hx-swap="outerHTML" hx-sync="closest .compare-page:replace" hx-push-url="true" aria-current={r?.selected?.path === file.path ? 'true' : undefined} title={compareFileTitle(file)}>
+        {directory && <a class="compare-directory" title={`Show changes in ${directory}/`}
+          href={url(r?.selected?.path ?? '', directory + '/')} hx-get={url(r?.selected?.path ?? '', directory + '/')}>{directory}</a>}
+        {files.map(file => <a class="compare-file-link" href={url(file.path)} hx-get={url(file.path)} hx-select="#compare-reader" hx-target="#compare-reader" hx-swap="outerHTML" hx-sync="closest .compare-page:replace" hx-push-url="true" aria-current={r?.selected?.path === file.path ? 'true' : undefined} title={compareFileTitle(file)}>
         <span class="compare-file-path">{file.path.slice(file.path.lastIndexOf('/') + 1)}</span>
         <span class="compare-file-stats">{file.binary ? <span class="file-num-binary">binary</span> : <>
           {file.added !== undefined ? <span class="file-num-add">+{file.added}</span> : null}

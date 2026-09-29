@@ -15,8 +15,9 @@ const CSS = `
 .compare-page select { width: 100%; min-width: 0; }
 .compare-page .compare-refresh { margin-left: auto; color: var(--accent); background: none; border: 0; padding: 0; }
 .compare-page label { display: flex; align-items: center; gap: 8px; }
-.compare-scope { padding: 0 12px 12px; font-size: 12px; }
-.compare-scope input { width: 100%; min-width: 0; }
+.compare-scope { display: flex; align-items: center; gap: 8px; padding: 0 12px 12px; font-size: 12px; }
+.compare-scope span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
+.compare-scope a { flex-shrink: 0; }
 .compare-content { display: grid; grid-template-columns: clamp(160px, var(--compare-files-width, 320px), 50%) 6px minmax(0, 1fr); flex: 1; min-height: 0; border-top: 1px solid var(--border); }
 .compare-files { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
 .compare-files-controls { flex-shrink: 0; border-bottom: 1px solid var(--border); }
@@ -25,13 +26,13 @@ const CSS = `
 .compare-files-resizer:hover, .compare-files-resizer:focus-visible { background: var(--accent); outline: none; }
 .compare-resizing { user-select: none; cursor: col-resize; }
 .compare-files-heading { padding: 12px; color: var(--muted); }
-.compare-files a { display: flex; gap: 8px; padding: 6px 12px; color: var(--fg); }
+.compare-files .compare-file-link { display: flex; gap: 8px; padding: 6px 12px; color: var(--fg); }
 .compare-file-path { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.compare-directory { padding: 12px 12px 4px; color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.compare-file-group:has(.compare-directory) a { padding-left: 20px; }
+.compare-files .compare-directory { display: block; padding: 12px 12px 4px; color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.compare-file-group:has(.compare-directory) .compare-file-link { padding-left: 20px; }
 .compare-file-stats { display: flex; gap: 5px; flex-shrink: 0; white-space: nowrap; font-size: 11px; padding-top: 2px; }
 .compare-files a:hover { background: #2b2b2b; }
-.compare-files a[aria-current=true] { background: #18364a; }
+.compare-file-link[aria-current=true] { background: #18364a; }
 .compare-reader { min-width: 0; min-height: 0; display: flex; flex-direction: column; }
 .compare-file-head { padding: 8px 12px; display: flex; align-items: center; gap: 6px; border-bottom: 1px solid var(--border); }
 .compare-file-head > span { flex: 1; overflow-wrap: anywhere; }

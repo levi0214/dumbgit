@@ -27,6 +27,10 @@ test('direct branch and working tree comparisons, literal paths, rename and bina
     writeFileSync(path.join(repo, 'contracts', '[a].txt'), 'after\n')
     renameSync(path.join(repo, 'rename.txt'), path.join(repo, 'renamed.txt'))
     rmSync(path.join(repo, 'deleted.txt'))
+    mkdirSync(path.join(repo, 'contracts', 'nested'))
+    writeFileSync(path.join(repo, 'contracts', 'nested', 'child.txt'), 'nested change\n')
+    mkdirSync(path.join(repo, 'contracts-other'))
+    writeFileSync(path.join(repo, 'contracts-other', 'outside.txt'), 'outside\n')
     writeFileSync(path.join(repo, 'binary'), Buffer.from([0, 1, 2]))
     writeFileSync(path.join(repo, 'tab\tline\n.txt'), 'odd name\n')
     git(repo, 'add', '.')
@@ -46,6 +50,8 @@ test('direct branch and working tree comparisons, literal paths, rename and bina
     expect(filtered.files.length).toBe(1)
     expect(filtered.patch).toContain('+after')
     expect(filtered.patch).toContain('-before')
+    const folder = await compare(repo, { scope: 'contracts/' })
+    expect(folder.files.map(file => file.path)).toEqual(['contracts/[a].txt', 'contracts/nested/child.txt'])
     writeFileSync(path.join(repo, 'contracts', '[a].txt'), 'staged\n')
     git(repo, 'add', '.')
     writeFileSync(path.join(repo, 'contracts', '[a].txt'), 'working\n')
@@ -87,7 +93,6 @@ test('reader displays the full document and exposes change navigation', () => {
   expect(html).not.toContain('<details')
   expect(html).toContain('line 0')
   expect(html).toContain('line 19')
-  expect(html).toContain('delay:350ms')
   expect(html).not.toContain('<button>Compare</button>')
   expect(html).not.toContain('data-compare-jump')
   expect(html).toContain('aria-label="Resize file list"')
@@ -263,7 +268,9 @@ test('compact controls remain available for empty comparisons and errors', () =>
     }).toString()
     expect(html).toContain('aria-label="Base version"')
     expect(html).toContain('aria-label="Target version"')
-    expect(html).toContain('id="compare-scope"')
+    expect(html).toContain('type="hidden" name="scope" value="src/"')
+    expect(html).toContain('>All files</a>')
+    expect(html).not.toContain('id="compare-scope"')
     expect(html).toContain('hx-include="closest form"')
     expect(html).not.toContain('class="compare-note"')
     expect(html).toContain(error ?? 'No differences in this path.')
@@ -277,9 +284,28 @@ test('directory groups show filenames while preserving full paths in links and t
     },
   }).toString()
   expect(html.match(/class="compare-directory"/g)?.length).toBe(2)
-  expect(html).toContain('title="src">src</div>')
+  expect(html).toContain('title="Show changes in src/"')
   expect(html).toContain('class="compare-file-path">a.ts</span>')
   expect(html).toContain('Modified · test/a.ts')
   expect(html).toContain('file=test%2Fa.ts')
   expect(html).toContain('class="compare-file-path">README.md</span>')
+})
+
+test('folder links set a directory scope and All files clears it without changing versions', () => {
+  const render = (scope: string) => CompareView({ repo: '/tmp/example', name: 'example', scope,
+    result: { refs: [], base: 'refs/heads/main', target: 'worktree', patch: '',
+      files: [{ status: 'M', path: 'src/a & b/file.ts' }],
+    },
+  }).toString()
+  const folder = render('').match(/class="compare-directory"[^>]*href="([^"]+)"/)![1]!
+  const scoped = new URL(folder.replaceAll('&amp;', '&'), 'http://local')
+  expect(scoped.searchParams.get('scope')).toBe('src/a & b/')
+  expect(scoped.searchParams.get('base')).toBe('refs/heads/main')
+  expect(scoped.searchParams.get('target')).toBe('worktree')
+  const filtered = render('src/a & b/')
+  const back = filtered.match(/<a href="([^"]+)"[^>]*>All files<\/a>/)![1]!
+  const all = new URL(back.replaceAll('&amp;', '&'), 'http://local')
+  expect(all.searchParams.get('scope')).toBe('')
+  expect(all.searchParams.get('base')).toBe('refs/heads/main')
+  expect(all.searchParams.get('target')).toBe('worktree')
 })
