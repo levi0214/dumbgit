@@ -46,7 +46,12 @@ const CSS = `
 .compare-scroll { overflow: auto; flex: 1; min-height: 0; scroll-padding: 20px; }
 .compare-code { display: flex; min-width: 0; padding-right: 12px; line-height: 21px; min-height: 21px; }
 .compare-code:first-child, .compare-labels span:first-child { border-right: 1px solid var(--border); }
-.compare-code code { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; min-width: 0; }
+.compare-text { flex: 1; min-width: 0; overflow: hidden; }
+.compare-code code { display: block; width: max-content; white-space: pre; font: inherit; transform: translateX(var(--compare-x-left, 0px)); }
+.compare-code:last-child code { transform: translateX(var(--compare-x-right, 0px)); }
+.compare-horizontal { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); padding-right: calc(20px + var(--compare-scrollbar-width, 0px)); flex-shrink: 0; }
+.compare-x-scroll { overflow-x: auto; overflow-y: hidden; min-width: 0; }
+.compare-x-scroll > div { height: 1px; }
 .compare-ln { color: var(--muted); user-select: none; flex: 0 0 56px; text-align: right; padding-right: 12px; font-size: 11px; }
 .compare-code.del { background: #402626; }
 .compare-code.add { background: #24392a; }

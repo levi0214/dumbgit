@@ -22,7 +22,7 @@ export function splitRows(patch: string): SplitRow[] {
   return rows
 }
 function Line({ row, side }: { row?: CodeRow; side: 'left' | 'right' }) {
-  return <div class={`compare-code ${row?.kind ?? 'blank'}`}><span class="compare-ln">{side === 'left' ? row?.oldNo : row?.newNo}</span><code>{row?.word ? row.word.map(w => <span class={w.chg ? 'diff-word-chg' : undefined}>{w.t}</span>) : row?.text}</code></div>
+  return <div class={`compare-code ${row?.kind ?? 'blank'}`}><span class="compare-ln">{side === 'left' ? row?.oldNo : row?.newNo}</span><span class="compare-text"><code>{row?.word ? row.word.map(w => <span class={w.chg ? 'diff-word-chg' : undefined}>{w.t}</span>) : row?.text}</code></span></div>
 }
 function Row({ row, id }: { row: SplitRow; id?: string }) {
   return <div class="compare-row" id={id}><Line row={row.left} side="left" /><Line row={row.right} side="right" /></div>
@@ -57,13 +57,17 @@ function SplitDiff({ patch }: { patch: string }) {
       </button>,
     )
   }
-  return <div class="compare-document">
+  return <><div class="compare-document">
     <div class="compare-scroll">{blocks}</div>
     <nav class="compare-overview" aria-label="Changes in this file">
       <div class="compare-viewport" aria-hidden="true" />
       {markers}
     </nav>
   </div>
+    <div class="compare-horizontal">
+      {(['left', 'right'] as const).map(side => <div class="compare-x-scroll" data-side={side} tabindex={0} role="region" aria-label={`Scroll ${side} code horizontally`}><div /></div>)}
+    </div>
+  </>
 }
 
 const COMPARE_SCRIPT = `
@@ -88,7 +92,7 @@ const COMPARE_SCRIPT = `
     var scrollbarWidth = scroll.offsetWidth - scroll.clientWidth;
     var groups = scroll.querySelectorAll('.compare-change');
     var markers = document.querySelectorAll('.compare-marker');
-    // Read all geometry before writing styles; wrapped lines count at their actual height.
+    // Read all geometry before writing styles.
     var positions = Array.from(groups, function(group) {
       var rect = group.getBoundingClientRect();
       return { top: (rect.top - top) / height * 100, height: rect.height / height * 100 };
@@ -97,6 +101,18 @@ const COMPARE_SCRIPT = `
     markers.forEach(function(marker, i) {
       marker.style.top = 'min(' + positions[i].top + '%, calc(100% - 4px))';
       marker.style.height = positions[i].height + '%';
+    });
+    var reader = scroll.closest('.compare-reader');
+    reader.querySelectorAll('.compare-x-scroll').forEach(function(bar, side) {
+      var width = 0;
+      scroll.querySelectorAll('.compare-code:' + (side === 0 ? 'first-child' : 'last-child') + ' code').forEach(function(code) {
+        width = Math.max(width, code.scrollWidth);
+      });
+      var cell = scroll.querySelector('.compare-code');
+      var gutter = cell.querySelector('.compare-ln').getBoundingClientRect().width;
+      bar.firstElementChild.style.width = (width + gutter + 12) + 'px';
+      bar.onscroll = function() { reader.style.setProperty('--compare-x-' + bar.dataset.side, -bar.scrollLeft + 'px'); };
+      bar.onscroll();
     });
     updateViewport();
   }
@@ -145,6 +161,15 @@ const COMPARE_SCRIPT = `
     var target = document.getElementById(button.getAttribute('aria-controls'));
     if (target) target.scrollIntoView({ block: 'center' });
   });
+  document.addEventListener('wheel', function(e) {
+    var cell = e.target.closest('.compare-code');
+    if (!cell || Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;
+    var side = cell.matches(':first-child') ? 'left' : 'right';
+    var bar = cell.closest('.compare-reader').querySelector('.compare-x-scroll[data-side=' + side + ']');
+    if (!bar) return;
+    bar.scrollLeft += e.deltaX * (e.deltaMode === 1 ? 21 : e.deltaMode === 2 ? bar.clientWidth : 1);
+    e.preventDefault();
+  }, { passive: false });
   function resizeFiles(handle, width) {
     var content = handle.closest('.compare-content');
     width = Math.max(160, Math.min(width, content.clientWidth / 2));
