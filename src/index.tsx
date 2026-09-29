@@ -471,7 +471,6 @@ app.get('/repo', async (c) => {
   return c.html(
     <Layout title={`dumbgit: ${path.basename(repoPath)}`} repoPath={repoPath}>
       <div class="page">
-        <a class="repo-compare-link" href={'/compare?repo=' + encodeURIComponent(repoPath)}>Compare branches →</a>
         <div id="status" class="status-slot"></div>
         <div class="main-grid">
           <GraphFragment {...graph} />

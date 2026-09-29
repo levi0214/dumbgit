@@ -45,8 +45,10 @@ graph itself. That is how dumbgit became what it is today.
 - Shows branches, remotes, tags, stashes, commits, and local edits.
 - Opens diffs and stages, unstages, or discards changes.
 - Compares branches or the working tree in a dedicated side-by-side reader,
-  with a changed-file list, path filtering, and expandable unchanged lines.
-  Open a repository and choose **Compare branches**. Comparisons use the two
+  with a changed-file list, automatic path filtering, full document context,
+  and a clickable red/green change overview. Very large diffs (over 5,000
+  aligned rows) are left to your editor to keep the reader responsive.
+  Open a repository and choose **Compare**. Comparisons use the two
   selected versions directly (not their merge base); Working tree includes
   tracked staged and unstaged changes, but excludes untracked files.
 - Switches and creates branches, checks out commits, and pushes or pulls (fast-forward only).

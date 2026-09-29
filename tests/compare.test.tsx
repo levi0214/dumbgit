@@ -74,11 +74,45 @@ test('split rows preserve independent line numbers and align unequal replacement
   expect(rows[3]?.right?.newNo).toBe(3)
 })
 
-test('reader escapes code, folds context and exposes change navigation', () => {
+test('reader displays the full document and exposes change navigation', () => {
   const patch = '@@ -1,21 +1,21 @@\n' + Array.from({ length: 20 }, (_, i) => ` line ${i}\n`).join('') + '-old\n+<script>alert(1)</script>\n'
   const html = CompareView({ repo: '/tmp/example', name: 'example', scope: '', result: { refs: [{ value: 'HEAD', label: 'HEAD' }], base: 'HEAD', target: 'worktree', files: [{ status: 'M', path: 'a.txt' }], selected: { status: 'M', path: 'a.txt' }, patch } }).toString()
-  expect(html).toContain('Show 17 unchanged lines')
+  expect(html).not.toContain('<details')
+  expect(html).toContain('line 0')
+  expect(html).toContain('line 19')
+  expect(html).toContain('input changed delay:350ms')
+  expect(html).not.toContain('<button>Compare</button>')
   expect(html).toContain('compare-change-0')
   expect(html).toContain('&lt;script&gt;')
   expect(html).toContain('untracked files are excluded')
+})
+
+function renderPatch(patch: string) {
+  return CompareView({ repo: '/tmp/example', name: 'example', scope: '', result: {
+    refs: [{ value: 'HEAD', label: 'HEAD' }], base: 'HEAD', target: 'worktree',
+    files: [{ status: 'M', path: 'a.txt' }], selected: { status: 'M', path: 'a.txt' }, patch,
+  } }).toString()
+}
+
+test('overview groups changes, distinguishes additions and deletions, and targets the matching block', () => {
+  const html = renderPatch('@@ -1,5 +1,5 @@\n-deleted\n same\n+added\n same\n-old\n+new\n end\n')
+  expect(html.match(/class="compare-marker"/g)?.length).toBe(3)
+  expect(html).toContain('Deleted lines · change 1')
+  expect(html).toContain('Added lines · change 2')
+  expect(html).toContain('Modified lines · change 3')
+  expect(html.match(/class="compare-marker-del"/g)?.length).toBe(2)
+  expect(html.match(/class="compare-marker-add"/g)?.length).toBe(2)
+  for (let i = 0; i < 3; i++) {
+    expect(html).toContain(`aria-controls="compare-change-${i}"`)
+    expect(html).toContain(`id="compare-change-${i}" class="compare-change"`)
+  }
+  expect(html).toContain('class="compare-viewport"')
+})
+
+test('large diffs remain selectable without rendering thousands of code rows', () => {
+  const patch = '@@ -1,5001 +1,5001 @@\n' + ' unchanged\n'.repeat(5000) + '-old\n+new\n'
+  const html = renderPatch(patch)
+  expect(html).toContain('5,000-row display limit')
+  expect(html).not.toContain('class="compare-code')
+  expect(html).not.toContain('class="compare-marker"')
 })

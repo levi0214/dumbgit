@@ -3,7 +3,9 @@ import { raw } from 'hono/html'
 import HTMX_SCRIPT from '../vendor/htmx-2.0.10.min.txt' with { type: 'text' }
 
 const CSS = `
-.repo-compare-link { display: block; align-self: flex-start; color: var(--accent); padding: 4px 0 8px; }
+.graph-compare-link { margin-left: auto; color: var(--muted); text-decoration: none; }
+.graph-compare-link:hover { color: var(--accent); }
+#compare-results { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 .compare-page { height: 100%; display: flex; flex-direction: column; }
 .compare-toolbar { display: flex; align-items: center; gap: 18px; padding: 12px 18px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
 .compare-page a { color: var(--accent); text-decoration: none; }
@@ -25,7 +27,17 @@ const CSS = `
 .compare-file-head > span { flex: 1; overflow-wrap: anywhere; }
 .compare-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
 .compare-labels { color: var(--muted); border-bottom: 1px solid var(--border); }
+.compare-reader:has(.compare-overview) .compare-labels { padding-right: calc(20px + var(--compare-scrollbar-width, 0px)); }
 .compare-labels span { padding: 8px 12px; overflow-wrap: anywhere; }
+.compare-document { display: flex; flex: 1; min-height: 0; }
+.compare-document .compare-scroll { min-width: 0; }
+.compare-overview { position: relative; flex: 0 0 20px; background: #252526; border-left: 1px solid var(--border); overflow: hidden; }
+.compare-viewport { position: absolute; left: 0; right: 0; background: #ffffff0c; border-block: 1px solid #ffffff35; pointer-events: none; }
+.compare-page .compare-marker { position: absolute; left: 2px; right: 2px; min-height: 4px; padding: 0; border: 0; border-radius: 0; background: transparent; display: flex; }
+.compare-marker span { flex: 1; pointer-events: none; }
+.compare-marker-del { background: var(--error); }
+.compare-marker-add { background: var(--success); }
+.compare-marker:hover, .compare-marker:focus-visible { outline: 1px solid var(--fg); z-index: 1; }
 .compare-scroll { overflow: auto; flex: 1; min-height: 0; scroll-padding: 20px; }
 .compare-code { display: flex; min-width: 0; padding-right: 12px; line-height: 21px; min-height: 21px; }
 .compare-code:first-child, .compare-labels span:first-child { border-right: 1px solid var(--border); }
@@ -35,7 +47,6 @@ const CSS = `
 .compare-code.add { background: #24392a; }
 .compare-code.blank { background: #242424; }
 .compare-code .diff-word-chg { background: #ffffff18; }
-.compare-context summary { cursor: pointer; padding: 7px 16px; color: var(--accent); background: #252c32; border-block: 1px solid var(--border); }
 .compare-message { padding: 20px; white-space: pre-wrap; overflow-wrap: anywhere; overflow: auto; }
 @media (max-width: 800px) { .compare-content { grid-template-columns: 170px minmax(0, 1fr); } .compare-toolbar { gap: 10px; } .compare-ln { flex-basis: 38px; padding-right: 6px; } }
 

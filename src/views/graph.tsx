@@ -1384,6 +1384,13 @@ export function GraphFragment(props: GraphFragmentProps) {
             </button>
           </div>
         ) : null}
+        <a
+          class="graph-compare-link"
+          href={'/compare?repo=' + encodeURIComponent(props.repoPath)}
+          title="Compare branches or working tree"
+        >
+          Compare
+        </a>
       </div>
       <WorkTreeFragment
         {...worktree}

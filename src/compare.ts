@@ -50,7 +50,7 @@ export async function compare(cwd: string, options: { base?: string; target?: st
   let patch = ''
   if (selected) {
     patch = await git(cwd, [...args, '--unified=1000000', '--', ...new Set([selected.oldPath, selected.path].filter((p): p is string => !!p))])
-    if (patch.length > 2_000_000 || patch.split('\n').length > 20_000) patch = 'This file is too large to display. Narrow the comparison or inspect it with git.'
+    if (patch.length > 2_000_000 || patch.split('\n').length > 20_000) patch = 'This file is too large to display. Open this file in your editor or inspect it with git.'
   }
   return { refs, base, target, files, selected, patch }
 }
