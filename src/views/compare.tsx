@@ -32,6 +32,8 @@ function SplitDiff({ patch }: { patch: string }) {
   if (!rows.length) return <pre class="compare-message">{patch || 'No content changes.'}</pre>
   // Full DOM rendering becomes noticeably slow for very long files in Safari.
   if (rows.length > 5000) return <p class="compare-message">This diff exceeds the 5,000-row display limit. Open this file in your editor or inspect it with git.</p>
+  const maxLine = rows.reduce((max, row) => Math.max(max, row.left?.oldNo ?? 0, row.right?.newNo ?? 0), 1)
+  const lineDigits = String(maxLine).length
   const blocks = []
   const markers = []
   for (let i = 0; i < rows.length;) {
@@ -57,7 +59,7 @@ function SplitDiff({ patch }: { patch: string }) {
       </button>,
     )
   }
-  return <><div class="compare-document">
+  return <><div class="compare-document" style={`--compare-line-digits: ${lineDigits}`}>
     <div class="compare-scroll">{blocks}</div>
     <nav class="compare-overview" aria-label="Changes in this file">
       <div class="compare-viewport" aria-hidden="true" />

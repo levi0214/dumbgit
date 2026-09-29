@@ -52,13 +52,13 @@ const CSS = `
 .compare-horizontal { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); padding-right: calc(20px + var(--compare-scrollbar-width, 0px)); flex-shrink: 0; }
 .compare-x-scroll { overflow-x: auto; overflow-y: hidden; min-width: 0; }
 .compare-x-scroll > div { height: 1px; }
-.compare-ln { color: var(--muted); user-select: none; flex: 0 0 56px; text-align: right; padding-right: 12px; font-size: 11px; }
+.compare-ln { color: var(--muted); user-select: none; flex: 0 0 calc(var(--compare-line-digits, 1) * 1ch + 20px); text-align: right; padding: 0 10px; font-size: 11px; }
 .compare-code.del { background: #402626; }
 .compare-code.add { background: #24392a; }
 .compare-code.blank { background: #242424; }
 .compare-code .diff-word-chg { background: #ffffff18; }
 .compare-message { padding: 20px; white-space: pre-wrap; overflow-wrap: anywhere; overflow: auto; }
-@media (max-width: 800px) { .compare-page { --compare-files-width: 220px; } .compare-toolbar { gap: 10px; } .compare-ln { flex-basis: 38px; padding-right: 6px; } }
+@media (max-width: 800px) { .compare-page { --compare-files-width: 220px; } .compare-toolbar { gap: 10px; } }
 
 :root {
   --bg: #1e1e1e;

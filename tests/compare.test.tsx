@@ -249,3 +249,9 @@ test('horizontal scrolling moves each side independently and includes the fixed 
   expect(offsets['--compare-x-right']).toBe('-90px')
   expect(scroll.scrollTop).toBe(937)
 })
+
+test('line number gutters use the largest actual line number on either side', () => {
+  expect(renderPatch('@@ -1 +1 @@\n-a\n+b\n')).toContain('--compare-line-digits: 1')
+  expect(renderPatch('@@ -99,2 +9,2 @@\n-a\n+b\n c\n')).toContain('--compare-line-digits: 3')
+  expect(renderPatch('@@ -9,2 +999,2 @@\n-a\n+b\n c\n')).toContain('--compare-line-digits: 4')
+})
