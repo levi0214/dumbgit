@@ -234,6 +234,14 @@ const COMPARE_SCRIPT = `
 })();
 `
 
+function FilePath({ path }: { path: string }) {
+  const slash = path.lastIndexOf('/') + 1
+  return <span class="compare-file-path">
+    {slash > 0 && <span class="compare-file-directory">{path.slice(0, slash)}</span>}
+    <span class="compare-file-name">{path.slice(slash)}</span>
+  </span>
+}
+
 function compareFileTitle(file: CompareFile): string {
   const status = ({ A: 'Added', D: 'Deleted', R: 'Renamed', C: 'Copied', M: 'Modified', T: 'Type changed' } as Record<string, string>)[file.status[0]!] ?? file.status
   const path = file.oldPath ? `${file.oldPath} → ${file.path}` : file.path
@@ -262,7 +270,7 @@ export function CompareView(props: { repo: string; name: string; scope: string; 
       hx-sync="closest .compare-page:replace" data-compare-refresh title="Reload this comparison manually">Refresh</a></div>
     {props.error ? <pre class="compare-message" role="alert">{props.error}</pre> : <div class="compare-content">
       <aside class="compare-files"><div class="compare-files-heading">Changed files · {r?.files.length}</div>{r?.files.map(file => <a href={url(file.path)} hx-get={url(file.path)} hx-select="#compare-reader" hx-target="#compare-reader" hx-swap="outerHTML" hx-sync="closest .compare-page:replace" hx-push-url="true" aria-current={r.selected?.path === file.path ? 'true' : undefined} title={compareFileTitle(file)}>
-        <span class="compare-file-path">{file.path}</span>
+        <FilePath path={file.path} />
         <span class="compare-file-stats">{file.binary ? <span class="file-num-binary">binary</span> : <>
           {file.added !== undefined ? <span class="file-num-add">+{file.added}</span> : null}
           {file.deleted !== undefined ? <span class="file-num-del">−{file.deleted}</span> : null}
