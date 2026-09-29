@@ -81,6 +81,7 @@ const COMPARE_SCRIPT = `
   var scroll;
   var viewport;
   var frame;
+  var scopeSelection;
   function updateViewport() {
     if (!scroll || !viewport) return;
     viewport.style.top = (scroll.scrollTop / scroll.scrollHeight * 100) + '%';
@@ -206,12 +207,23 @@ const COMPARE_SCRIPT = `
     var handle = e.target.closest('.compare-files-resizer');
     if (handle) handle.closest('.compare-page').style.removeProperty('--compare-files-width');
   });
+  document.addEventListener('htmx:beforeSwap', function(e) {
+    var input = document.activeElement;
+    scopeSelection = e.detail.target.id === 'compare-results' && input && input.id === 'compare-scope'
+      ? [input.selectionStart, input.selectionEnd] : null;
+  });
   document.addEventListener('htmx:afterSwap', function(e) {
     if (!['compare-reader', 'compare-results'].includes(e.detail.target.id)) return;
+    if (scopeSelection) {
+      var input = document.getElementById('compare-scope');
+      input.focus({ preventScroll: true });
+      input.setSelectionRange(scopeSelection[0], scopeSelection[1]);
+      scopeSelection = null;
+    }
     var reader = document.querySelector('#compare-reader');
     if (reader) {
       var selected = reader.dataset.file;
-      document.querySelector('.compare-toolbar input[name=file]').value = selected || '';
+      document.querySelector('.compare-form input[name=file]').value = selected || '';
       document.querySelectorAll('.compare-files a').forEach(function(a) {
         if (new URL(a.href).searchParams.get('file') === selected) a.setAttribute('aria-current', 'true');
         else a.removeAttribute('aria-current');
@@ -250,39 +262,42 @@ export function CompareView(props: { repo: string; name: string; scope: string; 
     groups.get(directory)!.push(file)
   }
   const url = (file: string) => '/compare?' + new URLSearchParams({ repo: props.repo, base: r!.base, target: r!.target, scope: props.scope, file })
-  const label = (value: string) => value === 'worktree' ? 'Working tree' : r?.refs.find(ref => ref.value === value)?.label ?? value
   return <main class="compare-page">
-    <header class="compare-toolbar"><a href="/">← Workspace</a><a href={'/repo?repo=' + encodeURIComponent(props.repo)}>{props.name}</a><strong>Compare</strong></header>
-    <form class="compare-toolbar" action="/compare"
-      hx-get="/compare" hx-trigger="submit, change from:select, input changed delay:350ms from:input[name=scope]"
+    <form class="compare-form" action="/compare"
+      hx-get="/compare" hx-trigger="submit, change[event.target.tagName === 'SELECT'], input[event.target.name === 'scope'] delay:350ms"
       hx-select="#compare-results" hx-target="#compare-results" hx-swap="outerHTML"
       hx-sync="closest .compare-page:replace" hx-push-url="true">
+    <header class="compare-toolbar"><a href="/">← Workspace</a><a href={'/repo?repo=' + encodeURIComponent(props.repo)}>{props.name}</a><strong title="Direct comparison of two versions, using their tips rather than a merge base.">Compare</strong>
+      <button type="button" class="compare-refresh" hx-get="/compare" hx-trigger="click" hx-include="closest form"
+        data-compare-refresh title="Reload this comparison manually">Refresh</button>
+    </header>
       <input type="hidden" name="file" value={r?.selected?.path ?? ''} />
       <input type="hidden" name="repo" value={props.repo} />
-      <label>Base <select name="base">{r?.refs.map(ref => <option value={ref.value} selected={ref.value === r.base}>{ref.label}</option>)}</select></label>
-      <span>→</span><label>Target <select name="target">{r?.refs.map(ref => <option value={ref.value} selected={ref.value === r.target}>{ref.label}</option>)}<option value="worktree" selected={r?.target === 'worktree'}>Working tree</option></select></label>
-      <label class="compare-scope">Path <input name="scope" value={props.scope} placeholder="All files, or contracts/src/" /></label>
-    </form>
     <div id="compare-results">
-    <div class="compare-note">Direct comparison of two versions.{r?.target === 'worktree' ? ' Working tree includes staged and unstaged tracked changes; untracked files are excluded.' : ''} <a href={url(r?.selected?.path ?? '')} hx-get={url(r?.selected?.path ?? '')}
-      hx-select="#compare-results" hx-target="#compare-results" hx-swap="outerHTML"
-      hx-sync="closest .compare-page:replace" data-compare-refresh title="Reload this comparison manually">Refresh</a></div>
-    {props.error ? <pre class="compare-message" role="alert">{props.error}</pre> : <div class="compare-content">
-      <aside class="compare-files"><div class="compare-files-heading">Changed files · {r?.files.length}</div>{[...groups].map(([directory, files]) => <section class="compare-file-group">
+    <div class="compare-content">
+      <aside class="compare-files">
+        <div class="compare-files-controls"><div class="compare-files-heading">Changed files · {r?.files.length ?? 0}</div>
+          <label class="compare-scope" for="compare-scope">Path <input id="compare-scope" hx-preserve name="scope" value={props.scope} placeholder="All files, or contracts/src/" /></label>
+        </div><div class="compare-file-list">{[...groups].map(([directory, files]) => <section class="compare-file-group">
         {directory && <div class="compare-directory" title={directory}>{directory}</div>}
         {files.map(file => <a href={url(file.path)} hx-get={url(file.path)} hx-select="#compare-reader" hx-target="#compare-reader" hx-swap="outerHTML" hx-sync="closest .compare-page:replace" hx-push-url="true" aria-current={r?.selected?.path === file.path ? 'true' : undefined} title={compareFileTitle(file)}>
         <span class="compare-file-path">{file.path.slice(file.path.lastIndexOf('/') + 1)}</span>
         <span class="compare-file-stats">{file.binary ? <span class="file-num-binary">binary</span> : <>
           {file.added !== undefined ? <span class="file-num-add">+{file.added}</span> : null}
           {file.deleted !== undefined ? <span class="file-num-del">−{file.deleted}</span> : null}
-        </>}</span></a>)}</section>)}</aside>
+        </>}</span></a>)}</section>)}</div></aside>
       <div class="compare-files-resizer" role="separator" aria-orientation="vertical"
         aria-label="Resize file list" tabindex={0} title="Drag to resize · double-click to reset" />
       <section id="compare-reader" class="compare-reader" data-file={r?.selected?.path}>
-        {r?.selected ? <><div class="compare-file-head"><span>{r.selected.oldPath ? `${r.selected.oldPath} → ` : ''}{r.selected.path}</span></div><div class="compare-row compare-labels"><span>{label(r.base)}</span><span>{label(r.target)}</span></div><SplitDiff patch={r.patch} /></> : <p class="compare-message">No differences{props.scope ? ' in this path' : ''}.</p>}
+        <div class="compare-row compare-labels">
+          <label><select name="base" aria-label="Base version">{r?.refs.map(ref => <option value={ref.value} selected={ref.value === r.base}>{ref.label}</option>)}</select></label>
+          <label><select name="target" aria-label="Target version" title="Working tree includes staged and unstaged tracked changes; untracked files are excluded.">{r?.refs.map(ref => <option value={ref.value} selected={ref.value === r.target}>{ref.label}</option>)}<option value="worktree" selected={r?.target === 'worktree'}>Working tree</option></select></label>
+        </div>
+        {props.error ? <pre class="compare-message" role="alert">{props.error}</pre> : r?.selected ? <><div class="compare-file-head"><span>{r.selected.oldPath ? `${r.selected.oldPath} → ` : ''}{r.selected.path}</span></div><SplitDiff patch={r.patch} /></> : <p class="compare-message">No differences{props.scope ? ' in this path' : ''}.</p>}
       </section>
-    </div>}
     </div>
+    </div>
+    </form>
     <script>{raw(COMPARE_SCRIPT)}</script>
   </main>
 }

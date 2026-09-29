@@ -87,7 +87,7 @@ test('reader displays the full document and exposes change navigation', () => {
   expect(html).not.toContain('<details')
   expect(html).toContain('line 0')
   expect(html).toContain('line 19')
-  expect(html).toContain('input changed delay:350ms')
+  expect(html).toContain('delay:350ms')
   expect(html).not.toContain('<button>Compare</button>')
   expect(html).not.toContain('data-compare-jump')
   expect(html).toContain('aria-label="Resize file list"')
@@ -254,4 +254,32 @@ test('line number gutters use the largest actual line number on either side', ()
   expect(renderPatch('@@ -1 +1 @@\n-a\n+b\n')).toContain('--compare-line-digits: 1')
   expect(renderPatch('@@ -99,2 +9,2 @@\n-a\n+b\n c\n')).toContain('--compare-line-digits: 3')
   expect(renderPatch('@@ -9,2 +999,2 @@\n-a\n+b\n c\n')).toContain('--compare-line-digits: 4')
+})
+
+test('compact controls remain available for empty comparisons and errors', () => {
+  for (const error of [undefined, 'Unknown ref']) {
+    const html = CompareView({ repo: '/tmp/example', name: 'example', scope: 'src/', error,
+      result: { refs: [{ value: 'HEAD', label: 'HEAD' }], base: 'HEAD', target: 'worktree', files: [], patch: '' },
+    }).toString()
+    expect(html).toContain('aria-label="Base version"')
+    expect(html).toContain('aria-label="Target version"')
+    expect(html).toContain('id="compare-scope"')
+    expect(html).toContain('hx-include="closest form"')
+    expect(html).not.toContain('class="compare-note"')
+    expect(html).toContain(error ?? 'No differences in this path.')
+  }
+})
+
+test('directory groups show filenames while preserving full paths in links and tooltips', () => {
+  const html = CompareView({ repo: '/tmp/example', name: 'example', scope: '',
+    result: { refs: [], base: 'HEAD', target: 'worktree', patch: '',
+      files: ['src/a.ts', 'src/b.ts', 'test/a.ts', 'README.md'].map(path => ({ status: 'M', path })),
+    },
+  }).toString()
+  expect(html.match(/class="compare-directory"/g)?.length).toBe(2)
+  expect(html).toContain('title="src">src</div>')
+  expect(html).toContain('class="compare-file-path">a.ts</span>')
+  expect(html).toContain('Modified · test/a.ts')
+  expect(html).toContain('file=test%2Fa.ts')
+  expect(html).toContain('class="compare-file-path">README.md</span>')
 })
