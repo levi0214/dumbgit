@@ -3,9 +3,10 @@ import type { JSX } from 'hono/jsx/jsx-runtime'
 import { raw } from 'hono/html'
 import type { CompareFile, CompareResult } from '../compare'
 import { parseDiff, type DiffRow } from './diff'
+import { highlightLines, syntaxSpans, type SyntaxToken } from './syntax'
 
 type CodeRow = Extract<DiffRow, { kind: 'ctx' | 'add' | 'del' }>
-export type SplitRow = { left?: CodeRow; right?: CodeRow; changed: boolean }
+export type SplitRow = { left?: CodeRow; right?: CodeRow; changed: boolean; leftSyntax?: SyntaxToken[]; rightSyntax?: SyntaxToken[] }
 export function splitRows(patch: string): SplitRow[] {
   const source = parseDiff(patch, true)
   const rows: SplitRow[] = []
@@ -22,17 +23,24 @@ export function splitRows(patch: string): SplitRow[] {
   }
   return rows
 }
-function Line({ row, side }: { row?: CodeRow; side: 'left' | 'right' }) {
-  return <div class={`compare-code ${row?.kind ?? 'blank'}`}><span class="compare-ln">{side === 'left' ? row?.oldNo : row?.newNo}</span><span class="compare-text"><code>{row?.word ? row.word.map(w => <span class={w.chg ? 'diff-word-chg' : undefined}>{w.t}</span>) : row?.text}</code></span></div>
+function Line({ row, side, syntax }: { row?: CodeRow; side: 'left' | 'right'; syntax?: SyntaxToken[] }) {
+  return <div class={`compare-code ${row?.kind ?? 'blank'}`}><span class="compare-ln">{side === 'left' ? row?.oldNo : row?.newNo}</span><span class="compare-text"><code>{syntax
+    ? syntaxSpans(syntax, row?.word).map(s => <span style={s.color ? `color:${s.color}` : undefined} class={s.changed ? 'diff-word-chg' : undefined}>{s.text}</span>)
+    : row?.word ? row.word.map(w => <span class={w.chg ? 'diff-word-chg' : undefined}>{w.t}</span>) : row?.text}</code></span></div>
 }
 function Row({ row, id }: { row: SplitRow; id?: string }) {
-  return <div class="compare-row" id={id}><Line row={row.left} side="left" /><Line row={row.right} side="right" /></div>
+  return <div class="compare-row" id={id}><Line row={row.left} side="left" syntax={row.leftSyntax} /><Line row={row.right} side="right" syntax={row.rightSyntax} /></div>
 }
-function SplitDiff({ patch }: { patch: string }) {
+function SplitDiff({ patch, file }: { patch: string; file: CompareFile }) {
   const rows = splitRows(patch)
   if (!rows.length) return <pre class="compare-message">{patch || 'No content changes.'}</pre>
   // Full DOM rendering becomes noticeably slow for very long files in Safari.
   if (rows.length > 5000) return <p class="compare-message">This diff exceeds the 5,000-row display limit. Open this file in your editor or inspect it with git.</p>
+  for (const side of ['left', 'right'] as const) {
+    const source = rows.filter(row => row[side])
+    const tokens = highlightLines(source.map(row => row[side]!.text), side === 'left' ? file.oldPath ?? file.path : file.path)
+    if (tokens) source.forEach((row, i) => { row[side === 'left' ? 'leftSyntax' : 'rightSyntax'] = tokens[i] })
+  }
   const maxLine = rows.reduce((max, row) => Math.max(max, row.left?.oldNo ?? 0, row.right?.newNo ?? 0), 1)
   const lineDigits = String(maxLine).length
   const blocks = []
@@ -366,7 +374,7 @@ export function CompareView(props: { repo: string; name: string; scope: string; 
           <label><select name="base" aria-label="Base version">{branchOptions(r?.base)}</select></label>
           <label><select name="target" aria-label="Target version" title="Working tree includes staged and unstaged tracked changes; untracked files are excluded.">{branchOptions(r?.target, true)}</select></label>
         </div>
-        {props.error ? <pre class="compare-message" role="alert">{props.error}</pre> : r?.selected ? <><div class="compare-file-head"><span>{r.selected.oldPath ? `${r.selected.oldPath} → ` : ''}{r.selected.path}</span></div><SplitDiff patch={r.patch} /></> : <p class="compare-message">No differences{props.scope ? ' in this path' : ''}.</p>}
+        {props.error ? <pre class="compare-message" role="alert">{props.error}</pre> : r?.selected ? <><div class="compare-file-head"><span>{r.selected.oldPath ? `${r.selected.oldPath} → ` : ''}{r.selected.path}</span></div><SplitDiff patch={r.patch} file={r.selected} /></> : <p class="compare-message">No differences{props.scope ? ' in this path' : ''}.</p>}
       </section>
     </div>
     </div>

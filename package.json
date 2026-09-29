@@ -28,6 +28,7 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
-    "hono": "^4.13.5"
+    "hono": "^4.13.5",
+    "shiki": "^4.4.3"
   }
 }
