@@ -285,6 +285,9 @@ test('directory groups show filenames while preserving full paths in links and t
   }).toString()
   expect(html.match(/class="compare-directory"/g)?.length).toBe(2)
   expect(html).toContain('title="Show changes in src/"')
+  expect(html).toContain('<span title="src">src</span>')
+  expect(html).toContain('aria-label="Filter to src/"')
+  expect(html).not.toContain('<a class="compare-directory"')
   expect(html).toContain('class="compare-file-path">a.ts</span>')
   expect(html).toContain('Modified · test/a.ts')
   expect(html).toContain('file=test%2Fa.ts')
@@ -297,7 +300,7 @@ test('folder links set a directory scope and All files clears it without changin
       files: [{ status: 'M', path: 'src/a & b/file.ts' }],
     },
   }).toString()
-  const folder = render('').match(/class="compare-directory"[^>]*href="([^"]+)"/)![1]!
+  const folder = render('').match(/class="compare-directory-filter"[^>]*href="([^"]+)"/)![1]!
   const scoped = new URL(folder.replaceAll('&amp;', '&'), 'http://local')
   expect(scoped.searchParams.get('scope')).toBe('src/a & b/')
   expect(scoped.searchParams.get('base')).toBe('refs/heads/main')
