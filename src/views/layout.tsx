@@ -27,7 +27,8 @@ const CSS = `
 .compare-files-resizer:focus-visible { outline: none; }
 .compare-files-resizer:hover::after, .compare-files-resizer:focus-visible::after, .compare-resizing .compare-files-resizer::after { width: 2px; background: var(--accent); }
 .compare-resizing { user-select: none; cursor: col-resize; }
-.compare-files-heading { padding: 12px; color: var(--muted); }
+.compare-files-heading, .compare-labels label { height: 44px; }
+.compare-files-heading { display: flex; align-items: center; padding: 0 12px; color: var(--muted); }
 .compare-files .compare-file-link { display: flex; gap: 8px; padding: 6px 12px; color: var(--fg); }
 .compare-file-path { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .compare-files .compare-directory { display: flex; align-items: center; gap: 6px; padding: 2px 12px; color: var(--muted); cursor: pointer; list-style: none; }
@@ -47,11 +48,11 @@ const CSS = `
 .compare-file-head { padding: 8px 12px; display: flex; align-items: center; gap: 6px; border-bottom: 1px solid var(--border); }
 .compare-file-head > span { flex: 1; overflow-wrap: anywhere; }
 .compare-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
-.compare-labels { color: var(--muted); border-bottom: 1px solid var(--border); }
+.compare-labels { flex-shrink: 0; color: var(--muted); border-bottom: 1px solid var(--border); }
 .compare-reader:has(.compare-overview) .compare-labels { padding-right: calc(20px + var(--compare-scrollbar-width, 0px)); }
 .compare-labels label { position: relative; padding: 8px 12px; min-width: 0; }
 .compare-labels label::after { content: ''; position: absolute; right: 24px; top: calc(50% - 4px); width: 6px; height: 6px; border-right: 1px solid var(--muted); border-bottom: 1px solid var(--muted); transform: rotate(45deg); pointer-events: none; }
-.compare-labels select { appearance: none; -webkit-appearance: none; background: transparent; border: 0; padding-right: 30px; text-overflow: ellipsis; }
+.compare-labels select { appearance: none; -webkit-appearance: none; background: transparent; border: 0; padding-left: 0; padding-right: 30px; text-overflow: ellipsis; }
 .compare-labels select:hover, .compare-labels select:focus-visible { background: #2b2b2b; }
 .compare-labels select:focus-visible { outline: 1px solid var(--accent); outline-offset: 1px; }
 .compare-labels option { background: var(--bg); color: var(--fg); }
