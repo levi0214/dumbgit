@@ -234,14 +234,6 @@ const COMPARE_SCRIPT = `
 })();
 `
 
-function FilePath({ path }: { path: string }) {
-  const slash = path.lastIndexOf('/') + 1
-  return <span class="compare-file-path">
-    {slash > 0 && <span class="compare-file-directory">{path.slice(0, slash)}</span>}
-    <span class="compare-file-name">{path.slice(slash)}</span>
-  </span>
-}
-
 function compareFileTitle(file: CompareFile): string {
   const status = ({ A: 'Added', D: 'Deleted', R: 'Renamed', C: 'Copied', M: 'Modified', T: 'Type changed' } as Record<string, string>)[file.status[0]!] ?? file.status
   const path = file.oldPath ? `${file.oldPath} → ${file.path}` : file.path
@@ -250,6 +242,13 @@ function compareFileTitle(file: CompareFile): string {
 
 export function CompareView(props: { repo: string; name: string; scope: string; result?: CompareResult; error?: string }) {
   const { result: r } = props
+  const groups = new Map<string, CompareFile[]>()
+  for (const file of r?.files ?? []) {
+    const slash = file.path.lastIndexOf('/')
+    const directory = slash < 0 ? '' : file.path.slice(0, slash)
+    if (!groups.has(directory)) groups.set(directory, [])
+    groups.get(directory)!.push(file)
+  }
   const url = (file: string) => '/compare?' + new URLSearchParams({ repo: props.repo, base: r!.base, target: r!.target, scope: props.scope, file })
   const label = (value: string) => value === 'worktree' ? 'Working tree' : r?.refs.find(ref => ref.value === value)?.label ?? value
   return <main class="compare-page">
@@ -269,12 +268,14 @@ export function CompareView(props: { repo: string; name: string; scope: string; 
       hx-select="#compare-results" hx-target="#compare-results" hx-swap="outerHTML"
       hx-sync="closest .compare-page:replace" data-compare-refresh title="Reload this comparison manually">Refresh</a></div>
     {props.error ? <pre class="compare-message" role="alert">{props.error}</pre> : <div class="compare-content">
-      <aside class="compare-files"><div class="compare-files-heading">Changed files · {r?.files.length}</div>{r?.files.map(file => <a href={url(file.path)} hx-get={url(file.path)} hx-select="#compare-reader" hx-target="#compare-reader" hx-swap="outerHTML" hx-sync="closest .compare-page:replace" hx-push-url="true" aria-current={r.selected?.path === file.path ? 'true' : undefined} title={compareFileTitle(file)}>
-        <FilePath path={file.path} />
+      <aside class="compare-files"><div class="compare-files-heading">Changed files · {r?.files.length}</div>{[...groups].map(([directory, files]) => <section class="compare-file-group">
+        {directory && <div class="compare-directory" title={directory}>{directory}</div>}
+        {files.map(file => <a href={url(file.path)} hx-get={url(file.path)} hx-select="#compare-reader" hx-target="#compare-reader" hx-swap="outerHTML" hx-sync="closest .compare-page:replace" hx-push-url="true" aria-current={r?.selected?.path === file.path ? 'true' : undefined} title={compareFileTitle(file)}>
+        <span class="compare-file-path">{file.path.slice(file.path.lastIndexOf('/') + 1)}</span>
         <span class="compare-file-stats">{file.binary ? <span class="file-num-binary">binary</span> : <>
           {file.added !== undefined ? <span class="file-num-add">+{file.added}</span> : null}
           {file.deleted !== undefined ? <span class="file-num-del">−{file.deleted}</span> : null}
-        </>}</span></a>)}</aside>
+        </>}</span></a>)}</section>)}</aside>
       <div class="compare-files-resizer" role="separator" aria-orientation="vertical"
         aria-label="Resize file list" tabindex={0} title="Drag to resize · double-click to reset" />
       <section id="compare-reader" class="compare-reader" data-file={r?.selected?.path}>

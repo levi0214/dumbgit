@@ -22,10 +22,10 @@ const CSS = `
 .compare-files-resizer:hover, .compare-files-resizer:focus-visible { background: var(--accent); outline: none; }
 .compare-resizing { user-select: none; cursor: col-resize; }
 .compare-files-heading { padding: 12px; color: var(--muted); }
-.compare-files a { display: flex; gap: 8px; padding: 8px 12px; color: var(--fg); }
-.compare-file-path { display: flex; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; }
-.compare-file-directory { overflow: hidden; text-overflow: ellipsis; }
-.compare-file-name { flex-shrink: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.compare-files a { display: flex; gap: 8px; padding: 6px 12px; color: var(--fg); }
+.compare-file-path { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.compare-directory { padding: 12px 12px 4px; color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.compare-file-group:has(.compare-directory) a { padding-left: 20px; }
 .compare-file-stats { display: flex; gap: 5px; flex-shrink: 0; white-space: nowrap; font-size: 11px; padding-top: 2px; }
 .compare-files a:hover { background: #2b2b2b; }
 .compare-files a[aria-current=true] { background: #18364a; }
