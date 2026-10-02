@@ -405,3 +405,19 @@ test('branches prioritize current and recent commits, and saved comparisons yiel
     expect((await comparisonRefs(repo))[0]).toMatchObject({ value: 'HEAD', current: true })
   } finally { rmSync(repo, { recursive: true, force: true }) }
 })
+
+
+test('word-diff matches stay aligned around an inserted line', () => {
+  const rows = splitRows([
+    '@@ -1,2 +1,3 @@',
+    '-    actions[id] = Action({creator: sender, uri: uri});',
+    '-    emit ActionSubmitted(token, id, sender, uri);',
+    '+    require(owner != address(0));',
+    '+    actions[id] = Action({creator: sender, owner: owner, uri: uri});',
+    '+    emit ActionSubmitted(token, id, sender, owner, uri);',
+  ].join('\n'))
+  expect(rows.map(r => [r.left?.oldNo, r.right?.newNo])).toEqual([[undefined, 1], [1, 2], [2, 3]])
+  expect(rows[0]?.right?.word).toBeUndefined()
+  expect(rows[1]?.right?.word?.filter(w => w.chg).map(w => w.t).join('')).toContain('owner: owner,')
+  expect(rows[2]?.right?.word?.filter(w => w.chg).map(w => w.t).join('')).toContain('owner,')
+})

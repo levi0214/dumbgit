@@ -79,7 +79,9 @@ const CSS = `
 .compare-code.del { background: #402626; }
 .compare-code.add { background: #24392a; }
 .compare-code.blank { background: #242424; }
-.compare-code .diff-word-chg { background: #ffffff18; }
+.compare-code .diff-word-chg { color: #f5f5f5; }
+.compare-code.del .diff-word-chg { background: #743535; }
+.compare-code.add .diff-word-chg { background: #386344; }
 .compare-message { padding: 20px; white-space: pre-wrap; overflow-wrap: anywhere; overflow: auto; }
 @media (max-width: 800px) { .compare-page { --compare-files-width: 220px; } .compare-toolbar { gap: 10px; } }
 

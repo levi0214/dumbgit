@@ -18,14 +18,27 @@ export function splitRows(patch: string): SplitRow[] {
       const adds: CodeRow[] = row.kind === 'add' ? [row] : []
       while (source[i]?.kind === 'del' && !adds.length) dels.push(source[i++] as CodeRow)
       while (source[i]?.kind === 'add') adds.push(source[i++] as CodeRow)
-      for (let j = 0; j < Math.max(dels.length, adds.length); j++) rows.push({ left: dels[j], right: adds[j], changed: true })
+      let d = 0
+      let a = 0
+      const appendUntil = (endD: number, endA: number) => {
+        while (d < endD || a < endA) rows.push({ left: d < endD ? dels[d++] : undefined, right: a < endA ? adds[a++] : undefined, changed: true })
+      }
+      for (let j = 0; j < dels.length; j++) {
+        const del = dels[j]!
+        if (del.kind !== 'del' || del.pairedNewNo === undefined) continue
+        const match = adds.findIndex(r => r.newNo === del.pairedNewNo)
+        if (match < a) continue
+        appendUntil(j, match)
+        rows.push({ left: dels[d++], right: adds[a++], changed: true })
+      }
+      appendUntil(dels.length, adds.length)
     }
   }
   return rows
 }
 function Line({ row, side, syntax }: { row?: CodeRow; side: 'left' | 'right'; syntax?: SyntaxToken[] }) {
   return <div class={`compare-code ${row?.kind ?? 'blank'}`}><span class="compare-ln">{side === 'left' ? row?.oldNo : row?.newNo}</span><span class="compare-text"><code>{syntax
-    ? syntaxSpans(syntax, row?.word).map(s => <span style={s.color ? `color:${s.color}` : undefined} class={s.changed ? 'diff-word-chg' : undefined}>{s.text}</span>)
+    ? syntaxSpans(syntax, row?.word).map(s => <span style={!s.changed && s.color ? `color:${s.color}` : undefined} class={s.changed ? 'diff-word-chg' : undefined}>{s.text}</span>)
     : row?.word ? row.word.map(w => <span class={w.chg ? 'diff-word-chg' : undefined}>{w.t}</span>) : row?.text}</code></span></div>
 }
 function Row({ row, id }: { row: SplitRow; id?: string }) {

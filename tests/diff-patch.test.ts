@@ -75,7 +75,7 @@ describe('parseDiff', () => {
     )
   })
 
-  test('only word-diffs clean 1:1 replacements, not multi-line blocks', () => {
+  test('word-diffs consecutive similar replacements', () => {
     const multi = parseDiff(
       [
         '@@ -1,2 +1,2 @@',
@@ -88,7 +88,21 @@ describe('parseDiff', () => {
     const add = multi.find(
       (r): r is Extract<DiffRow, { kind: 'add' }> => r.kind === 'add',
     )
-    expect(add?.word).toBeUndefined()
+    expect(add?.word?.every(w => !w.chg)).toBe(true)
+    const changed = multi.filter(r => r.kind === 'add').at(-1)
+    expect(changed?.word?.filter(w => w.chg).map(w => w.t)).toEqual(['c', '3'])
+  })
+
+  test('does not match unrelated lines just because indentation matches', () => {
+    const rows = parseDiff('@@ -1,2 +1,2 @@\n-    alpha();\n-    beta();\n+    gamma();\n+    delta();')
+    expect(rows.filter(r => r.kind === 'add' || r.kind === 'del').every(r => !r.word)).toBe(true)
+  })
+
+  test('large replacement blocks fall back without dropping content', () => {
+    const lines = Array.from({ length: 60 }, (_, i) => `const value${i} = 1;`)
+    const rows = parseDiff(['@@ -1,60 +1,60 @@', ...lines.map(l => '-' + l), ...lines.map(l => '+' + l.replace('1;', '2;'))].join('\n'))
+    expect(rows.filter(r => r.kind === 'add' || r.kind === 'del')).toHaveLength(120)
+    expect(rows.filter(r => r.kind === 'add' || r.kind === 'del').every(r => !r.word)).toBe(true)
   })
 
   test('skips word diff for oversized single lines (minified/embedded data)', () => {

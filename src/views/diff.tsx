@@ -46,6 +46,8 @@ export type DiffRow =
     }
   | {
       kind: 'del'
+      /** Matching added line, used to align split-view replacements. */
+      pairedNewNo?: number
       oldNo?: number
       newNo?: number
       text: string
@@ -124,7 +126,43 @@ export function diffWords(a: string, b: string): {
   return { a: ra, b: rb }
 }
 
-/** Consecutive `-`/`+` runs inside a hunk. Only a clean 1:1 replacement gets a word-level diff (pi's rule) — pairing more than one line per side misaligns and reads as noise. */
+/** Match similar lines in order; inserted lines must not shift every subsequent pair. */
+function matchLines(dels: string[], adds: string[]): [number, number][] {
+  const a = dels.map(tokenize)
+  const b = adds.map(tokenize)
+  // Bound both the line alignment and all candidate word comparisons.
+  if (a.length * b.length > 2500 ||
+      a.reduce((n, t) => n + t.length, 0) * b.reduce((n, t) => n + t.length, 0) > 1_000_000) return []
+  const scores = a.map((tokens, i) => b.map((other, j) => {
+    if (tokens.length > WORD_DIFF_MAX_TOKENS || other.length > WORD_DIFF_MAX_TOKENS) return 0
+    if (a.length === 1 && b.length === 1) return 1
+    const words = diffWords(dels[i]!, adds[j]!)
+    const length = (parts: { t: string }[]) => parts.reduce((n, t) => n + t.t.trim().length, 0)
+    const total = length(words.a) + length(words.b)
+    const shared = length(words.a.filter(t => t.same))
+    // Whitespace alone cannot make unrelated lines a match.
+    const similarity = total ? 2 * shared / total : 0
+    return similarity >= 0.5 ? similarity : 0
+  }))
+  const dp = Array.from({ length: a.length + 1 }, () => new Array<number>(b.length + 1).fill(0))
+  for (let i = a.length - 1; i >= 0; i--) {
+    for (let j = b.length - 1; j >= 0; j--) {
+      dp[i]![j] = Math.max(scores[i]![j]! + dp[i + 1]![j + 1]!, dp[i + 1]![j]!, dp[i]![j + 1]!)
+    }
+  }
+  const pairs: [number, number][] = []
+  let i = 0
+  let j = 0
+  while (i < a.length && j < b.length) {
+    if (scores[i]![j]! > 0 && dp[i]![j] === scores[i]![j]! + dp[i + 1]![j + 1]!) {
+      pairs.push([i++, j++])
+    } else if (dp[i + 1]![j]! >= dp[i]![j + 1]!) i++
+    else j++
+  }
+  return pairs
+}
+
+/** Annotate ordered, similar replacements within each consecutive deletion/addition run. */
 function annotateWordDiffs(rows: DiffRow[]): void {
   let i = 0
   while (i < rows.length) {
@@ -142,16 +180,14 @@ function annotateWordDiffs(rows: DiffRow[]): void {
       adds.push(rows[i]! as Extract<DiffRow, { kind: 'add' }>)
       i++
     }
-    if (dels.length !== 1 || adds.length !== 1) continue
-    if (
-      tokenize(dels[0]!.text).length > WORD_DIFF_MAX_TOKENS ||
-      tokenize(adds[0]!.text).length > WORD_DIFF_MAX_TOKENS
-    ) {
-      continue
+    for (const [d, a] of matchLines(dels.map(r => r.text), adds.map(r => r.text))) {
+      const del = dels[d]!
+      const add = adds[a]!
+      const wd = diffWords(del.text, add.text)
+      del.word = wd.a.map(t => ({ t: t.t, chg: !t.same }))
+      add.word = wd.b.map(t => ({ t: t.t, chg: !t.same }))
+      del.pairedNewNo = add.newNo
     }
-    const wd = diffWords(dels[0]!.text, adds[0]!.text)
-    dels[0]!.word = wd.a.map((t) => ({ t: t.t, chg: !t.same }))
-    adds[0]!.word = wd.b.map((t) => ({ t: t.t, chg: !t.same }))
   }
 }
 
