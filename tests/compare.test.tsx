@@ -172,7 +172,13 @@ function readerController(firstTop: number, navigationType = 'navigate', savedTo
     dataset: { side }, scrollLeft: 0, firstElementChild: { style: { width: '' } },
     onscroll: () => {},
   }))
-  const reader = { querySelectorAll: () => bars, dataset: { file: 'a.txt' } as Record<string, string>, style: { setProperty(name: string, value: string) { offsets[name] = value } } }
+  const cleanup = { removed: false, disconnected: false }
+  const reader = {
+    id: 'compare-reader',
+    querySelector: () => ({ remove() { cleanup.removed = true } }),
+    querySelectorAll: () => bars, dataset: { file: 'a.txt' } as Record<string, string>,
+    style: { setProperty(name: string, value: string) { offsets[name] = value } },
+  }
   const first = {
     scrollWidth: 900,
     getBoundingClientRect: () => ({ top: firstTop - scroll.scrollTop, height: 21, width: 40 }),
@@ -194,7 +200,7 @@ function readerController(firstTop: number, navigationType = 'navigate', savedTo
       querySelector: (selector: string) => selector === '.compare-scroll' ? scroll : selector === '.compare-viewport' ? { style: {} } : selector === '#compare-reader' ? reader : { value: '' },
       querySelectorAll: () => [],
     },
-    ResizeObserver: class { observe() {} disconnect() {} },
+    ResizeObserver: class { observe() {} disconnect() { cleanup.disconnected = true } },
     requestAnimationFrame: (callback: () => void) => { callbacks.set(++nextFrame, callback); return nextFrame },
     cancelAnimationFrame: (id: number) => callbacks.delete(id),
     getComputedStyle: () => ({ lineHeight: '21px' }),
@@ -204,8 +210,25 @@ function readerController(firstTop: number, navigationType = 'navigate', savedTo
   const paint = () => { const pending = [...callbacks.values()]; callbacks.clear(); pending.forEach(callback => callback()) }
   paint()
   paint()
-  return { scroll, reader, events, paint, bars, offsets, codes, scrollEvents, callbacks }
+  return { scroll, reader, events, paint, bars, offsets, codes, scrollEvents, callbacks, cleanup }
 }
+
+test('reader cleanup removes plain code and releases scheduled work before htmx walks its children', () => {
+  const controller = readerController(150)
+  controller.scrollEvents.get('scroll')!()
+  const cleanup = controller.events.get('htmx:beforeCleanupElement')!
+  cleanup({ detail: { elt: { id: 'other-element' } } })
+  expect(controller.cleanup.removed).toBe(false)
+  expect(controller.callbacks.size).toBe(1)
+  cleanup({ detail: { elt: controller.reader } })
+  expect(controller.cleanup.removed).toBe(true)
+  expect(controller.cleanup.disconnected).toBe(true)
+  expect(controller.scrollEvents.size).toBe(0)
+  expect(controller.callbacks.size).toBe(0)
+  controller.events.get('htmx:afterSwap')!({ detail: { target: { id: 'compare-reader' } } })
+  expect(controller.scrollEvents.has('scroll')).toBe(true)
+  controller.paint()
+})
 
 test('first change stays at the top when already visible, otherwise opens with three context lines', () => {
   expect(readerController(150).scroll.scrollTop).toBe(0)

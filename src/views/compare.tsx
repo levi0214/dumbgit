@@ -174,17 +174,23 @@ const COMPARE_SCRIPT = `
   function scheduleMeasure() {
     if (!frame) frame = requestAnimationFrame(measure);
   }
-  function attach(reveal, restoreTop) {
+  function detach() {
     if (observer) observer.disconnect();
+    observer = null;
     if (scroll) scroll.removeEventListener('scroll', schedulePaint);
-    scroll = document.querySelector('.compare-scroll');
-    viewport = document.querySelector('.compare-viewport');
     if (frame) cancelAnimationFrame(frame);
     frame = null;
     if (paintFrame) cancelAnimationFrame(paintFrame);
     paintFrame = null;
     codes = [];
     horizontal = 0;
+    scroll = null;
+    viewport = null;
+  }
+  function attach(reveal, restoreTop) {
+    detach();
+    scroll = document.querySelector('.compare-scroll');
+    viewport = document.querySelector('.compare-viewport');
     if (!scroll) return;
     codes = Array.from(scroll.querySelectorAll('.compare-code code'));
     scroll.addEventListener('scroll', schedulePaint, { passive: true });
@@ -264,6 +270,15 @@ const COMPARE_SCRIPT = `
     closedFolders = new Set(Array.from(document.querySelectorAll('.compare-folder:not([open])'), function(folder) {
       return folder.dataset.directory;
     }));
+  });
+  document.addEventListener('htmx:beforeCleanupElement', function(e) {
+    var reader = e.detail.elt;
+    if (reader.id !== 'compare-reader') return;
+    detach();
+    // History has already been saved. This subtree has no htmx controls;
+    // remove it directly instead of dispatching cleanup events for every token.
+    var content = reader.querySelector('.compare-document');
+    if (content) content.remove();
   });
   document.addEventListener('htmx:afterSwap', function(e) {
     if (!['compare-reader', 'compare-results'].includes(e.detail.target.id)) return;
