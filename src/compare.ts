@@ -45,13 +45,37 @@ function diffArgs(base: string, target: string) {
   return ['--literal-pathspecs', 'diff', '--no-ext-diff', '--no-textconv', '--no-color', '--find-renames', base, ...(target === 'worktree' ? [] : [target])]
 }
 
+function selectedPatch(output: string, file: Pick<CompareFile, 'path' | 'oldPath'>) {
+  if (!output) return ''
+  // --raw -z lists paths in patch order, followed by an extra NUL.
+  // Read these paths instead of parsing quoted filenames from patch headers.
+  const boundary = output.indexOf('\0\0')
+  if (boundary < 0) throw new Error('Could not read comparison file paths')
+  const fields = output.slice(0, boundary).split('\0')
+  const patches = output.slice(boundary + 2).split(/(?=^diff --git )/m)
+  let index = 0
+  for (let i = 0; i < fields.length; index++) {
+    const status = fields[i++]!.split(' ').at(-1)!
+    const first = fields[i++]!
+    const renamed = status.startsWith('R') || status.startsWith('C')
+    const path = renamed ? fields[i++]! : first
+    if (path === file.path && (!file.oldPath || renamed && first === file.oldPath)) {
+      if (!patches[index]) throw new Error('Could not read comparison patch')
+      return patches[index]!
+    }
+  }
+  return ''
+}
+
 /** Load only the selected file, using the commit IDs resolved for the reader. */
 export async function comparisonPatch(cwd: string, base: string, target: string, file: Pick<CompareFile, 'path' | 'oldPath'>) {
   const oid = /^[a-f0-9]{40}(?:[a-f0-9]{24})?$/
   if (!oid.test(base) || (target !== 'worktree' && !oid.test(target))) throw new Error('Invalid comparison version')
   const paths = [...new Set([file.oldPath, file.path].filter((p): p is string => p !== undefined))]
   if (!file.path || paths.some(p => !p || p.startsWith('/') || p.split('/').includes('..'))) throw new Error('Use a path relative to the repository')
-  const patch = await git(cwd, [...diffArgs(base, target), '--unified=1000000', '--', ...paths])
+  const output = await git(cwd, [...diffArgs(base, target), '--raw', '-z', '--patch', '--submodule=short', '--unified=1000000', '--', ...paths])
+  // Literal pathspecs still recurse into directories when a file changes type.
+  const patch = selectedPatch(output, file)
   return patch.length > 2_000_000 || patch.split('\n').length > 20_000
     ? 'This file is too large to display. Open this file in your editor or inspect it with git.' : patch
 }

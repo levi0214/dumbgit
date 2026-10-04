@@ -124,6 +124,65 @@ test('split rows preserve independent line numbers and align unequal replacement
   expect(rows[3]?.right?.newNo).toBe(3)
 })
 
+test('selected patches exclude descendants when files and directories exchange places', async () => {
+  const repo = mkdtempSync(path.join(os.tmpdir(), 'dg-compare-file-directory-'))
+  try {
+    git(repo, 'init', '-b', 'main')
+    git(repo, 'config', 'user.name', 'Test')
+    git(repo, 'config', 'user.email', 'test@example.test')
+    // Exercise quoted paths and characters that have pathspec meaning too.
+    for (const name of ['config', 'odd [*]\t\n名前']) writeFileSync(path.join(repo, name), `original ${JSON.stringify(name)}\n`)
+    git(repo, 'add', '.')
+    git(repo, 'commit', '-m', 'test: files')
+    git(repo, 'switch', '-c', 'feature')
+    for (const name of ['config', 'odd [*]\t\n名前']) {
+      rmSync(path.join(repo, name))
+      mkdirSync(path.join(repo, name))
+      writeFileSync(path.join(repo, name, 'new.txt'), 'descendant content\n')
+    }
+    git(repo, 'add', '.')
+    // Staged file-to-directory changes must stay isolated as well.
+    for (const target of ['worktree', 'refs/heads/feature']) {
+      if (target !== 'worktree') git(repo, 'commit', '-m', 'test: directories')
+      for (const name of ['config', 'odd [*]\t\n名前']) {
+        const result = await compare(repo, { file: name, target })
+        expect(result.selected).toMatchObject({ status: 'D', path: name })
+        expect(result.patch.match(/^diff --git /gm)).toHaveLength(1)
+        expect(splitRows(result.patch).map(row => [row.left?.text, row.right?.text])).toEqual([[`original ${JSON.stringify(name)}`, undefined]])
+        expect(compareColors(result.patch, result.selected!).map(cell => cell.text)).toEqual([`original ${JSON.stringify(name)}`, ''])
+        expect(await comparisonPatch(repo, result.versions!.base, result.versions!.target, result.selected!)).toBe(result.patch)
+      }
+    }
+    const reversed = await compare(repo, { base: 'refs/heads/feature', target: 'refs/heads/main', file: 'config' })
+    expect(reversed.selected).toMatchObject({ status: 'A', path: 'config' })
+    expect(splitRows(reversed.patch).map(row => [row.left?.text, row.right?.text])).toEqual([[undefined, 'original "config"']])
+  } finally { rmSync(repo, { recursive: true, force: true }) }
+})
+
+test('a selected rename into its old directory excludes other descendants', async () => {
+  const repo = mkdtempSync(path.join(os.tmpdir(), 'dg-compare-rename-reuse-'))
+  try {
+    git(repo, 'init', '-b', 'main')
+    git(repo, 'config', 'user.name', 'Test')
+    git(repo, 'config', 'user.email', 'test@example.test')
+    writeFileSync(path.join(repo, 'config'), 'original contents\n')
+    git(repo, 'add', '.')
+    git(repo, 'commit', '-m', 'test: base')
+    git(repo, 'switch', '-c', 'feature')
+    renameSync(path.join(repo, 'config'), path.join(repo, 'renamed.txt'))
+    mkdirSync(path.join(repo, 'config'))
+    renameSync(path.join(repo, 'renamed.txt'), path.join(repo, 'config', 'new.txt'))
+    writeFileSync(path.join(repo, 'config', 'other.txt'), 'unrelated replacement\n')
+    git(repo, 'add', '.')
+    git(repo, 'commit', '-m', 'test: rename and reuse')
+    const result = await compare(repo, { file: 'config/new.txt' })
+    expect(result.selected).toMatchObject({ oldPath: 'config', path: 'config/new.txt' })
+    expect(result.patch).toContain('rename to config/new.txt')
+    expect(result.patch.match(/^diff --git /gm)).toHaveLength(1)
+    expect(result.patch).not.toContain('unrelated replacement')
+  } finally { rmSync(repo, { recursive: true, force: true }) }
+})
+
 test('reader displays the full document and exposes change navigation', () => {
   const patch = '@@ -1,21 +1,21 @@\n' + Array.from({ length: 20 }, (_, i) => ` line ${i}\n`).join('') + '-old\n+<script>alert(1)</script>\n'
   const html = CompareView({ repo: '/tmp/example', name: 'example', scope: '', result: { refs: [{ value: 'HEAD', label: 'HEAD' }], base: 'HEAD', target: 'worktree', files: [{ status: 'M', path: 'a.txt' }], selected: { status: 'M', path: 'a.txt' }, patch } }).toString()
