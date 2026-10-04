@@ -208,22 +208,39 @@ test('file list uses consistent counts and describes file status in tooltips', (
 
 // Execute the actual page controller with geometry supplied by the test.
 // This checks initial positioning and the htmx refresh lifecycle together.
-function readerController(firstTop: number, navigationType = 'navigate', savedTop?: number) {
+function readerController(firstTop: number, navigationType = 'navigate', savedTop?: number, deferredColors = false) {
   const callbacks = new Map<number, () => void>()
   const events = new Map<string, (event: any) => void>()
   let nextFrame = 0
   const offsets: Record<string, string> = {}
-  const codes = Array.from({ length: 10000 }, () => ({ scrollWidth: 900, style: { transform: '' } }))
+  const makeCodes = () => Array.from({ length: deferredColors ? 4 : 10000 }, (_, i) => ({
+    textContent: `line ${i}`, innerHTML: `line ${i}`, scrollWidth: 900, style: { transform: '' },
+  }))
+  let codes = makeCodes()
+  const timers = new Map<number, () => void>()
+  const requests: {
+    signal: AbortSignal
+    resolve: (response: { ok: boolean; json: () => Promise<unknown> }) => void
+    reject: (error: Error) => void
+  }[] = []
+  const selection = { isCollapsed: true, anchorNode: null as unknown, focusNode: null as unknown }
+  let now = 0
+  let clockStep = 0
   const scrollEvents = new Map<string, () => void>()
   const bars = ['left', 'right'].map(side => ({
     dataset: { side }, scrollLeft: 0, firstElementChild: { style: { width: '' } },
     onscroll: () => {},
   }))
   const cleanup = { removed: false, disconnected: false }
+  const content = {
+    dataset: deferredColors ? { colorPending: 'true' } as Record<string, string> : {} as Record<string, string>,
+    remove() { cleanup.removed = true },
+  }
   const reader = {
-    id: 'compare-reader',
-    querySelector: () => ({ dataset: {}, remove() { cleanup.removed = true } }),
-    querySelectorAll: () => bars, dataset: { file: 'a.txt' } as Record<string, string>,
+    id: 'compare-reader', isConnected: true,
+    contains: (node: unknown) => codes.includes(node as typeof codes[number]),
+    querySelector: () => content,
+    querySelectorAll: () => bars, dataset: { file: 'a.txt', colorUrl: '/compare/colors?file=a.ts' } as Record<string, string>,
     style: { setProperty(name: string, value: string) { offsets[name] = value } },
   }
   const first = {
@@ -241,7 +258,7 @@ function readerController(firstTop: number, navigationType = 'navigate', savedTo
   }
   const script = [...renderPatch('@@ -1 +1 @@\n-old\n+new\n').matchAll(/<script>([\s\S]*?)<\/script>/g)].at(-1)![1]!
   runInNewContext(script, {
-    window: { addEventListener() {} }, location: { href: 'http://local/compare' },
+    window: { addEventListener() {}, getSelection: () => selection }, location: { href: 'http://local/compare' },
     document: {
       addEventListener: (name: string, callback: (event: any) => void) => events.set(name, callback),
       querySelector: (selector: string) => selector === '.compare-scroll' ? scroll : selector === '.compare-viewport' ? { style: {} } : selector === '#compare-reader' ? reader : { value: '' },
@@ -251,14 +268,149 @@ function readerController(firstTop: number, navigationType = 'navigate', savedTo
     requestAnimationFrame: (callback: () => void) => { callbacks.set(++nextFrame, callback); return nextFrame },
     cancelAnimationFrame: (id: number) => callbacks.delete(id),
     getComputedStyle: () => ({ lineHeight: '21px' }),
-    performance: { getEntriesByType: () => [{ type: navigationType }] },
+    performance: { getEntriesByType: () => [{ type: navigationType }], now: () => { now += clockStep; return now } },
+    URL, AbortController,
+    fetch: (_url: URL, options: { signal: AbortSignal }) => new Promise((resolve, reject) => {
+      requests.push({ signal: options.signal, resolve, reject })
+    }),
+    setTimeout: (callback: () => void) => { timers.set(++nextFrame, callback); return nextFrame },
+    clearTimeout: (id: number) => timers.delete(id),
     sessionStorage: { getItem: () => savedTop === undefined ? null : JSON.stringify({ url: 'http://local/compare', top: savedTop }) },
   })
   const paint = () => { const pending = [...callbacks.values()]; callbacks.clear(); pending.forEach(callback => callback()) }
   paint()
   paint()
-  return { scroll, reader, events, paint, bars, offsets, codes, scrollEvents, callbacks, cleanup }
+  return {
+    scroll, reader, events, paint, bars, offsets, get codes() { return codes }, scrollEvents, callbacks, cleanup,
+    content, requests, selection, timers,
+    setClockStep(step: number) { clockStep = step },
+    switchFile() {
+      events.get('htmx:beforeCleanupElement')!({ detail: { elt: reader } })
+      codes = makeCodes()
+      content.dataset.colorPending = 'true'
+      reader.dataset.file = 'b.ts'
+      reader.dataset.colorUrl = '/compare/colors?file=b.ts'
+      events.get('htmx:afterSwap')!({ detail: { target: { id: 'compare-reader' } } })
+    },
+    fireTimers() {
+      const pending = [...timers.values()]
+      timers.clear()
+      pending.forEach(callback => callback())
+    },
+  }
 }
+
+const settleColors = () => new Promise<void>(resolve => setImmediate(resolve))
+function colorCells(controller: ReturnType<typeof readerController>) {
+  return controller.codes.map(node => ({ text: node.textContent, html: `<span>${node.textContent}</span>` }))
+}
+async function deliverColors(controller: ReturnType<typeof readerController>, cells = colorCells(controller), ok = true) {
+  controller.requests.at(-1)!.resolve({ ok, json: async () => cells })
+  await settleColors()
+}
+
+test('deferred colors paint plain content first, apply in bounded frames and finish once', async () => {
+  const controller = readerController(0, 'navigate', undefined, true)
+  expect(controller.requests).toHaveLength(0)
+  controller.paint()
+  expect(controller.requests).toHaveLength(1)
+  controller.setClockStep(7) // Each cell consumes a full frame budget.
+  await deliverColors(controller)
+  controller.paint()
+  expect(controller.codes.filter(node => node.innerHTML.startsWith('<span>'))).toHaveLength(1)
+  expect(controller.content.dataset.colorPending).toBe('true')
+  for (let i = 0; i < 3; i++) controller.paint()
+  expect(controller.codes.every(node => node.innerHTML.startsWith('<span>'))).toBe(true)
+  expect(controller.content.dataset.colorPending).toBeUndefined()
+  controller.paint()
+  expect(controller.callbacks.size).toBe(1) // Measurement schedules a viewport paint.
+  controller.paint()
+  expect(controller.callbacks.size).toBe(0)
+  expect(controller.requests).toHaveLength(1)
+})
+
+test('switching files aborts a color request and ignores its late response', async () => {
+  const controller = readerController(0, 'navigate', undefined, true)
+  controller.paint()
+  const oldRequest = controller.requests[0]!
+  const oldNodes = controller.codes
+  const oldCells = colorCells(controller)
+  controller.switchFile()
+  expect(oldRequest.signal.aborted).toBe(true)
+  oldRequest.resolve({ ok: true, json: async () => oldCells })
+  await settleColors()
+  for (let i = 0; i < 3; i++) controller.paint()
+  expect(controller.requests).toHaveLength(2)
+  expect(oldNodes.every(node => node.innerHTML === node.textContent)).toBe(true)
+  expect(controller.codes.every(node => node.innerHTML === node.textContent)).toBe(true)
+  await deliverColors(controller)
+  controller.paint()
+  expect(controller.codes.every(node => node.innerHTML.startsWith('<span>'))).toBe(true)
+})
+
+test('cleanup cancels color work before fetching and before applying a resolved response', async () => {
+  const beforeFetch = readerController(0, 'navigate', undefined, true)
+  beforeFetch.events.get('htmx:beforeCleanupElement')!({ detail: { elt: beforeFetch.reader } })
+  beforeFetch.paint()
+  expect(beforeFetch.requests).toHaveLength(0)
+  expect(beforeFetch.callbacks.size).toBe(0)
+
+  const beforeApply = readerController(0, 'navigate', undefined, true)
+  beforeApply.paint()
+  await deliverColors(beforeApply)
+  beforeApply.events.get('htmx:beforeCleanupElement')!({ detail: { elt: beforeApply.reader } })
+  beforeApply.paint()
+  expect(beforeApply.codes.every(node => node.innerHTML === node.textContent)).toBe(true)
+  expect(beforeApply.requests[0]!.signal.aborted).toBe(true)
+  expect(beforeApply.callbacks.size).toBe(0)
+})
+
+test('color application waits for a reader selection to clear and cancels its retry on cleanup', async () => {
+  const controller = readerController(0, 'navigate', undefined, true)
+  controller.paint()
+  controller.selection.isCollapsed = false
+  controller.selection.anchorNode = controller.codes[0]
+  await deliverColors(controller)
+  controller.paint()
+  expect(controller.codes.every(node => node.innerHTML === node.textContent)).toBe(true)
+  expect(controller.timers.size).toBe(1)
+  controller.selection.isCollapsed = true
+  controller.fireTimers()
+  controller.paint()
+  expect(controller.codes.every(node => node.innerHTML.startsWith('<span>'))).toBe(true)
+
+  controller.switchFile()
+  for (let i = 0; i < 3; i++) controller.paint()
+  controller.selection.isCollapsed = false
+  controller.selection.anchorNode = controller.codes[0]
+  await deliverColors(controller)
+  controller.paint()
+  expect(controller.timers.size).toBe(1)
+  controller.events.get('htmx:beforeCleanupElement')!({ detail: { elt: controller.reader } })
+  expect(controller.timers.size).toBe(0)
+  expect(controller.callbacks.size).toBe(0)
+})
+
+test('failed, stale and disconnected color responses leave plain content readable', async () => {
+  for (const failure of ['http', 'network', 'text', 'count', 'disconnected']) {
+    const controller = readerController(0, 'navigate', undefined, true)
+    controller.paint()
+    const cells = colorCells(controller)
+    if (failure === 'network') {
+      controller.requests[0]!.reject(new Error('Offline'))
+      await settleColors()
+    } else {
+      if (failure === 'text') cells[0]!.text = 'changed working tree'
+      if (failure === 'count') cells.pop()
+      if (failure === 'disconnected') controller.reader.isConnected = false
+      await deliverColors(controller, cells, failure !== 'http')
+    }
+    controller.paint()
+    expect(controller.codes.every(node => node.innerHTML === node.textContent)).toBe(true)
+    expect(controller.callbacks.size).toBe(0)
+    expect(controller.timers.size).toBe(0)
+  }
+})
 
 test('reader cleanup removes plain code and releases scheduled work before htmx walks its children', () => {
   const controller = readerController(150)
