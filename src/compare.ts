@@ -54,15 +54,18 @@ function selectedPatch(output: string, file: Pick<CompareFile, 'path' | 'oldPath
   const fields = output.slice(0, boundary).split('\0')
   const patches = output.slice(boundary + 2).split(/(?=^diff --git )/m)
   let index = 0
-  for (let i = 0; i < fields.length; index++) {
+  for (let i = 0; i < fields.length;) {
     const status = fields[i++]!.split(' ').at(-1)!
     const first = fields[i++]!
     const renamed = status.startsWith('R') || status.startsWith('C')
     const path = renamed ? fields[i++]! : first
+    // A type change has one raw record but separate deletion and addition patches.
+    const count = status === 'T' ? 2 : 1
     if (path === file.path && (!file.oldPath || renamed && first === file.oldPath)) {
-      if (!patches[index]) throw new Error('Could not read comparison patch')
-      return patches[index]!
+      if (!patches[index + count - 1]) throw new Error('Could not read comparison patch')
+      return patches.slice(index, index + count).join('')
     }
+    index += count
   }
   return ''
 }

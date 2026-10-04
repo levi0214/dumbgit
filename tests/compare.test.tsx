@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
 import { runInNewContext } from 'node:vm'
-import { mkdtempSync, mkdirSync, writeFileSync, renameSync, rmSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, renameSync, rmSync, symlinkSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { compare, comparisonPatch, comparisonRefs } from '../src/compare'
@@ -156,6 +156,40 @@ test('selected patches exclude descendants when files and directories exchange p
     const reversed = await compare(repo, { base: 'refs/heads/feature', target: 'refs/heads/main', file: 'config' })
     expect(reversed.selected).toMatchObject({ status: 'A', path: 'config' })
     expect(splitRows(reversed.patch).map(row => [row.left?.text, row.right?.text])).toEqual([[undefined, 'original "config"']])
+  } finally { rmSync(repo, { recursive: true, force: true }) }
+})
+
+test('selected type changes retain both deletion and addition patches', async () => {
+  const repo = mkdtempSync(path.join(os.tmpdir(), 'dg-compare-type-'))
+  try {
+    git(repo, 'init', '-b', 'main')
+    git(repo, 'config', 'user.name', 'Test')
+    git(repo, 'config', 'user.email', 'test@example.test')
+    writeFileSync(path.join(repo, 'config'), 'original contents\n')
+    git(repo, 'add', '.')
+    git(repo, 'commit', '-m', 'test: file')
+    git(repo, 'switch', '-c', 'feature')
+    rmSync(path.join(repo, 'config'))
+    symlinkSync('destination', path.join(repo, 'config'))
+    git(repo, 'add', '.')
+    for (const target of ['worktree', 'refs/heads/feature']) {
+      if (target !== 'worktree') git(repo, 'commit', '-m', 'test: symlink')
+      const result = await compare(repo, { file: 'config', target })
+      expect(result.selected).toMatchObject({ status: 'T', path: 'config' })
+      expect(result.patch.match(/^diff --git /gm)).toHaveLength(2)
+      expect(result.patch).toContain('-original contents')
+      expect(result.patch).toContain('+destination')
+      expect(splitRows(result.patch).map(row => [row.left?.text, row.right?.text])).toEqual([
+        ['original contents', undefined], [undefined, 'destination'],
+      ])
+    }
+    const reversed = await compare(repo, { base: 'refs/heads/feature', target: 'refs/heads/main', file: 'config' })
+    expect(reversed.patch.match(/^diff --git /gm)).toHaveLength(2)
+    expect(reversed.patch).toContain('-destination')
+    expect(reversed.patch).toContain('+original contents')
+    expect(splitRows(reversed.patch).map(row => [row.left?.text, row.right?.text])).toEqual([
+      ['destination', undefined], [undefined, 'original contents'],
+    ])
   } finally { rmSync(repo, { recursive: true, force: true }) }
 })
 
