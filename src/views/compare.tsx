@@ -6,9 +6,10 @@ import { parseDiff, type DiffRow } from './diff'
 import { highlightLines, highlightReady, syntaxSpans, type SyntaxToken } from './syntax'
 
 type CodeRow = Extract<DiffRow, { kind: 'ctx' | 'add' | 'del' }>
+const MAX_DISPLAY_ROWS = 5000
 export type SplitRow = { left?: CodeRow; right?: CodeRow; changed: boolean; leftSyntax?: SyntaxToken[]; rightSyntax?: SyntaxToken[] }
-export function splitRows(patch: string): SplitRow[] {
-  const source = parseDiff(patch, true)
+export function splitRows(patch: string, maxRows = Infinity): SplitRow[] {
+  const source = parseDiff(patch, true, maxRows)
   const rows: SplitRow[] = []
   for (let i = 0; i < source.length;) {
     const row = source[i++]!
@@ -58,8 +59,8 @@ function colorRows(rows: SplitRow[], file: CompareFile, cachedOnly: boolean) {
 }
 // The text accompanies HTML so a changed working tree cannot color stale lines.
 export function compareColors(patch: string, file: CompareFile) {
-  const rows = splitRows(patch)
-  if (rows.length > 5000) return []
+  const rows = splitRows(patch, MAX_DISPLAY_ROWS)
+  if (rows.length > MAX_DISPLAY_ROWS) return []
   colorRows(rows, file, false)
   return rows.flatMap(row => (['left', 'right'] as const).map(side => ({
     text: row[side]?.text ?? '',
@@ -70,10 +71,10 @@ function Row({ row, id }: { row: SplitRow; id?: string }) {
   return <div class="compare-row" id={id}><Line row={row.left} side="left" syntax={row.leftSyntax} /><Line row={row.right} side="right" syntax={row.rightSyntax} /></div>
 }
 function SplitDiff({ patch, file }: { patch: string; file: CompareFile }) {
-  const rows = splitRows(patch)
+  const rows = splitRows(patch, MAX_DISPLAY_ROWS)
   if (!rows.length) return <pre class="compare-message">{patch || 'No content changes.'}</pre>
   // Full DOM rendering becomes noticeably slow for very long files in Safari.
-  if (rows.length > 5000) return <p class="compare-message">This diff exceeds the 5,000-row display limit. Open this file in your editor or inspect it with git.</p>
+  if (rows.length > MAX_DISPLAY_ROWS) return <p class="compare-message">This diff exceeds the 5,000-row display limit. Open this file in your editor or inspect it with git.</p>
   const pending = colorRows(rows, file, true)
   const maxLine = rows.reduce((max, row) => Math.max(max, row.left?.oldNo ?? 0, row.right?.newNo ?? 0), 1)
   const lineDigits = String(maxLine).length

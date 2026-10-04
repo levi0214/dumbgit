@@ -166,6 +166,24 @@ test('large diffs remain selectable without rendering thousands of code rows', (
   expect(html).toContain('5,000-row display limit')
   expect(html).not.toContain('class="compare-code')
   expect(html).not.toContain('class="compare-marker"')
+  expect(compareColors(patch, { status: 'M', path: 'a.ts' })).toEqual([])
+  const rows = splitRows(patch, 5000)
+  expect(rows).toHaveLength(5001)
+  expect(rows.at(-1)?.left?.word).toBeUndefined()
+  expect(rows.at(-1)?.right?.word).toBeUndefined()
+})
+
+test('the display limit counts aligned rows, preserving word changes at the boundary', () => {
+  const patch = '@@ -1,5000 +1,5000 @@\n' + ' unchanged\n'.repeat(4999) + '-const value = 1;\n+const value = 2;\n'
+  const rows = splitRows(patch, 5000)
+  expect(rows).toHaveLength(5000)
+  expect(rows.at(-1)?.left?.word?.filter(w => w.chg).map(w => w.t)).toEqual(['1;'])
+  expect(rows.at(-1)?.right?.word?.filter(w => w.chg).map(w => w.t)).toEqual(['2;'])
+  // Similarity-based pairing can produce more rows than the cheap lower bound.
+  const expanded = '@@ -1,5000 +1,5000 @@\n' + ' unchanged\n'.repeat(4998)
+    + '-const first = 1;\n-const second = 2;\n+unrelated();\n+const first = 3;\n'
+  expect(splitRows(expanded, 5000)).toHaveLength(5001)
+  expect(renderPatch(expanded)).toContain('5,000-row display limit')
 })
 
 test('file list uses consistent counts and describes file status in tooltips', () => {

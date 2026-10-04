@@ -163,10 +163,16 @@ function matchLines(dels: string[], adds: string[]): [number, number][] {
 }
 
 /** Annotate ordered, similar replacements within each consecutive deletion/addition run. */
-function annotateWordDiffs(rows: DiffRow[]): void {
+function annotateWordDiffs(rows: DiffRow[], maxAlignedRows: number): void {
+  const replacements: {
+    dels: Extract<DiffRow, { kind: 'del' }>[]
+    adds: Extract<DiffRow, { kind: 'add' }>[]
+  }[] = []
+  let alignedRows = 0
   let i = 0
   while (i < rows.length) {
-    if (rows[i]!.kind !== 'del') {
+    if (rows[i]!.kind === 'ctx') alignedRows++
+    if (rows[i]!.kind !== 'del' && rows[i]!.kind !== 'add') {
       i++
       continue
     }
@@ -180,6 +186,12 @@ function annotateWordDiffs(rows: DiffRow[]): void {
       adds.push(rows[i]! as Extract<DiffRow, { kind: 'add' }>)
       i++
     }
+    alignedRows += Math.max(dels.length, adds.length)
+    if (dels.length && adds.length) replacements.push({ dels, adds })
+  }
+  // Even perfect pairing cannot fit this file. Skip all LCS work before display.
+  if (alignedRows > maxAlignedRows) return
+  for (const { dels, adds } of replacements) {
     for (const [d, a] of matchLines(dels.map(r => r.text), adds.map(r => r.text))) {
       const del = dels[d]!
       const add = adds[a]!
@@ -192,7 +204,7 @@ function annotateWordDiffs(rows: DiffRow[]): void {
 }
 
 /** Parse a unified diff into rows with old/new line numbers; del/add runs are paired for word-level highlighting. */
-export function parseDiff(text: string, preserveContext = false): DiffRow[] {
+export function parseDiff(text: string, preserveContext = false, maxAlignedRows = Infinity): DiffRow[] {
   const rows: DiffRow[] = []
   let oldNo: number | undefined
   let newNo: number | undefined
@@ -234,7 +246,7 @@ export function parseDiff(text: string, preserveContext = false): DiffRow[] {
   const isBlank = (r: DiffRow) => r.text.trim() === '' && ((r.kind === 'ctx' && !preserveContext) || r.kind === 'meta')
   while (rows.length > 0 && isBlank(rows[0]!)) rows.shift()
   while (rows.length > 0 && isBlank(rows[rows.length - 1]!)) rows.pop()
-  annotateWordDiffs(rows)
+  annotateWordDiffs(rows, maxAlignedRows)
   return rows
 }
 
