@@ -46,6 +46,10 @@ test('direct branch and working tree comparisons, literal paths, rename and bina
     expect(r.files.find(f => f.path === 'binary')?.added).toBeUndefined()
     expect(r.files.some(f => f.path === 'tab\tline\n.txt')).toBe(true)
     expect(r.files.some(f => f.status === 'D')).toBe(true)
+    // A caller cannot corrupt the immutable comparison cached for later clicks.
+    const repeated = await compare(repo, {})
+    repeated.files[0]!.path = 'modified-by-caller'
+    expect((await compare(repo, {})).files).toEqual(r.files)
     const filtered = await compare(repo, { scope: 'contracts/[a].txt' })
     expect(filtered.files.length).toBe(1)
     expect(filtered.patch).toContain('+after')
@@ -60,6 +64,10 @@ test('direct branch and working tree comparisons, literal paths, rename and bina
     expect(work.files[0]).toMatchObject({ added: 1, deleted: 1 })
     expect(work.patch).toContain('+working')
     expect(work.patch).not.toContain('+staged')
+    writeFileSync(path.join(repo, 'contracts', '[a].txt'), 'new working\nsecond line\n')
+    const updatedWork = await compare(repo, { target: 'worktree', scope: 'contracts/' })
+    expect(updatedWork.files[0]).toMatchObject({ added: 2, deleted: 1 })
+    expect(updatedWork.patch).toContain('+new working')
     expect((await compare(repo, { target: 'worktree' })).files.some(f => f.path === 'untracked')).toBe(false)
     expect((await compare(repo, { scope: 'missing/' })).files).toEqual([])
     expect((await compare(repo, { file: 'binary' })).patch).toContain('Binary files')

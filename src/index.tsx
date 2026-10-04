@@ -1,6 +1,6 @@
 /** @jsxImportSource hono/jsx */
 import { compare, comparisonRefs } from './compare'
-import { CompareView } from './views/compare'
+import { CompareReader, CompareView } from './views/compare'
 import { Fragment } from 'hono/jsx'
 import { Hono, type Context, type Next } from 'hono'
 import { getCookie, setCookie } from 'hono/cookie'
@@ -491,6 +491,7 @@ app.get('/repo', async (c) => {
 
 app.get('/compare', async (c) => {
   c.header('Cache-Control', 'no-store')
+  c.header('Vary', 'HX-Request, HX-Target, HX-History-Restore-Request')
   const repo = resolveWorkspaceRepo(c.req.query('repo'))
   if (!repo) return c.redirect('/')
   const scope = c.req.query('scope') ?? ''
@@ -511,7 +512,13 @@ app.get('/compare', async (c) => {
     error = e instanceof Error ? e.message : 'Could not load comparison'
     result = { refs: await comparisonRefs(repo).catch(() => []), base: c.req.query('base') ?? 'refs/heads/main', target: c.req.query('target') ?? 'HEAD', files: [], patch: '' }
   }
-  return c.html(<Layout title={`Compare · ${path.basename(repo)}`}><CompareView repo={repo} name={path.basename(repo)} scope={scope} result={result} error={error} /></Layout>)
+  const props = { repo, name: path.basename(repo), scope, result, error }
+  // File links retain their normal URL for reloads, history misses and new tabs.
+  if (c.req.header('HX-Request') === 'true' && c.req.header('HX-Target') === 'compare-reader'
+      && c.req.header('HX-History-Restore-Request') !== 'true') {
+    return c.html(<CompareReader {...props} />)
+  }
+  return c.html(<Layout title={`Compare · ${props.name}`}><CompareView {...props} /></Layout>)
 })
 
 app.get('/workspace', (c) => {

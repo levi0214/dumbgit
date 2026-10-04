@@ -35,25 +35,9 @@ export async function comparisonRefs(cwd: string) {
   return refs.sort((a, b) => Number(b.current) - Number(a.current))
 }
 
-export async function compare(cwd: string, options: { base?: string; target?: string; scope?: string; file?: string; previous?: { base: string; target: string } }): Promise<CompareResult> {
-  const refs = await comparisonRefs(cwd)
-  // Explicit links take precedence. Forget a saved pair if either branch disappeared.
-  const previous = !options.base && !options.target && options.previous
-    && refs.some(r => r.value === options.previous!.base)
-    && (options.previous.target === 'worktree' || refs.some(r => r.value === options.previous!.target))
-    ? options.previous : undefined
-  const base = options.base ?? previous?.base ?? refs.find(r => r.value === 'refs/heads/main')?.value ?? 'HEAD'
-  const target = options.target ?? previous?.target ?? refs.find(r => r.current)?.value ?? 'HEAD'
-  const resolve = async (ref: string) => {
-    if (!refs.some(r => r.value === ref)) throw new Error('Unknown comparison branch')
-    return (await git(cwd, ['rev-parse', '--verify', '--end-of-options', `${ref}^{commit}`])).trim()
-  }
-  const left = await resolve(base)
-  const right = target === 'worktree' ? undefined : await resolve(target)
-  const args = ['--literal-pathspecs', 'diff', '--no-ext-diff', '--no-textconv', '--no-color', '--find-renames', left, ...(right ? [right] : [])]
-  const scope = options.scope ?? ''
-  if (scope.startsWith('/') || scope.split('/').includes('..')) throw new Error('Use a path relative to the repository')
-  const paths = scope ? [scope] : []
+const fileCache = new Map<string, CompareFile[]>()
+
+async function comparisonFiles(cwd: string, args: string[], paths: string[]) {
   const [nameOutput, statOutput] = await Promise.all([
     git(cwd, [...args, '--name-status', '-z', '--', ...paths]),
     git(cwd, [...args, '--numstat', '-z', '--', ...paths]),
@@ -89,6 +73,44 @@ export async function compare(cwd: string, options: { base?: string; target?: st
       file.deleted = Number(deleted)
     }
   }
+  return files
+}
+
+export async function compare(cwd: string, options: { base?: string; target?: string; scope?: string; file?: string; previous?: { base: string; target: string } }): Promise<CompareResult> {
+  const refs = await comparisonRefs(cwd)
+  // Explicit links take precedence. Forget a saved pair if either branch disappeared.
+  const previous = !options.base && !options.target && options.previous
+    && refs.some(r => r.value === options.previous!.base)
+    && (options.previous.target === 'worktree' || refs.some(r => r.value === options.previous!.target))
+    ? options.previous : undefined
+  const base = options.base ?? previous?.base ?? refs.find(r => r.value === 'refs/heads/main')?.value ?? 'HEAD'
+  const target = options.target ?? previous?.target ?? refs.find(r => r.current)?.value ?? 'HEAD'
+  const resolve = async (ref: string) => {
+    if (!refs.some(r => r.value === ref)) throw new Error('Unknown comparison branch')
+    return (await git(cwd, ['rev-parse', '--verify', '--end-of-options', `${ref}^{commit}`])).trim()
+  }
+  const [left, right] = await Promise.all([resolve(base), target === 'worktree' ? undefined : resolve(target)])
+  const args = ['--literal-pathspecs', 'diff', '--no-ext-diff', '--no-textconv', '--no-color', '--find-renames', left, ...(right ? [right] : [])]
+  const scope = options.scope ?? ''
+  if (scope.startsWith('/') || scope.split('/').includes('..')) throw new Error('Use a path relative to the repository')
+  const paths = scope ? [scope] : []
+  // Commit tips are immutable. Never cache working-tree metadata.
+  const key = right ? JSON.stringify([cwd, left, right, scope]) : undefined
+  let files = key ? fileCache.get(key) : undefined
+  if (files && key) {
+    fileCache.delete(key)
+    fileCache.set(key, files)
+  } else {
+    files = await comparisonFiles(cwd, args, paths)
+    if (key && files.length <= 10_000) {
+      fileCache.set(key, files)
+      while (fileCache.size > 32 || [...fileCache.values()].reduce((n, files) => n + files.length, 0) > 10_000) {
+        fileCache.delete(fileCache.keys().next().value!)
+      }
+    }
+  }
+  // Keep callers from mutating the cached snapshot.
+  files = files.map(file => ({ ...file }))
   const selected = files.find(f => f.path === options.file) ?? files[0]
   let patch = ''
   if (selected) {

@@ -13,6 +13,23 @@ function cells(html: string) {
 }
 const text = (html: string) => html.replace(/<[^>]*>/g, '')
 
+test('syntax cache reuses identical content and language, but refreshes changed content', () => {
+  const lines = ['const syntaxCacheValue = "before";']
+  const first = highlightLines(lines, 'before.ts')!
+  expect(highlightLines(lines, 'other.mts')).toBe(first)
+  const changed = highlightLines(['const syntaxCacheValue = "after";'], 'before.ts')!
+  expect(changed).not.toBe(first)
+  expect(changed[0]!.map(token => token.content).join('')).toBe('const syntaxCacheValue = "after";')
+  expect(highlightLines(lines, 'before.py')).not.toBe(first)
+})
+
+test('syntax cache evicts old entries instead of retaining every visited file', () => {
+  const lines = ['const evictedSyntaxValue = 0;']
+  const first = highlightLines(lines, 'cache.ts')!
+  for (let i = 0; i < 32; i++) highlightLines([`const cacheEntry${i} = ${i};`], 'cache.ts')
+  expect(highlightLines(lines, 'cache.ts')).not.toBe(first)
+})
+
 test('selected grammars preserve source text, including empty lines and Unicode', () => {
   const lines = ['/* 中文 🐈 */', '', 'hello world', '']
   for (const extension of ['sol', 'ts', 'tsx', 'js', 'jsx', 'json', 'css', 'html', 'md', 'yaml', 'sh', 'py', 'rs', 'go', 'toml']) {

@@ -304,7 +304,35 @@ function compareFileTitle(file: CompareFile): string {
   return `${status} · ${path}`
 }
 
-export function CompareView(props: { repo: string; name: string; scope: string; result?: CompareResult; error?: string }) {
+type CompareViewProps = { repo: string; name: string; scope: string; result?: CompareResult; error?: string }
+
+export function CompareReader(props: CompareViewProps) {
+  const { result: r } = props
+  function branchOptions(selected: string | undefined, workingTree = false) {
+    const refs = r?.refs ?? []
+    const option = (ref: CompareResult['refs'][number]) => <option value={ref.value} selected={ref.value === selected}>{ref.label}{ref.current ? ' (current)' : ''}</option>
+    const local = refs.filter(ref => !ref.current && ref.value.startsWith('refs/heads/'))
+    const remote = refs.filter(ref => ref.value.startsWith('refs/remotes/'))
+    return <>
+      {refs.filter(ref => ref.current).map(option)}
+      {workingTree && <option value="worktree" selected={selected === 'worktree'}>Working tree</option>}
+      {local.length > 0 && <optgroup label="Local branches · recent commits">{local.map(option)}</optgroup>}
+      {remote.length > 0 && <optgroup label="Remote branches · recent commits">{remote.map(option)}</optgroup>}
+      {refs.filter(ref => !ref.current && ref.value === 'HEAD').map(option)}
+    </>
+  }
+  return (
+    <section id="compare-reader" class="compare-reader" data-file={r?.selected?.path}>
+      <div class="compare-row compare-labels">
+        <label><select name="base" aria-label="Base version">{branchOptions(r?.base)}</select></label>
+        <label><select name="target" aria-label="Target version" title="Working tree includes staged and unstaged tracked changes; untracked files are excluded.">{branchOptions(r?.target, true)}</select></label>
+      </div>
+      {props.error ? <pre class="compare-message" role="alert">{props.error}</pre> : r?.selected ? <><div class="compare-file-head"><span>{r.selected.oldPath ? `${r.selected.oldPath} → ` : ''}{r.selected.path}</span></div><SplitDiff patch={r.patch} file={r.selected} /></> : <p class="compare-message">No differences{props.scope ? ' in this path' : ''}.</p>}
+    </section>
+  )
+}
+
+export function CompareView(props: CompareViewProps) {
   const { result: r } = props
   type Directory = { path: string; name: string; directories: Map<string, Directory>; files: CompareFile[] }
   const root: Directory = { path: '', name: '', directories: new Map(), files: [] }
@@ -320,19 +348,6 @@ export function CompareView(props: { repo: string; name: string; scope: string; 
     parent.files.push(file)
   }
   const url = (file: string, scope = props.scope) => '/compare?' + new URLSearchParams({ repo: props.repo, base: r!.base, target: r!.target, scope, file })
-  function branchOptions(selected: string | undefined, workingTree = false) {
-    const refs = r?.refs ?? []
-    const option = (ref: CompareResult['refs'][number]) => <option value={ref.value} selected={ref.value === selected}>{ref.label}{ref.current ? ' (current)' : ''}</option>
-    const local = refs.filter(ref => !ref.current && ref.value.startsWith('refs/heads/'))
-    const remote = refs.filter(ref => ref.value.startsWith('refs/remotes/'))
-    return <>
-      {refs.filter(ref => ref.current).map(option)}
-      {workingTree && <option value="worktree" selected={selected === 'worktree'}>Working tree</option>}
-      {local.length > 0 && <optgroup label="Local branches · recent commits">{local.map(option)}</optgroup>}
-      {remote.length > 0 && <optgroup label="Remote branches · recent commits">{remote.map(option)}</optgroup>}
-      {refs.filter(ref => !ref.current && ref.value === 'HEAD').map(option)}
-    </>
-  }
   function renderChildren(node: Directory, depth: number): JSX.Element {
     return <>{[...node.directories.values()].map(child => {
       let directory = child
@@ -382,13 +397,7 @@ export function CompareView(props: { repo: string; name: string; scope: string; 
         </div><div class="compare-file-list">{renderChildren(root, 0)}</div></aside>
       <div class="compare-files-resizer" role="separator" aria-orientation="vertical"
         aria-label="Resize file list" tabindex={0} title="Drag to resize · double-click to reset" />
-      <section id="compare-reader" class="compare-reader" data-file={r?.selected?.path}>
-        <div class="compare-row compare-labels">
-          <label><select name="base" aria-label="Base version">{branchOptions(r?.base)}</select></label>
-          <label><select name="target" aria-label="Target version" title="Working tree includes staged and unstaged tracked changes; untracked files are excluded.">{branchOptions(r?.target, true)}</select></label>
-        </div>
-        {props.error ? <pre class="compare-message" role="alert">{props.error}</pre> : r?.selected ? <><div class="compare-file-head"><span>{r.selected.oldPath ? `${r.selected.oldPath} → ` : ''}{r.selected.path}</span></div><SplitDiff patch={r.patch} file={r.selected} /></> : <p class="compare-message">No differences{props.scope ? ' in this path' : ''}.</p>}
-      </section>
+      <CompareReader {...props} />
     </div>
     </div>
     </form>

@@ -1,5 +1,6 @@
 import { createHighlighterCoreSync } from 'shiki/core'
-import { createJavaScriptRegexEngine } from 'shiki/engine/javascript'
+import { createOnigurumaEngine } from 'shiki/engine/oniguruma'
+import wasm from 'shiki/wasm'
 import monokai from 'shiki/themes/monokai.mjs'
 import solidity from 'shiki/langs/solidity.mjs'
 import typescript from 'shiki/langs/typescript.mjs'
@@ -27,6 +28,12 @@ const languages: Record<string, string> = {
   rs: 'rust', go: 'go', toml: 'toml',
 }
 let highlighter: ReturnType<typeof createHighlighterCoreSync> | undefined
+// Inline WASM also works in the compiled Bun executable; no runtime asset path.
+const engine = await createOnigurumaEngine(wasm).catch(() => undefined)
+const cache = new Map<string, { tokens?: SyntaxToken[][]; count: number }>()
+let cachedTokens = 0
+const MAX_CACHE_ENTRIES = 32
+const MAX_CACHE_TOKENS = 100_000
 
 /** Tokenize a complete side, so comments and strings keep their state across lines. */
 export function highlightLines(lines: string[], path: string): SyntaxToken[][] | undefined {
@@ -36,15 +43,32 @@ export function highlightLines(lines: string[], path: string): SyntaxToken[][] |
   if (!lang || !lines.length || lines.length > 2000 || lines.some(line => line.length > 2000)) return
   const code = lines.join('\n')
   if (code.length > 100_000) return
+  const key = lang + '\0' + code
+  const cached = cache.get(key)
+  if (cached) {
+    cache.delete(key)
+    cache.set(key, cached)
+    return cached.tokens
+  }
+  if (!engine) return
   try {
     highlighter ??= createHighlighterCoreSync({
       themes: [monokai],
       langs: [solidity, typescript, tsx, javascript, jsx, json, css, html, markdown, yaml, shell, python, rust, go, toml],
-      engine: createJavaScriptRegexEngine(),
+      engine,
     })
     const { tokens } = highlighter.codeToTokens(code, { lang, theme: 'monokai' })
-    if (tokens.reduce((count, line) => count + line.length, 0) > 20_000) return
-    return tokens
+    const count = tokens.reduce((count, line) => count + line.length, 0)
+    // Cache plain fallbacks too: oversized token output should not be recomputed.
+    const entry = count > 20_000 ? { count: 0 } : { tokens, count }
+    cache.set(key, entry)
+    cachedTokens += entry.count
+    while (cache.size > MAX_CACHE_ENTRIES || cachedTokens > MAX_CACHE_TOKENS) {
+      const oldest = cache.keys().next().value!
+      cachedTokens -= cache.get(oldest)!.count
+      cache.delete(oldest)
+    }
+    return entry.tokens
   } catch {
     // A grammar failure must never prevent reading a diff.
     return
