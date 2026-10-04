@@ -35,22 +35,32 @@ let cachedTokens = 0
 const MAX_CACHE_ENTRIES = 32
 const MAX_CACHE_TOKENS = 100_000
 
-/** Tokenize a complete side, so comments and strings keep their state across lines. */
-export function highlightLines(lines: string[], path: string): SyntaxToken[][] | undefined {
+function highlightKey(lines: string[], path: string) {
   const extension = path.split('/').pop()!.split('.').pop()!.toLowerCase()
   const lang = languages[extension]
-  // Bound both server work and the extra DOM nodes. Minified files stay plain too.
-  if (!lang || !lines.length || lines.length > 2000 || lines.some(line => line.length > 2000)) return
+  if (!engine || !lang || !lines.length || lines.length > 2000 || lines.some(line => line.length > 2000)) return
   const code = lines.join('\n')
   if (code.length > 100_000) return
-  const key = lang + '\0' + code
+  return { lang, code, key: lang + '\0' + code }
+}
+
+export function highlightReady(lines: string[], path: string) {
+  const input = highlightKey(lines, path)
+  return !input || cache.has(input.key)
+}
+
+/** Tokenize a complete side, so comments and strings keep their state across lines. */
+export function highlightLines(lines: string[], path: string, cachedOnly = false): SyntaxToken[][] | undefined {
+  const input = highlightKey(lines, path)
+  if (!input) return
+  const { lang, code, key } = input
   const cached = cache.get(key)
   if (cached) {
     cache.delete(key)
     cache.set(key, cached)
     return cached.tokens
   }
-  if (!engine) return
+  if (cachedOnly || !engine) return
   try {
     highlighter ??= createHighlighterCoreSync({
       themes: [monokai],

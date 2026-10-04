@@ -3,7 +3,7 @@ import type { JSX } from 'hono/jsx/jsx-runtime'
 import { raw } from 'hono/html'
 import type { CompareFile, CompareResult } from '../compare'
 import { parseDiff, type DiffRow } from './diff'
-import { highlightLines, syntaxSpans, type SyntaxToken } from './syntax'
+import { highlightLines, highlightReady, syntaxSpans, type SyntaxToken } from './syntax'
 
 type CodeRow = Extract<DiffRow, { kind: 'ctx' | 'add' | 'del' }>
 export type SplitRow = { left?: CodeRow; right?: CodeRow; changed: boolean; leftSyntax?: SyntaxToken[]; rightSyntax?: SyntaxToken[] }
@@ -36,10 +36,35 @@ export function splitRows(patch: string): SplitRow[] {
   }
   return rows
 }
-function Line({ row, side, syntax }: { row?: CodeRow; side: 'left' | 'right'; syntax?: SyntaxToken[] }) {
-  return <div class={`compare-code ${row?.kind ?? 'blank'}`}><span class="compare-ln">{side === 'left' ? row?.oldNo : row?.newNo}</span><span class="compare-text"><code>{syntax
+function Code({ row, syntax }: { row?: CodeRow; syntax?: SyntaxToken[] }) {
+  return <>{syntax
     ? syntaxSpans(syntax, row?.word).map(s => <span style={!s.changed && s.color ? `color:${s.color}` : undefined} class={s.changed ? 'diff-word-chg' : undefined}>{s.text}</span>)
-    : row?.word ? row.word.map(w => <span class={w.chg ? 'diff-word-chg' : undefined}>{w.t}</span>) : row?.text}</code></span></div>
+    : row?.word ? row.word.map(w => <span class={w.chg ? 'diff-word-chg' : undefined}>{w.t}</span>) : row?.text}</>
+}
+function Line({ row, side, syntax }: { row?: CodeRow; side: 'left' | 'right'; syntax?: SyntaxToken[] }) {
+  return <div class={`compare-code ${row?.kind ?? 'blank'}`}><span class="compare-ln">{side === 'left' ? row?.oldNo : row?.newNo}</span><span class="compare-text"><code><Code row={row} syntax={syntax} /></code></span></div>
+}
+function colorRows(rows: SplitRow[], file: CompareFile, cachedOnly: boolean) {
+  let pending = false
+  for (const side of ['left', 'right'] as const) {
+    const source = rows.filter(row => row[side])
+    const lines = source.map(row => row[side]!.text)
+    const path = side === 'left' ? file.oldPath ?? file.path : file.path
+    const tokens = highlightLines(lines, path, cachedOnly)
+    if (tokens) source.forEach((row, i) => { row[side === 'left' ? 'leftSyntax' : 'rightSyntax'] = tokens[i] })
+    else if (!highlightReady(lines, path)) pending = true
+  }
+  return pending
+}
+// The text accompanies HTML so a changed working tree cannot color stale lines.
+export function compareColors(patch: string, file: CompareFile) {
+  const rows = splitRows(patch)
+  if (rows.length > 5000) return []
+  colorRows(rows, file, false)
+  return rows.flatMap(row => (['left', 'right'] as const).map(side => ({
+    text: row[side]?.text ?? '',
+    html: (<Code row={row[side]} syntax={row[side === 'left' ? 'leftSyntax' : 'rightSyntax']} />).toString(),
+  })))
 }
 function Row({ row, id }: { row: SplitRow; id?: string }) {
   return <div class="compare-row" id={id}><Line row={row.left} side="left" syntax={row.leftSyntax} /><Line row={row.right} side="right" syntax={row.rightSyntax} /></div>
@@ -49,11 +74,7 @@ function SplitDiff({ patch, file }: { patch: string; file: CompareFile }) {
   if (!rows.length) return <pre class="compare-message">{patch || 'No content changes.'}</pre>
   // Full DOM rendering becomes noticeably slow for very long files in Safari.
   if (rows.length > 5000) return <p class="compare-message">This diff exceeds the 5,000-row display limit. Open this file in your editor or inspect it with git.</p>
-  for (const side of ['left', 'right'] as const) {
-    const source = rows.filter(row => row[side])
-    const tokens = highlightLines(source.map(row => row[side]!.text), side === 'left' ? file.oldPath ?? file.path : file.path)
-    if (tokens) source.forEach((row, i) => { row[side === 'left' ? 'leftSyntax' : 'rightSyntax'] = tokens[i] })
-  }
+  const pending = colorRows(rows, file, true)
   const maxLine = rows.reduce((max, row) => Math.max(max, row.left?.oldNo ?? 0, row.right?.newNo ?? 0), 1)
   const lineDigits = String(maxLine).length
   const blocks = []
@@ -81,7 +102,7 @@ function SplitDiff({ patch, file }: { patch: string; file: CompareFile }) {
       </button>,
     )
   }
-  return <><div class="compare-document" style={`--compare-line-digits: ${lineDigits}`}>
+  return <><div class="compare-document" data-color-pending={pending ? 'true' : undefined} style={`--compare-line-digits: ${lineDigits}`}>
     <div class="compare-scroll">{blocks}</div>
     <nav class="compare-overview" aria-label="Changes in this file">
       <div class="compare-viewport" aria-hidden="true" />
@@ -105,6 +126,9 @@ const COMPARE_SCRIPT = `
   var frame;
   var paintFrame;
   var codes = [];
+  var coloring;
+  var colorFrame;
+  var colorTimer;
   var rowHeight = 21;
   var horizontal = 0;
   function paintScroll() {
@@ -174,7 +198,60 @@ const COMPARE_SCRIPT = `
   function scheduleMeasure() {
     if (!frame) frame = requestAnimationFrame(measure);
   }
+  function deferColors() {
+    var reader = scroll.closest('.compare-reader');
+    var content = reader.querySelector('.compare-document');
+    if (!content || content.dataset.colorPending !== 'true') return;
+    coloring = new AbortController();
+    var signal = coloring.signal;
+    var nodes = codes.slice();
+    var url = new URL(reader.dataset.colorUrl, location.href);
+    // Give the plain content a paint before requesting and applying colors.
+    colorFrame = requestAnimationFrame(function() {
+      colorFrame = requestAnimationFrame(function() {
+        colorFrame = null;
+        fetch(url, { signal: signal }).then(function(response) {
+          if (!response.ok) throw new Error('Color request failed');
+          return response.json();
+        }).then(function(cells) {
+          if (signal.aborted || !reader.isConnected || cells.length !== nodes.length) return;
+          if (cells.some(function(cell, i) { return cell.text !== nodes[i].textContent; })) return;
+          var start = Math.max(0, Math.floor(scroll.scrollTop / rowHeight) - 1) * 2;
+          var order = nodes.map(function(_, i) { return (start + i) % nodes.length; });
+          var next = 0;
+          function apply() {
+            colorFrame = null;
+            if (signal.aborted || !reader.isConnected) return;
+            var selection = window.getSelection();
+            // Replacing text inside an active selection would destroy it.
+            if (selection && !selection.isCollapsed &&
+                (reader.contains(selection.anchorNode) || reader.contains(selection.focusNode))) {
+              colorTimer = setTimeout(function() { colorFrame = requestAnimationFrame(apply); }, 100);
+              return;
+            }
+            var until = performance.now() + 6;
+            do {
+              var i = order[next++];
+              if (nodes[i].innerHTML !== cells[i].html) nodes[i].innerHTML = cells[i].html;
+            } while (next < order.length && performance.now() < until);
+            if (next < order.length) colorFrame = requestAnimationFrame(apply);
+            else {
+              delete content.dataset.colorPending;
+              scheduleMeasure();
+            }
+          }
+          if (order.length) colorFrame = requestAnimationFrame(apply);
+        }).catch(function() { /* Plain content remains readable on failure. */ });
+      });
+    });
+  }
   function detach() {
+    if (coloring) coloring.abort();
+    coloring = null;
+    if (colorFrame) cancelAnimationFrame(colorFrame);
+    colorFrame = null;
+    if (colorTimer) clearTimeout(colorTimer);
+    colorTimer = null;
     if (observer) observer.disconnect();
     observer = null;
     if (scroll) scroll.removeEventListener('scroll', schedulePaint);
@@ -213,6 +290,7 @@ const COMPARE_SCRIPT = `
         }
       }
       updateViewport();
+      deferColors();
     });
   }
   document.addEventListener('htmx:beforeRequest', function(e) {
@@ -266,7 +344,7 @@ const COMPARE_SCRIPT = `
     if (handle) handle.closest('.compare-page').style.removeProperty('--compare-files-width');
   });
   document.addEventListener('htmx:beforeSwap', function(e) {
-    if (e.detail.target.id !== 'compare-results') return;
+    if (!e.detail.target || e.detail.target.id !== 'compare-results') return;
     closedFolders = new Set(Array.from(document.querySelectorAll('.compare-folder:not([open])'), function(folder) {
       return folder.dataset.directory;
     }));
@@ -281,7 +359,7 @@ const COMPARE_SCRIPT = `
     if (content) content.remove();
   });
   document.addEventListener('htmx:afterSwap', function(e) {
-    if (!['compare-reader', 'compare-results'].includes(e.detail.target.id)) return;
+    if (!e.detail.target || !['compare-reader', 'compare-results'].includes(e.detail.target.id)) return;
     if (e.detail.target.id === 'compare-results') {
       document.querySelectorAll('.compare-folder').forEach(function(folder) {
         if (closedFolders.has(folder.dataset.directory)) folder.open = false;
@@ -337,7 +415,8 @@ export function CompareReader(props: CompareViewProps) {
     </>
   }
   return (
-    <section id="compare-reader" class="compare-reader" data-file={r?.selected?.path}>
+    <section id="compare-reader" class="compare-reader" data-file={r?.selected?.path}
+      data-color-url={r?.selected ? '/compare/colors?' + new URLSearchParams({ repo: props.repo, base: r.base, target: r.target, scope: props.scope, file: r.selected.path }) : undefined}>
       <div class="compare-row compare-labels">
         <label><select name="base" aria-label="Base version">{branchOptions(r?.base)}</select></label>
         <label><select name="target" aria-label="Target version" title="Working tree includes staged and unstaged tracked changes; untracked files are excluded.">{branchOptions(r?.target, true)}</select></label>

@@ -1,9 +1,10 @@
 import { expect, test } from 'bun:test'
-import { highlightLines, syntaxSpans } from '../src/views/syntax'
-import { CompareView } from '../src/views/compare'
+import { highlightLines, highlightReady, syntaxSpans } from '../src/views/syntax'
+import { CompareView, compareColors } from '../src/views/compare'
 
 function render(patch: string, path = 'test.sol', oldPath?: string) {
   const file = { status: oldPath ? 'R' : 'M', path, oldPath }
+  compareColors(patch, file)
   return CompareView({ repo: '/tmp/example', name: 'example', scope: '', result: {
     refs: [], base: 'HEAD', target: 'worktree', files: [file], selected: file, patch,
   } }).toString()
@@ -93,4 +94,17 @@ test('unknown languages and expensive inputs fall back to the existing reader', 
   expect(code).toHaveLength(4002)
   expect(code.join('')).not.toContain('style="color:')
   expect(code.at(-1)).toContain('diff-word-chg')
+})
+
+
+test('plain rendering checks syntax cache without tokenizing cold content', () => {
+  const lines = ['const deferredColorCacheProbe = "<unsafe>&";']
+  expect(highlightReady(lines, 'deferred.ts')).toBe(false)
+  expect(highlightLines(lines, 'deferred.ts', true)).toBeUndefined()
+  expect(highlightReady(lines, 'deferred.ts')).toBe(false)
+  const tokens = highlightLines(lines, 'deferred.ts')!
+  expect(highlightReady(lines, 'deferred.ts')).toBe(true)
+  expect(highlightLines(lines, 'deferred.ts', true)).toBe(tokens)
+  expect(highlightReady(lines, 'deferred.txt')).toBe(true)
+  expect(highlightReady(Array(2001).fill('x'), 'deferred.ts')).toBe(true)
 })

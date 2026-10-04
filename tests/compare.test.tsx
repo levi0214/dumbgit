@@ -4,7 +4,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, renameSync, rmSync } from 'node:
 import os from 'node:os'
 import path from 'node:path'
 import { compare, comparisonRefs } from '../src/compare'
-import { CompareView, splitRows } from '../src/views/compare'
+import { CompareView, CompareReader, compareColors, splitRows } from '../src/views/compare'
 
 function git(cwd: string, ...args: string[]) {
   const p = Bun.spawnSync(['git', ...args], { cwd })
@@ -175,7 +175,7 @@ function readerController(firstTop: number, navigationType = 'navigate', savedTo
   const cleanup = { removed: false, disconnected: false }
   const reader = {
     id: 'compare-reader',
-    querySelector: () => ({ remove() { cleanup.removed = true } }),
+    querySelector: () => ({ dataset: {}, remove() { cleanup.removed = true } }),
     querySelectorAll: () => bars, dataset: { file: 'a.txt' } as Record<string, string>,
     style: { setProperty(name: string, value: string) { offsets[name] = value } },
   }
@@ -451,4 +451,37 @@ test('word-diff matches stay aligned around an inserted line', () => {
   expect(rows[0]?.right?.word).toBeUndefined()
   expect(rows[1]?.right?.word?.filter(w => w.chg).map(w => w.t).join('')).toContain('owner: owner,')
   expect(rows[2]?.right?.word?.filter(w => w.chg).map(w => w.t).join('')).toContain('owner,')
+})
+
+
+test('cold readers defer syntax while retaining word changes, and color output escapes source text', () => {
+  const patch = '@@ -1 +1 @@\n-const deferredReaderValue = "<before>";\n+const deferredReaderValue = "<after>";\n'
+  const file = { path: 'deferred-reader.ts', status: 'M' }
+  const props = { repo: '/repo', name: 'repo', scope: '', result: {
+    refs: [], base: 'HEAD', target: 'worktree', files: [file], selected: file, patch,
+  } }
+  const plain = (<CompareReader {...props} />).toString()
+  expect(plain).toContain('data-color-pending="true"')
+  expect(plain).toContain('diff-word-chg')
+  expect(plain).not.toContain('style="color:')
+  const cells = compareColors(patch, file)
+  expect(cells.map(cell => cell.text)).toEqual([
+    'const deferredReaderValue = "<before>";', 'const deferredReaderValue = "<after>";',
+  ])
+  expect(cells[0]!.html).toContain('&lt;')
+  expect(cells[0]!.html).not.toContain('<before>')
+  expect(cells[1]!.html).toContain('diff-word-chg')
+  const warm = (<CompareReader {...props} />).toString()
+  expect(warm).not.toContain('data-color-pending')
+  expect(warm).toContain('style="color:')
+})
+
+
+test('history swap events without a request target leave reattachment to historyRestore', () => {
+  const controller = readerController(150)
+  expect(() => controller.events.get('htmx:beforeSwap')!({ detail: { elt: { id: 'body' } } })).not.toThrow()
+  expect(() => controller.events.get('htmx:afterSwap')!({ detail: { elt: { id: 'body' } } })).not.toThrow()
+  expect(controller.callbacks.size).toBe(0)
+  controller.events.get('htmx:historyRestore')!({ detail: {} })
+  expect(controller.callbacks.size).toBe(1)
 })

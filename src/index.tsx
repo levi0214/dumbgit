@@ -1,6 +1,6 @@
 /** @jsxImportSource hono/jsx */
 import { compare, comparisonRefs } from './compare'
-import { CompareReader, CompareView } from './views/compare'
+import { compareColors, CompareReader, CompareView } from './views/compare'
 import { Fragment } from 'hono/jsx'
 import { Hono, type Context, type Next } from 'hono'
 import { getCookie, setCookie } from 'hono/cookie'
@@ -487,6 +487,21 @@ app.get('/repo', async (c) => {
     </Layout>,
     200,
   )
+})
+
+app.get('/compare/colors', async (c) => {
+  c.header('Cache-Control', 'no-store')
+  const repo = resolveWorkspaceRepo(c.req.query('repo'))
+  if (!repo) return c.json([], 404)
+  try {
+    const result = await compare(repo, {
+      base: c.req.query('base'), target: c.req.query('target'),
+      scope: c.req.query('scope'), file: c.req.query('file'),
+    })
+    return c.json(result.selected ? compareColors(result.patch, result.selected) : [])
+  } catch {
+    return c.json([], 400)
+  }
 })
 
 app.get('/compare', async (c) => {
