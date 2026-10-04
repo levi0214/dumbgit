@@ -44,23 +44,18 @@ function highlightKey(lines: string[], path: string) {
   return { lang, code, key: lang + '\0' + code }
 }
 
-export function highlightReady(lines: string[], path: string) {
-  const input = highlightKey(lines, path)
-  return !input || cache.has(input.key)
-}
-
 /** Tokenize a complete side, so comments and strings keep their state across lines. */
-export function highlightLines(lines: string[], path: string, cachedOnly = false): SyntaxToken[][] | undefined {
+export function highlightLines(lines: string[], path: string, cachedOnly = false): { tokens?: SyntaxToken[][]; pending: boolean } {
   const input = highlightKey(lines, path)
-  if (!input) return
+  if (!input || !engine) return { pending: false }
   const { lang, code, key } = input
   const cached = cache.get(key)
   if (cached) {
     cache.delete(key)
     cache.set(key, cached)
-    return cached.tokens
+    return { tokens: cached.tokens, pending: false }
   }
-  if (cachedOnly || !engine) return
+  if (cachedOnly) return { pending: true }
   try {
     highlighter ??= createHighlighterCoreSync({
       themes: [monokai],
@@ -78,10 +73,10 @@ export function highlightLines(lines: string[], path: string, cachedOnly = false
       cachedTokens -= cache.get(oldest)!.count
       cache.delete(oldest)
     }
-    return entry.tokens
+    return { tokens: entry.tokens, pending: false }
   } catch {
     // A grammar failure must never prevent reading a diff.
-    return
+    return { pending: false }
   }
 }
 

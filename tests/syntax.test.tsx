@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { highlightLines, highlightReady, syntaxSpans } from '../src/views/syntax'
+import { highlightLines, syntaxSpans } from '../src/views/syntax'
 import { CompareView, compareColors } from '../src/views/compare'
 
 function render(patch: string, path = 'test.sol', oldPath?: string) {
@@ -16,25 +16,26 @@ const text = (html: string) => html.replace(/<[^>]*>/g, '')
 
 test('syntax cache reuses identical content and language, but refreshes changed content', () => {
   const lines = ['const syntaxCacheValue = "before";']
-  const first = highlightLines(lines, 'before.ts')!
-  expect(highlightLines(lines, 'other.mts')).toBe(first)
-  const changed = highlightLines(['const syntaxCacheValue = "after";'], 'before.ts')!
+  const first = highlightLines(lines, 'before.ts').tokens!
+  expect(highlightLines(lines, 'other.mts').tokens).toBe(first)
+  const changed = highlightLines(['const syntaxCacheValue = "after";'], 'before.ts').tokens!
   expect(changed).not.toBe(first)
   expect(changed[0]!.map(token => token.content).join('')).toBe('const syntaxCacheValue = "after";')
-  expect(highlightLines(lines, 'before.py')).not.toBe(first)
+  expect(highlightLines(lines, 'before.py').tokens).not.toBe(first)
 })
 
 test('syntax cache evicts old entries instead of retaining every visited file', () => {
   const lines = ['const evictedSyntaxValue = 0;']
-  const first = highlightLines(lines, 'cache.ts')!
+  const first = highlightLines(lines, 'cache.ts').tokens!
   for (let i = 0; i < 32; i++) highlightLines([`const cacheEntry${i} = ${i};`], 'cache.ts')
-  expect(highlightLines(lines, 'cache.ts')).not.toBe(first)
+  expect(highlightLines(lines, 'cache.ts').tokens).not.toBe(first)
 })
 
 test('selected grammars preserve source text, including empty lines and Unicode', () => {
   const lines = ['/* 中文 🐈 */', '', 'hello world', '']
   for (const extension of ['sol', 'ts', 'tsx', 'js', 'jsx', 'json', 'css', 'html', 'md', 'yaml', 'sh', 'py', 'rs', 'go', 'toml']) {
-    const tokens = highlightLines(lines, `a.${extension}`)
+    const { tokens, pending } = highlightLines(lines, `a.${extension}`)
+    expect(pending).toBe(false)
     expect(tokens).toBeDefined()
     expect(tokens!.map(line => line.map(token => token.content).join(''))).toEqual(lines)
   }
@@ -84,11 +85,11 @@ test('renames choose each side’s language; added and deleted files preserve al
 })
 
 test('unknown languages and expensive inputs fall back to the existing reader', () => {
-  expect(highlightLines(['address owner;'], 'a.unknown')).toBeUndefined()
-  expect(highlightLines(['x'.repeat(2001)], 'a.ts')).toBeUndefined()
-  expect(highlightLines(Array(2001).fill('const x = 1;'), 'a.ts')).toBeUndefined()
-  expect(highlightLines(Array(1000).fill('x'.repeat(101)), 'a.ts')).toBeUndefined()
-  expect(highlightLines(Array(1200).fill('const a = 1; const b = 2; const c = 3;'), 'a.ts')).toBeUndefined()
+  expect(highlightLines(['address owner;'], 'a.unknown')).toEqual({ pending: false })
+  expect(highlightLines(['x'.repeat(2001)], 'a.ts')).toEqual({ pending: false })
+  expect(highlightLines(Array(2001).fill('const x = 1;'), 'a.ts')).toEqual({ pending: false })
+  expect(highlightLines(Array(1000).fill('x'.repeat(101)), 'a.ts')).toEqual({ pending: false })
+  expect(highlightLines(Array(1200).fill('const a = 1; const b = 2; const c = 3;'), 'a.ts')).toEqual({ pending: false })
   const patch = '@@ -1,2001 +1,2001 @@\n' + ' address owner;\n'.repeat(2000) + '-address old;\n+address next;\n'
   const code = cells(render(patch))
   expect(code).toHaveLength(4002)
@@ -97,14 +98,16 @@ test('unknown languages and expensive inputs fall back to the existing reader', 
 })
 
 
-test('plain rendering checks syntax cache without tokenizing cold content', () => {
+test('plain rendering distinguishes pending syntax from ready tokens and plain fallbacks', () => {
   const lines = ['const deferredColorCacheProbe = "<unsafe>&";']
-  expect(highlightReady(lines, 'deferred.ts')).toBe(false)
-  expect(highlightLines(lines, 'deferred.ts', true)).toBeUndefined()
-  expect(highlightReady(lines, 'deferred.ts')).toBe(false)
-  const tokens = highlightLines(lines, 'deferred.ts')!
-  expect(highlightReady(lines, 'deferred.ts')).toBe(true)
-  expect(highlightLines(lines, 'deferred.ts', true)).toBe(tokens)
-  expect(highlightReady(lines, 'deferred.txt')).toBe(true)
-  expect(highlightReady(Array(2001).fill('x'), 'deferred.ts')).toBe(true)
+  expect(highlightLines(lines, 'deferred.ts', true)).toEqual({ pending: true })
+  expect(highlightLines(lines, 'deferred.ts', true)).toEqual({ pending: true })
+  const ready = highlightLines(lines, 'deferred.ts')
+  expect(ready.pending).toBe(false)
+  expect(ready.tokens).toBeDefined()
+  expect(highlightLines(lines, 'deferred.ts', true).tokens).toBe(ready.tokens)
+  expect(highlightLines(lines, 'deferred.txt', true)).toEqual({ pending: false })
+  expect(highlightLines(Array(2001).fill('x'), 'deferred.ts', true)).toEqual({ pending: false })
+  const expensive = Array(1200).fill('const a = 1; const b = 2; const c = 3;')
+  expect(highlightLines(expensive, 'deferred.ts', true)).toEqual({ pending: false, tokens: undefined })
 })

@@ -3,7 +3,7 @@ import type { JSX } from 'hono/jsx/jsx-runtime'
 import { raw } from 'hono/html'
 import type { CompareFile, CompareResult } from '../compare'
 import { parseDiff, type DiffRow } from './diff'
-import { highlightLines, highlightReady, syntaxSpans, type SyntaxToken } from './syntax'
+import { highlightLines, syntaxSpans, type SyntaxToken } from './syntax'
 
 type CodeRow = Extract<DiffRow, { kind: 'ctx' | 'add' | 'del' }>
 const MAX_DISPLAY_ROWS = 5000
@@ -51,9 +51,9 @@ function colorRows(rows: SplitRow[], file: CompareFile, cachedOnly: boolean) {
     const source = rows.filter(row => row[side])
     const lines = source.map(row => row[side]!.text)
     const path = side === 'left' ? file.oldPath ?? file.path : file.path
-    const tokens = highlightLines(lines, path, cachedOnly)
+    const { tokens, pending: sidePending } = highlightLines(lines, path, cachedOnly)
     if (tokens) source.forEach((row, i) => { row[side === 'left' ? 'leftSyntax' : 'rightSyntax'] = tokens[i] })
-    else if (!highlightReady(lines, path)) pending = true
+    if (sidePending) pending = true
   }
   return pending
 }
