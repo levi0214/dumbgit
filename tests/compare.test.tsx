@@ -11,6 +11,28 @@ function git(cwd: string, ...args: string[]) {
   if (p.exitCode) throw new Error(p.stderr.toString())
   return p.stdout.toString().trim()
 }
+test('HEAD-suffixed branches remain comparable while remote HEAD symbolic aliases are excluded', async () => {
+  const repo = mkdtempSync(path.join(os.tmpdir(), 'dg-compare-head-'))
+  try {
+    git(repo, 'init', '-b', 'main')
+    git(repo, 'config', 'user.name', 'Test')
+    git(repo, 'config', 'user.email', 'test@example.test')
+    git(repo, 'commit', '--allow-empty', '-m', 'test: base')
+    git(repo, 'switch', '-c', 'feature/HEAD')
+    git(repo, 'update-ref', 'refs/remotes/origin/feature/HEAD', 'HEAD')
+    git(repo, 'symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/feature/HEAD')
+    const refs = await comparisonRefs(repo)
+    expect(refs[0]).toEqual({ value: 'refs/heads/feature/HEAD', label: 'feature/HEAD', current: true })
+    expect(refs.some(ref => ref.value === 'refs/remotes/origin/feature/HEAD')).toBe(true)
+    expect(refs.some(ref => ref.value === 'refs/remotes/origin/HEAD')).toBe(false)
+    expect((await compare(repo, {})).target).toBe('refs/heads/feature/HEAD')
+    const result = await compare(repo, {
+      base: 'refs/heads/feature/HEAD', target: 'refs/remotes/origin/feature/HEAD',
+    })
+    expect(result.files).toEqual([])
+  } finally { rmSync(repo, { recursive: true, force: true }) }
+})
+
 test('direct branch and working tree comparisons, literal paths, rename and binary files', async () => {
   const repo = mkdtempSync(path.join(os.tmpdir(), 'dg-compare-'))
   try {

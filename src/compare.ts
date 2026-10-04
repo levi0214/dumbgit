@@ -25,11 +25,14 @@ async function git(cwd: string, args: string[]) {
 
 export async function comparisonRefs(cwd: string) {
   const [output, current] = await Promise.all([
-    git(cwd, ['for-each-ref', '--sort=refname', '--sort=-committerdate', '--format=%(refname)', 'refs/heads', 'refs/remotes']),
+    git(cwd, ['for-each-ref', '--sort=refname', '--sort=-committerdate', '--format=%(refname)%09%(symref)', 'refs/heads', 'refs/remotes']),
     spawnGit(['symbolic-ref', '-q', 'HEAD'], cwd),
   ])
   const currentRef = current.code === 0 ? current.stdout.trim() : 'HEAD'
-  const refs = output.trim().split('\n').filter(Boolean).filter(r => !r.endsWith('/HEAD'))
+  const refs = output.split('\n').filter(Boolean)
+    .map(line => line.split('\t'))
+    .filter(([ref, symref]) => !(ref!.startsWith('refs/remotes/') && ref!.endsWith('/HEAD') && symref))
+    .map(([ref]) => ref!)
     .map(value => ({ value, label: value.replace(/^refs\/(heads|remotes)\//, ''), current: value === currentRef }))
   refs.push({ value: 'HEAD', label: 'HEAD', current: currentRef === 'HEAD' })
   return refs.sort((a, b) => Number(b.current) - Number(a.current))
