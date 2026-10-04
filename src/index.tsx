@@ -1,5 +1,5 @@
 /** @jsxImportSource hono/jsx */
-import { compare, comparisonRefs } from './compare'
+import { compare, comparisonPatch, comparisonRefs } from './compare'
 import { compareColors, CompareReader, CompareView } from './views/compare'
 import { Fragment } from 'hono/jsx'
 import { Hono, type Context, type Next } from 'hono'
@@ -494,11 +494,9 @@ app.get('/compare/colors', async (c) => {
   const repo = resolveWorkspaceRepo(c.req.query('repo'))
   if (!repo) return c.json([], 404)
   try {
-    const result = await compare(repo, {
-      base: c.req.query('base'), target: c.req.query('target'),
-      scope: c.req.query('scope'), file: c.req.query('file'),
-    })
-    return c.json(result.selected ? compareColors(result.patch, result.selected) : [])
+    const file = { status: '', path: c.req.query('file') ?? '', oldPath: c.req.query('oldPath') }
+    const patch = await comparisonPatch(repo, c.req.query('base') ?? '', c.req.query('target') ?? '', file)
+    return c.json(compareColors(patch, file))
   } catch {
     return c.json([], 400)
   }

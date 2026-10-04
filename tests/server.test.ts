@@ -119,6 +119,17 @@ test('Workspace routes repository pages and guards git fragments', async () => {
     expect(await historyRestore.text()).toContain('compare-file-list')
     const readerError = await request(`${fileUrl}&base=--help`, { headers: readerHeaders })
     expect(await readerError.text()).toContain('role="alert">Unknown comparison branch')
+    const colorUrl = readerHtml.match(/data-color-url="([^"]+)"/)![1]!.replaceAll('&amp;', '&')
+    const colors = await request(colorUrl)
+    expect(colors.status).toBe(200)
+    const cells = await colors.json() as { text: string }[]
+    expect(cells.map(cell => cell.text)).toEqual(['example', 'changed for compare'])
+    expect((await request('/compare/colors?repo=/unknown')).status).toBe(404)
+    expect((await request(`/compare/colors?${query}&base=--help&target=worktree&file=README.md`)).status).toBe(400)
+    // Working-tree color reads remain fresh; the browser checks their text before applying.
+    writeFileSync(path.join(repo, 'README.md'), 'new working content\n')
+    const freshCells = await (await request(colorUrl)).json() as { text: string }[]
+    expect(freshCells[1]!.text).toBe('new working content')
     writeFileSync(path.join(repo, 'README.md'), 'example\n')
     const workspace = await request('/')
     expect(workspace.status).toBe(200)

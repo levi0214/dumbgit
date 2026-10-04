@@ -3,7 +3,7 @@ import { runInNewContext } from 'node:vm'
 import { mkdtempSync, mkdirSync, writeFileSync, renameSync, rmSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { compare, comparisonRefs } from '../src/compare'
+import { compare, comparisonPatch, comparisonRefs } from '../src/compare'
 import { CompareView, CompareReader, compareColors, splitRows } from '../src/views/compare'
 
 function git(cwd: string, ...args: string[]) {
@@ -68,6 +68,11 @@ test('direct branch and working tree comparisons, literal paths, rename and bina
     expect(r.files.find(f => f.path === 'binary')?.added).toBeUndefined()
     expect(r.files.some(f => f.path === 'tab\tline\n.txt')).toBe(true)
     expect(r.files.some(f => f.status === 'D')).toBe(true)
+    const renamed = r.files.find(f => f.path === 'renamed.txt')!
+    expect(await comparisonPatch(repo, r.versions!.base, r.versions!.target, renamed)).toContain('rename to renamed.txt')
+    expect(await comparisonPatch(repo, r.versions!.base, r.versions!.target, { path: 'contracts/[a].txt' })).toContain('+after')
+    await expect(comparisonPatch(repo, '--help', r.versions!.target, renamed)).rejects.toThrow('version')
+    await expect(comparisonPatch(repo, r.versions!.base, r.versions!.target, { path: '../outside' })).rejects.toThrow('relative')
     // A caller cannot corrupt the immutable comparison cached for later clicks.
     const repeated = await compare(repo, {})
     repeated.files[0]!.path = 'modified-by-caller'
@@ -102,6 +107,8 @@ test('direct branch and working tree comparisons, literal paths, rename and bina
     const direct = await compare(repo, { target: 'refs/heads/feature' })
     expect(direct.files.some(f => f.path === 'main-only' && f.status === 'D')).toBe(true)
     expect(git(repo, 'branch', '--show-current')).toBe('main')
+    // Color requests stay on the displayed commit pair after branch tips move.
+    expect(await comparisonPatch(repo, r.versions!.base, r.versions!.target, { path: 'main-only' })).toBe('')
     await expect(compare(repo, { base: '--help' })).rejects.toThrow('Unknown')
     await expect(compare(repo, { scope: '../' })).rejects.toThrow('relative')
   } finally { rmSync(repo, { recursive: true, force: true }) }

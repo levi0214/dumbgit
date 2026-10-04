@@ -12,6 +12,7 @@ export type CompareResult = {
   refs: { value: string; label: string; current?: boolean }[]
   base: string
   target: string
+  versions?: { base: string; target: string }
   files: CompareFile[]
   selected?: CompareFile
   patch: string
@@ -39,6 +40,21 @@ export async function comparisonRefs(cwd: string) {
 }
 
 const fileCache = new Map<string, CompareFile[]>()
+
+function diffArgs(base: string, target: string) {
+  return ['--literal-pathspecs', 'diff', '--no-ext-diff', '--no-textconv', '--no-color', '--find-renames', base, ...(target === 'worktree' ? [] : [target])]
+}
+
+/** Load only the selected file, using the commit IDs resolved for the reader. */
+export async function comparisonPatch(cwd: string, base: string, target: string, file: Pick<CompareFile, 'path' | 'oldPath'>) {
+  const oid = /^[a-f0-9]{40}(?:[a-f0-9]{24})?$/
+  if (!oid.test(base) || (target !== 'worktree' && !oid.test(target))) throw new Error('Invalid comparison version')
+  const paths = [...new Set([file.oldPath, file.path].filter((p): p is string => p !== undefined))]
+  if (!file.path || paths.some(p => !p || p.startsWith('/') || p.split('/').includes('..'))) throw new Error('Use a path relative to the repository')
+  const patch = await git(cwd, [...diffArgs(base, target), '--unified=1000000', '--', ...paths])
+  return patch.length > 2_000_000 || patch.split('\n').length > 20_000
+    ? 'This file is too large to display. Open this file in your editor or inspect it with git.' : patch
+}
 
 async function comparisonFiles(cwd: string, args: string[], paths: string[]) {
   const [nameOutput, statOutput] = await Promise.all([
@@ -93,7 +109,8 @@ export async function compare(cwd: string, options: { base?: string; target?: st
     return (await git(cwd, ['rev-parse', '--verify', '--end-of-options', `${ref}^{commit}`])).trim()
   }
   const [left, right] = await Promise.all([resolve(base), target === 'worktree' ? undefined : resolve(target)])
-  const args = ['--literal-pathspecs', 'diff', '--no-ext-diff', '--no-textconv', '--no-color', '--find-renames', left, ...(right ? [right] : [])]
+  const versions = { base: left, target: right ?? 'worktree' }
+  const args = diffArgs(versions.base, versions.target)
   const scope = options.scope ?? ''
   if (scope.startsWith('/') || scope.split('/').includes('..')) throw new Error('Use a path relative to the repository')
   const paths = scope ? [scope] : []
@@ -115,10 +132,6 @@ export async function compare(cwd: string, options: { base?: string; target?: st
   // Keep callers from mutating the cached snapshot.
   files = files.map(file => ({ ...file }))
   const selected = files.find(f => f.path === options.file) ?? files[0]
-  let patch = ''
-  if (selected) {
-    patch = await git(cwd, [...args, '--unified=1000000', '--', ...new Set([selected.oldPath, selected.path].filter((p): p is string => !!p))])
-    if (patch.length > 2_000_000 || patch.split('\n').length > 20_000) patch = 'This file is too large to display. Open this file in your editor or inspect it with git.'
-  }
-  return { refs, base, target, files, selected, patch }
+  const patch = selected ? await comparisonPatch(cwd, versions.base, versions.target, selected) : ''
+  return { refs, base, target, versions, files, selected, patch }
 }

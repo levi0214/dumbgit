@@ -416,7 +416,7 @@ export function CompareReader(props: CompareViewProps) {
   }
   return (
     <section id="compare-reader" class="compare-reader" data-file={r?.selected?.path}
-      data-color-url={r?.selected ? '/compare/colors?' + new URLSearchParams({ repo: props.repo, base: r.base, target: r.target, scope: props.scope, file: r.selected.path }) : undefined}>
+      data-color-url={r?.selected && r.versions ? '/compare/colors?' + new URLSearchParams({ repo: props.repo, ...r.versions, file: r.selected.path, ...(r.selected.oldPath ? { oldPath: r.selected.oldPath } : {}) }) : undefined}>
       <div class="compare-row compare-labels">
         <label><select name="base" aria-label="Base version">{branchOptions(r?.base)}</select></label>
         <label><select name="target" aria-label="Target version" title="Working tree includes staged and unstaged tracked changes; untracked files are excluded.">{branchOptions(r?.target, true)}</select></label>
