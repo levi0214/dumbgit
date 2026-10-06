@@ -67,7 +67,8 @@ const CSS = `
 .compare-marker-del { left: 0; background: var(--error); }
 .compare-marker-add { right: 0; background: var(--success); }
 .compare-marker:hover, .compare-marker:focus-visible { outline: 1px solid var(--fg); z-index: 1; }
-.compare-scroll { overflow: auto; flex: 1; min-height: 0; scroll-padding: 20px; }
+.compare-scroll { overflow: auto; flex: 1; min-height: 0; scroll-padding: 20px; scrollbar-width: none; }
+.compare-scroll::-webkit-scrollbar { display: none; }
 .compare-code { display: flex; min-width: 0; padding-right: 12px; line-height: 21px; min-height: 21px; }
 .compare-code:first-child, .compare-labels label:first-child { border-right: 1px solid var(--border); }
 .compare-text { flex: 1; min-width: 0; overflow: hidden; }
