@@ -313,10 +313,22 @@ const COMPARE_SCRIPT = `
     }
   });
   document.addEventListener('click', function(e) {
+    var overview = e.target.closest('.compare-overview');
+    if (!overview || !scroll) return;
     var button = e.target.closest('[data-compare-change]');
-    if (!button) return;
-    var target = document.getElementById(button.getAttribute('aria-controls'));
-    if (target) target.scrollIntoView({ block: 'center' });
+    // Keyboard activation keeps change navigation; pointer clicks map to the document.
+    if (e.detail === 0) {
+      if (button) {
+        var target = document.getElementById(button.getAttribute('aria-controls'));
+        if (target) target.scrollIntoView({ block: 'center' });
+      }
+      return;
+    }
+    var rect = overview.getBoundingClientRect();
+    if (!rect.height) return;
+    var position = (e.clientY - rect.top) / rect.height;
+    scroll.scrollTop = Math.max(0, Math.min(scroll.scrollHeight - scroll.clientHeight,
+      position * scroll.scrollHeight - scroll.clientHeight / 2));
   });
   document.addEventListener('wheel', function(e) {
     var cell = e.target.closest('.compare-code');

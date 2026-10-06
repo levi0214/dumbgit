@@ -350,6 +350,7 @@ function readerController(firstTop: number, navigationType = 'navigate', savedTo
     onscroll: () => {},
   }))
   const cleanup = { removed: false, disconnected: false }
+  const jumps: unknown[] = []
   const content = {
     dataset: deferredColors ? { colorPending: 'true' } as Record<string, string> : {} as Record<string, string>,
     remove() { cleanup.removed = true },
@@ -362,6 +363,7 @@ function readerController(firstTop: number, navigationType = 'navigate', savedTo
     style: { setProperty(name: string, value: string) { offsets[name] = value } },
   }
   const first = {
+    scrollIntoView: (options: unknown) => jumps.push(options),
     scrollWidth: 900,
     getBoundingClientRect: () => ({ top: firstTop - scroll.scrollTop, height: 21, width: 40 }),
     querySelector: () => ({ getBoundingClientRect: () => ({ width: 40 }) }),
@@ -378,6 +380,7 @@ function readerController(firstTop: number, navigationType = 'navigate', savedTo
   runInNewContext(script, {
     window: { addEventListener() {}, getSelection: () => selection }, location: { href: 'http://local/compare' },
     document: {
+      getElementById: (id: string) => id === 'compare-change-0' ? first : null,
       addEventListener: (name: string, callback: (event: any) => void) => events.set(name, callback),
       querySelector: (selector: string) => selector === '.compare-scroll' ? scroll : selector === '.compare-viewport' ? { style: {} } : selector === '#compare-reader' ? reader : { value: '' },
       querySelectorAll: () => [],
@@ -400,7 +403,7 @@ function readerController(firstTop: number, navigationType = 'navigate', savedTo
   paint()
   return {
     scroll, reader, events, paint, bars, offsets, get codes() { return codes }, scrollEvents, callbacks, cleanup,
-    content, requests, selection, timers,
+    content, requests, selection, timers, jumps,
     setClockStep(step: number) { clockStep = step },
     switchFile() {
       events.get('htmx:beforeCleanupElement')!({ detail: { elt: reader } })
@@ -551,6 +554,34 @@ test('first change stays at the top when already visible, otherwise opens with t
   expect(readerController(150).scroll.scrollTop).toBe(0)
   const distant = readerController(1000)
   expect(distant.scroll.scrollTop).toBe(937)
+})
+
+test('overview pointer clicks map blank space and markers to document positions, clamped at both ends', () => {
+  const controller = readerController(150)
+  const overview = { getBoundingClientRect: () => ({ top: 100, height: 400 }) }
+  const marker = { getAttribute: () => 'compare-change-0' }
+  for (const button of [null, marker]) {
+    const target = { closest: (selector: string) => selector === '.compare-overview' ? overview : button }
+    for (const [clientY, expected] of [[100, 0], [200, 350], [300, 850], [400, 1350], [500, 1700]]) {
+      controller.events.get('click')!({ target, clientY, detail: 1 })
+      expect(controller.scroll.scrollTop).toBe(expected)
+    }
+  }
+  expect(controller.jumps).toEqual([])
+  controller.scroll.scrollHeight = 300
+  controller.events.get('click')!({ target: { closest: () => overview }, clientY: 300, detail: 1 })
+  expect(controller.scroll.scrollTop).toBe(0)
+})
+
+test('overview keyboard activation still jumps to the selected change', () => {
+  const controller = readerController(150)
+  const marker = { getAttribute: () => 'compare-change-0' }
+  controller.events.get('click')!({
+    target: { closest: (selector: string) => selector === '.compare-overview' ? {} : marker }, detail: 0,
+  })
+  expect(controller.jumps).toEqual([{ block: 'center' }])
+  controller.events.get('click')!({ target: { closest: () => null }, detail: 1 })
+  expect(controller.jumps).toHaveLength(1)
 })
 
 test('manual refresh and browser reload retain reading position, file switches reveal the first change', () => {

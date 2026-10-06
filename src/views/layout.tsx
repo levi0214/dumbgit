@@ -60,7 +60,7 @@ const CSS = `
 .compare-labels option { background: var(--bg); color: var(--fg); }
 .compare-document { display: flex; flex: 1; min-height: 0; }
 .compare-document .compare-scroll { min-width: 0; }
-.compare-overview { position: relative; isolation: isolate; flex: 0 0 20px; background: #252526; border-left: 1px solid var(--border); overflow: hidden; }
+.compare-overview { position: relative; isolation: isolate; flex: 0 0 20px; background: #252526; border-left: 1px solid var(--border); overflow: hidden; cursor: pointer; }
 .compare-viewport { position: absolute; z-index: 2; left: 0; right: 0; background: #ffffff1a; box-shadow: inset 0 0 0 1px #ffffff4d, inset 0 0 0 2px #00000026; pointer-events: none; }
 .compare-page .compare-marker { position: absolute; left: 2px; right: 2px; min-height: 4px; padding: 0; border: 0; border-radius: 0; background: transparent; display: flex; }
 .compare-marker span { position: absolute; width: 50%; min-height: 4px; pointer-events: none; }
