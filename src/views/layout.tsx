@@ -60,8 +60,8 @@ const CSS = `
 .compare-labels option { background: var(--bg); color: var(--fg); }
 .compare-document { display: flex; flex: 1; min-height: 0; }
 .compare-document .compare-scroll { min-width: 0; }
-.compare-overview { position: relative; flex: 0 0 20px; background: #252526; border-left: 1px solid var(--border); overflow: hidden; }
-.compare-viewport { position: absolute; left: 0; right: 0; background: #ffffff0c; border-block: 1px solid #ffffff35; pointer-events: none; }
+.compare-overview { position: relative; isolation: isolate; flex: 0 0 20px; background: #252526; border-left: 1px solid var(--border); overflow: hidden; }
+.compare-viewport { position: absolute; z-index: 2; left: 0; right: 0; background: #569cd633; box-shadow: inset 0 0 0 1px #9cdcfe99; pointer-events: none; }
 .compare-page .compare-marker { position: absolute; left: 2px; right: 2px; min-height: 4px; padding: 0; border: 0; border-radius: 0; background: transparent; display: flex; }
 .compare-marker span { position: absolute; width: 50%; min-height: 4px; pointer-events: none; }
 .compare-marker-del { left: 0; background: var(--error); }
