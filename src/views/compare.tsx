@@ -93,13 +93,25 @@ function SplitDiff({ patch, file }: { patch: string; file: CompareFile }) {
     const deleted = group.some(row => row.left?.kind === 'del')
     const added = group.some(row => row.right?.kind === 'add')
     const label = `${deleted && added ? 'Modified' : deleted ? 'Deleted' : 'Added'} lines · change ${index + 1}`
+    // Map each side's occupied runs, leaving alignment padding uncolored.
+    const segments = (['left', 'right'] as const).flatMap(side => {
+      const kind = side === 'left' ? 'del' : 'add'
+      const spans = []
+      for (let j = 0; j < group.length;) {
+        if (group[j]![side]?.kind !== kind) { j++; continue }
+        const start = j++
+        while (j < group.length && group[j]![side]?.kind === kind) j++
+        spans.push(<span class={`compare-marker-${kind}`}
+          style={`top:min(${start / group.length * 100}%, calc(100% - 4px));height:${(j - start) / group.length * 100}%`} />)
+      }
+      return spans
+    })
     blocks.push(<div id={id} class="compare-change">{group.map(row => <Row row={row} />)}</div>)
     markers.push(
       <button type="button" class="compare-marker" data-compare-change={index}
         style={`top:min(${start / rows.length * 100}%, calc(100% - 4px));height:${group.length / rows.length * 100}%`}
         title={label} aria-label={label} aria-controls={id}>
-        <span class={deleted ? 'compare-marker-del' : ''} />
-        <span class={added ? 'compare-marker-add' : ''} />
+        {segments}
       </button>,
     )
   }

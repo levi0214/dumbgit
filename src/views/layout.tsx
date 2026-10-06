@@ -63,9 +63,9 @@ const CSS = `
 .compare-overview { position: relative; flex: 0 0 20px; background: #252526; border-left: 1px solid var(--border); overflow: hidden; }
 .compare-viewport { position: absolute; left: 0; right: 0; background: #ffffff0c; border-block: 1px solid #ffffff35; pointer-events: none; }
 .compare-page .compare-marker { position: absolute; left: 2px; right: 2px; min-height: 4px; padding: 0; border: 0; border-radius: 0; background: transparent; display: flex; }
-.compare-marker span { flex: 1; pointer-events: none; }
-.compare-marker-del { background: var(--error); }
-.compare-marker-add { background: var(--success); }
+.compare-marker span { position: absolute; width: 50%; min-height: 4px; pointer-events: none; }
+.compare-marker-del { left: 0; background: var(--error); }
+.compare-marker-add { right: 0; background: var(--success); }
 .compare-marker:hover, .compare-marker:focus-visible { outline: 1px solid var(--fg); z-index: 1; }
 .compare-scroll { overflow: auto; flex: 1; min-height: 0; scroll-padding: 20px; }
 .compare-code { display: flex; min-width: 0; padding-right: 12px; line-height: 21px; min-height: 21px; }

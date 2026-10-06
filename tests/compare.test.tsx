@@ -253,6 +253,31 @@ test('overview groups changes, distinguishes additions and deletions, and target
   expect(html).toContain('class="compare-viewport"')
 })
 
+test('overview sizes deletion and addition runs independently for unequal replacements', () => {
+  for (const [deleted, added] of [[1, 100], [100, 1]]) {
+    const html = renderPatch(`@@ -1,${deleted} +1,${added} @@\n` + '-old\n'.repeat(deleted) + '+new\n'.repeat(added))
+    expect(html.match(/class="compare-marker"/g)).toHaveLength(1)
+    expect(html).toContain(`class="compare-marker-del" style="top:min(0%, calc(100% - 4px));height:${deleted}%"`)
+    expect(html).toContain(`class="compare-marker-add" style="top:min(0%, calc(100% - 4px));height:${added}%"`)
+  }
+})
+
+test('overview leaves gaps where matching lines introduce alignment padding', () => {
+  const html = renderPatch([
+    '@@ -1,2 +1,4 @@',
+    '-const first = 1;',
+    '-const second = 2;',
+    '+const first = 10;',
+    '+inserted();',
+    '+another();',
+    '+const second = 20;',
+  ].join('\n'))
+  expect(html.match(/class="compare-marker-del"/g)).toHaveLength(2)
+  expect(html).toContain('class="compare-marker-del" style="top:min(0%, calc(100% - 4px));height:25%"')
+  expect(html).toContain('class="compare-marker-del" style="top:min(75%, calc(100% - 4px));height:25%"')
+  expect(html).toContain('class="compare-marker-add" style="top:min(0%, calc(100% - 4px));height:100%"')
+})
+
 test('large diffs remain selectable without rendering thousands of code rows', () => {
   const patch = '@@ -1,5001 +1,5001 @@\n' + ' unchanged\n'.repeat(5000) + '-old\n+new\n'
   const html = renderPatch(patch)
