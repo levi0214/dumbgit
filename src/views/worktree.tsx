@@ -183,7 +183,7 @@ function Section(props: {
                 data-kind={kind}
                 data-path={e.path}
               >
-                <span class={`wt-mark file-${e.mark[0] ?? '_'}`}>{e.mark}</span>
+                <span class={`wt-mark file-${e.mark[0] ?? '_'}`}>{e.mark.startsWith('R') ? 'R' : e.mark}</span>
                 <span class="wt-path">{e.path}</span>
                 <WorkTreeNums entry={e} kind={kind} />
               </button>

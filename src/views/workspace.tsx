@@ -468,7 +468,7 @@ function WorkspaceWorktreeFile(props: {
         <span
           class={`file-status file-${props.entry.mark[0] ?? '_'}`}
         >
-          {props.entry.mark}
+          {props.entry.mark.startsWith('R') ? 'R' : props.entry.mark}
         </span>
         <span class="file-path">{props.entry.path}</span>
         <WorkspaceFileNums file={props.entry} />

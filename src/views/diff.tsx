@@ -580,7 +580,7 @@ export function DiffPanel(props: DiffPanelProps) {
                     hx-swap="innerHTML"
                   >
                     <span class={`file-status file-${f.status[0] ?? '_'}`}>
-                      {f.status}
+                      {f.status.startsWith('R') ? 'R' : f.status}
                     </span>
                     <span class="file-path">{f.path}</span>
                     <FileNums file={f} />
