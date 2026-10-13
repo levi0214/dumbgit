@@ -634,7 +634,8 @@ export async function commitFilePatch(
     if (!summary.ok) return summary
     files = summary.value.files
   }
-  if (!files.some((f) => f.path === displayPath)) {
+  const file = files.find((f) => f.path === displayPath)
+  if (!file) {
     return {
       ok: false,
       stderr: 'path not in commit file list',
@@ -644,10 +645,11 @@ export async function commitFilePatch(
   const raw = gitDiffPath(displayPath)
   if (!raw) return { ok: false, stderr: 'invalid path' }
 
-  const deleted = files.find((f) => f.path === displayPath)?.status === 'D'
+  const deleted = file.status === 'D'
   const image = await imagePreview(raw, [deleted ? `${sha}^1` : sha], cwd, deleted)
   if (image) return { ok: true, patch: '', image }
 
+  const paths = file.status.startsWith('R') ? displayPath.split(' → ') : [raw]
   const patch = await spawnGit([
     'show',
     '--format=',
@@ -655,7 +657,7 @@ export async function commitFilePatch(
     '--end-of-options',
     sha,
     '--',
-    raw,
+    ...paths.map((p) => `:(literal)${p}`),
   ], cwd)
   if (patch.code !== 0) {
     return {
@@ -977,7 +979,7 @@ export async function workTreeSummary(cwd = repoRoot): Promise<WorkTreeSummary> 
 export type WorkTreeChangeKind = 'staged' | 'unstaged' | 'untracked'
 export type WorkTreeActionOp = 'stage' | 'unstage' | 'discard'
 
-/** Right-hand side path used by git diff after an `R*` rename (`old → new` → `new`). */
+/** Current path after an `R*` rename (`old → new` → `new`). */
 function gitDiffPath(displayPath: string): string {
   const parts = displayPath
     .split(' → ')
@@ -1009,7 +1011,8 @@ export async function workTreeFilePatch(
   const wt = await workTreeSummary(cwd)
   const bucket =
     kind === 'staged' ? wt.staged : kind === 'unstaged' ? wt.unstaged : wt.untracked
-  if (!bucket.some((e) => e.path === displayPath)) {
+  const entry = bucket.find((e) => e.path === displayPath)
+  if (!entry) {
     return {
       ok: false,
       stderr: 'path not in current working tree list (try refreshing)',
@@ -1022,7 +1025,7 @@ export async function workTreeFilePatch(
   const rel = await strictRepoRelative(raw, cwd)
   if (!rel) return { ok: false, stderr: 'invalid path' }
 
-  const deleted = bucket.find((e) => e.path === displayPath)?.mark === 'D'
+  const deleted = entry.mark === 'D'
   const refs = kind === 'staged' ? [deleted ? 'HEAD' : ''] : deleted ? [''] : null
   const image = await imagePreview(rel, refs, cwd, deleted)
   if (image) return { ok: true, patch: '', image }
@@ -1056,10 +1059,13 @@ export async function workTreeFilePatch(
     return { ok: true, patch: stdoutTrim }
   }
 
+  // Keep both rename paths so Git compares their contents instead of showing an addition.
+  const paths = entry.mark.startsWith('R') ? displayPath.split(' → ') : [rel]
+  const pathspecs = paths.map((p) => `:(literal)${p}`)
   const args =
     kind === 'staged'
-      ? (['diff', '--cached', '--no-color', '--', rel] as const)
-      : (['diff', '--no-color', '--', rel] as const)
+      ? ['diff', '--cached', '--no-color', '--', ...pathspecs]
+      : ['diff', '--no-color', '--', ...pathspecs]
 
   const r = await spawnGit([...args], cwd)
   if (!(r.code === 0 || r.code === 1)) {
