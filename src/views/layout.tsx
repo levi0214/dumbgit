@@ -196,7 +196,8 @@ body {
 }
 .main-grid {
   display: grid;
-  grid-template-columns: minmax(0, var(--graph-w, 60%)) 8px minmax(0, 1fr);
+  /* The 288px cap keeps the resizer and a 280px diff on narrow windows. */
+  grid-template-columns: minmax(0, min(var(--graph-w, 480px), calc(100% - 288px))) 8px minmax(0, 1fr);
   align-items: stretch;
   flex: 1;
   min-height: 0;
@@ -2216,40 +2217,28 @@ const SSE_SCRIPT = `
 
 const RESIZER_SCRIPT = `
 (function () {
-  var KEY = 'dumbgit:graph-w';
+  // Pixels, not a ratio: the graph needs a fixed width, so extra screen goes to the diff.
+  var KEY = 'dumbgit:graph-px';
   var MIN_GRAPH_PX = 320;
-  var MIN_DIFF_PX = 280;
-  var RESIZER_PX = 8;
-  var FALLBACK_MIN_PCT = 15;
-  var FALLBACK_MAX_PCT = 85;
-  function clampFallback(n) {
-    return Math.min(FALLBACK_MAX_PCT, Math.max(FALLBACK_MIN_PCT, n));
-  }
-  function clampPct(n) {
+  function clampPx(n) {
     if (!Number.isFinite(n)) return null;
-    var grid = document.querySelector('.main-grid');
-    if (!grid) return clampFallback(n);
-    var w = grid.getBoundingClientRect().width;
-    if (w <= 0) return clampFallback(n);
-    var minPct = (MIN_GRAPH_PX / w) * 100;
-    var maxPct = ((w - RESIZER_PX - MIN_DIFF_PX) / w) * 100;
-    if (minPct > maxPct) return clampFallback(n);
-    return Math.min(maxPct, Math.max(minPct, n));
+    // CSS caps the width so the diff keeps its minimum on narrow windows.
+    return Math.round(Math.max(MIN_GRAPH_PX, n));
   }
-  function applyPct(pct) {
+  function applyPx(px) {
     var grid = document.querySelector('.main-grid');
     if (!grid) return;
-    grid.style.setProperty('--graph-w', pct + '%');
+    grid.style.setProperty('--graph-w', px + 'px');
   }
-  function loadPct() {
+  function loadPx() {
     var raw = null;
     try { raw = localStorage.getItem(KEY); } catch (_) {}
     if (raw == null) return;
-    var n = clampPct(Number(raw));
-    if (n != null) applyPct(n);
+    var n = clampPx(Number(raw));
+    if (n != null) applyPx(n);
   }
-  function savePct(pct) {
-    try { localStorage.setItem(KEY, String(pct)); } catch (_) {}
+  function savePx(px) {
+    try { localStorage.setItem(KEY, String(px)); } catch (_) {}
   }
   function attach() {
     var resizer = document.querySelector('.main-resizer');
@@ -2268,17 +2257,17 @@ const RESIZER_SCRIPT = `
       if (!dragging) return;
       var rect = grid.getBoundingClientRect();
       if (rect.width <= 0) return;
-      var pct = clampPct(((e.clientX - rect.left) / rect.width) * 100);
-      if (pct != null) applyPct(pct);
+      var max = rect.width - 8 - 280;
+      var px = clampPx(Math.min(max, e.clientX - rect.left));
+      if (px != null) applyPx(px);
     });
     function endDrag() {
       if (!dragging) return;
       dragging = false;
       try { resizer.releasePointerCapture(pointerId); } catch (_) {}
       document.body.classList.remove('main-grid-dragging');
-      var raw = grid.style.getPropertyValue('--graph-w');
-      var n = parseFloat(raw);
-      if (Number.isFinite(n)) savePct(n);
+      var n = parseFloat(grid.style.getPropertyValue('--graph-w'));
+      if (Number.isFinite(n)) savePx(n);
     }
     resizer.addEventListener('pointerup', endDrag);
     resizer.addEventListener('pointercancel', endDrag);
@@ -2288,7 +2277,7 @@ const RESIZER_SCRIPT = `
       if (grid) grid.style.removeProperty('--graph-w');
     });
   }
-  loadPct();
+  loadPx();
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', attach);
   } else {
