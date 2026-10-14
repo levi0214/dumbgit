@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
 import { runInNewContext } from 'node:vm'
-import { mkdtempSync, mkdirSync, writeFileSync, renameSync, rmSync, symlinkSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, renameSync, rmSync, symlinkSync, utimesSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { compare, comparisonPatch, comparisonRefs } from '../src/compare'
@@ -98,6 +98,26 @@ test('direct branch and working tree comparisons, literal paths, rename and bina
     // Untracked files appear as additions; branch comparisons stay unaffected.
     expect((await compare(repo, { target: 'worktree' })).files.find(f => f.path === 'untracked')).toMatchObject({ status: 'A' })
     expect((await compare(repo, { target: 'HEAD' })).files.some(f => f.path === 'untracked')).toBe(false)
+    // An equal-length edit with an unchanged mtime stays visible when the comparison copies the index.
+    const racy = mkdtempSync(path.join(os.tmpdir(), 'dumbgit-racy-'))
+    try {
+      git(racy, 'init', '-b', 'main')
+      git(racy, 'config', 'core.trustctime', 'false')
+      git(racy, 'config', 'core.checkstat', 'minimal')
+      writeFileSync(path.join(racy, 'a'), 'before\n')
+      git(racy, 'add', 'a')
+      git(racy, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-m', 'init')
+      const then = new Date('2020-01-01T00:00:00Z')
+      utimesSync(path.join(racy, 'a'), then, then)
+      git(racy, 'update-index', '--refresh')
+      utimesSync(path.join(racy, '.git', 'index'), then, then)
+      writeFileSync(path.join(racy, 'a'), 'after!\n')
+      utimesSync(path.join(racy, 'a'), then, then)
+      writeFileSync(path.join(racy, 'b'), 'new\n')
+      expect((await compare(racy, { target: 'worktree' })).files.map(f => f.path)).toEqual(['a', 'b'])
+    } finally {
+      rmSync(racy, { recursive: true, force: true })
+    }
     expect((await compare(repo, { scope: 'missing/' })).files).toEqual([])
     expect((await compare(repo, { file: 'binary' })).patch).toContain('Binary files')
     // Advance main separately: comparison must use its tip, not the merge base.

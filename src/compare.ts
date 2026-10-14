@@ -1,4 +1,4 @@
-import { copyFile, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { copyFile, mkdtemp, rm, stat, utimes, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { spawnGit } from './git'
@@ -48,22 +48,31 @@ function diffArgs(base: string, target: string) {
   return ['--literal-pathspecs', 'diff', '--no-ext-diff', '--no-textconv', '--no-color', '--find-renames', base, ...(target === 'worktree' ? [] : [target])]
 }
 
-/** git diff skips untracked files, so mark them intent-to-add in a throwaway index; the real index is never touched. */
-async function diff(cwd: string, base: string, target: string, args: string[]) {
-  const full = [...diffArgs(base, target), ...args]
-  if (target !== 'worktree') return git(cwd, full)
+/**
+ * git diff skips untracked files, so a worktree comparison marks the untracked files under `paths`
+ * intent-to-add in a throwaway index; the real index is never touched.
+ */
+async function worktreeDiff<T>(cwd: string, target: string, paths: string[], run: (env?: Record<string, string>) => Promise<T>) {
+  if (target !== 'worktree') return run()
   // Nested repositories are listed as directories; adding them would record a gitlink.
-  const untracked = (await git(cwd, ['ls-files', '--others', '--exclude-standard', '-z'])).split('\0').filter(p => p && !p.endsWith('/'))
-  if (!untracked.length) return git(cwd, full)
+  const untracked = (await git(cwd, ['--literal-pathspecs', 'ls-files', '--others', '--exclude-standard', '-z', '--', ...paths]))
+    .split('\0').filter(p => p && !p.endsWith('/'))
+  if (!untracked.length) return run()
   const dir = await mkdtemp(path.join(os.tmpdir(), 'dumbgit-index-'))
   try {
     const env = { GIT_INDEX_FILE: path.join(dir, 'index') }
     const index = path.resolve(cwd, (await git(cwd, ['rev-parse', '--git-path', 'index'])).trim())
-    await copyFile(index, env.GIT_INDEX_FILE).catch(() => {}) // A repository with nothing staged yet has no index.
+    const original = await stat(index).catch(() => undefined) // A repository with nothing staged yet has no index.
+    if (original) {
+      await copyFile(index, env.GIT_INDEX_FILE)
+      // Git trusts cached stat data only for entries older than the index file. A fresh copy would make
+      // racily clean entries look trustworthy, so backdate it: those entries get their content rechecked.
+      await utimes(env.GIT_INDEX_FILE, original.atime, new Date(original.mtimeMs - 1000))
+    }
     // A file list avoids the argument length limit when agents create many files.
     await writeFile(path.join(dir, 'paths'), untracked.join('\0'))
     await git(cwd, ['--literal-pathspecs', 'add', '--intent-to-add', `--pathspec-from-file=${path.join(dir, 'paths')}`, '--pathspec-file-nul'], env)
-    return await git(cwd, full, env)
+    return await run(env)
   } finally {
     await rm(dir, { recursive: true, force: true })
   }
@@ -100,7 +109,8 @@ export async function comparisonPatch(cwd: string, base: string, target: string,
   if (!oid.test(base) || (target !== 'worktree' && !oid.test(target))) throw new Error('Invalid comparison version')
   const paths = [...new Set([file.oldPath, file.path].filter((p): p is string => p !== undefined))]
   if (!file.path || paths.some(p => !p || p.startsWith('/') || p.split('/').includes('..'))) throw new Error('Use a path relative to the repository')
-  const output = await diff(cwd, base, target, ['--raw', '-z', '--patch', '--submodule=short', '--unified=1000000', '--', ...paths])
+  const output = await worktreeDiff(cwd, target, paths, env =>
+    git(cwd, [...diffArgs(base, target), '--raw', '-z', '--patch', '--submodule=short', '--unified=1000000', '--', ...paths], env))
   // Literal pathspecs still recurse into directories when a file changes type.
   const patch = selectedPatch(output, file)
   return patch.length > 2_000_000 || patch.split('\n').length > 20_000
@@ -108,10 +118,11 @@ export async function comparisonPatch(cwd: string, base: string, target: string,
 }
 
 async function comparisonFiles(cwd: string, base: string, target: string, paths: string[]) {
-  const [nameOutput, statOutput] = await Promise.all([
-    diff(cwd, base, target, ['--name-status', '-z', '--', ...paths]),
-    diff(cwd, base, target, ['--numstat', '-z', '--', ...paths]),
-  ])
+  const args = diffArgs(base, target)
+  const [nameOutput, statOutput] = await worktreeDiff(cwd, target, paths, env => Promise.all([
+    git(cwd, [...args, '--name-status', '-z', '--', ...paths], env),
+    git(cwd, [...args, '--numstat', '-z', '--', ...paths], env),
+  ]))
   const names = nameOutput.split('\0')
   const files: CompareFile[] = []
   for (let i = 0; i < names.length && names[i];) {
