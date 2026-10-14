@@ -9,6 +9,7 @@ import type {
   WorkTreeChangeKind,
 } from '../git'
 import { CopyButton } from './copy'
+import { highlightLines, syntaxSpans, type SyntaxToken } from './syntax'
 
 const TAG_ICO = raw(
   `<svg class="tag-ico" xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>`,
@@ -250,19 +251,42 @@ export function parseDiff(text: string, preserveContext = false, maxAlignedRows 
   return rows
 }
 
-function DiffRowView({ row }: { row: DiffRow }) {
+type CodeRow = Extract<DiffRow, { kind: 'ctx' | 'add' | 'del' }>
+
+/** Highlight each side as one document so multi-line strings and comments keep their state. */
+function syntaxByRow(rows: DiffRow[], path: string): Map<DiffRow, SyntaxToken[]> {
+  const out = new Map<DiffRow, SyntaxToken[]>()
+  for (const side of ['del', 'add'] as const) {
+    const source = rows.filter((r): r is CodeRow => r.kind === 'ctx' || r.kind === side)
+    const { tokens } = highlightLines(source.map(r => r.text), path)
+    // Context lines take the new side's colors.
+    if (tokens) source.forEach((r, i) => { if (r.kind === side || side === 'add') out.set(r, tokens[i]!) })
+  }
+  return out
+}
+
+function CodeText({ row, syntax }: { row: CodeRow; syntax?: SyntaxToken[] }) {
+  if (syntax) {
+    return <>{syntaxSpans(syntax, row.word).map(s => s.changed && !/^\s+$/.test(s.text)
+      ? <span class="diff-word-chg">{s.text}</span>
+      : <span style={s.color ? `color:${s.color}` : undefined}>{s.text}</span>)}</>
+  }
+  if (!row.word) return <>{row.text}</>
+  return <>{row.word.map(w => w.chg && !/^\s+$/.test(w.t) ? <span class="diff-word-chg">{w.t}</span> : w.t)}</>
+}
+
+function DiffRowView({ row, syntax }: { row: DiffRow; syntax?: SyntaxToken[] }) {
   if (row.kind === 'hunk') {
+    // Line numbers already locate the hunk; show only the enclosing section as a quiet divider.
+    if (row.first && !row.text) return null
     return (
       <div
         class={`diff-row diff-row-hunk${row.first ? ' diff-hunk-first' : ''}`}
-        id={`diff-hunk-${row.n}`}
+        title={row.range ? `@@ ${row.range} @@` : undefined}
       >
         <span class="diff-ln diff-ln-old" />
         <span class="diff-ln diff-ln-new" />
-        <span class="diff-ln-text">
-          {row.range ? <span class="diff-hunk-range">@@ {row.range} @@</span> : null}
-          {row.text ? <span class="diff-hunk-ctx"> {row.text}</span> : null}
-        </span>
+        <span class="diff-ln-text">{row.text || '⋯'}</span>
       </div>
     )
   }
@@ -279,17 +303,7 @@ function DiffRowView({ row }: { row: DiffRow }) {
     <div class={`diff-row diff-row-${row.kind}`}>
       <span class="diff-ln diff-ln-old">{row.kind === 'add' ? '' : (row.oldNo ?? '')}</span>
       <span class="diff-ln diff-ln-new">{row.kind === 'del' ? '' : (row.newNo ?? '')}</span>
-      <span class="diff-ln-text">
-        {row.word
-          ? row.word.map((w, j) =>
-              w.chg && !/^\s+$/.test(w.t) ? (
-                <span key={j} class="diff-word-chg">{w.t}</span>
-              ) : (
-                w.t
-              ),
-            )
-          : row.text}
-      </span>
+      <span class="diff-ln-text"><CodeText row={row} syntax={syntax} /></span>
     </div>
   )
 }
@@ -373,7 +387,7 @@ function DiffTag(props: { tag: TagInfo }) {
 }
 
 /** Unified diff body: line numbers plus word-level highlights on changed lines. */
-export function DiffPatchBody(props: { text: string; image?: ImagePreview }) {
+export function DiffPatchBody(props: { text: string; path?: string; image?: ImagePreview }) {
   if (props.image) {
     return <div class="image-preview">
       {props.image.previous ? <div class="image-preview-note">Deleted image · previous version</div> : null}
@@ -391,28 +405,14 @@ export function DiffPatchBody(props: { text: string; image?: ImagePreview }) {
   if (rows.length === 0) {
     return <pre class="diff-body diff-patch-empty">(no diff)</pre>
   }
-  const hunks = rows.filter(
-    (r): r is Extract<DiffRow, { kind: 'hunk' }> => r.kind === 'hunk',
-  )
+  const syntax = props.path ? syntaxByRow(rows, props.path) : undefined
   return (
     <div class="diff-body diff-patch-pre">
-      {hunks.length > 1 ? (
-        <div class="diff-hunk-nav" aria-label="jump to hunk">
-          {hunks.map((h) => (
-            <button
-              type="button"
-              class="diff-hunk-jump"
-              data-hunk={h.n}
-              title={`@@ ${h.range} @@${h.text ? ` ${h.text}` : ''}`}
-            >
-              {h.range}
-            </button>
-          ))}
-        </div>
-      ) : null}
-      {rows.map((row, i) => (
-        <DiffRowView key={i} row={row} />
-      ))}
+      <div class="diff-lines">
+        {rows.map((row, i) => (
+          <DiffRowView key={i} row={row} syntax={syntax?.get(row)} />
+        ))}
+      </div>
     </div>
   )
 }
@@ -499,7 +499,7 @@ export function WorkTreeDiffPanel(props: WorkTreeDiffPanelProps) {
       </div>
       <div id="diff-patch-slot" class="diff-patch-slot diff-patch-slot-inline">
         {patch || props.image ? (
-          <DiffPatchBody text={props.patch} image={props.image} />
+          <DiffPatchBody text={props.patch} path={props.displayPath} image={props.image} />
         ) : (
           <pre class="diff-body diff-patch-empty">(no diff)</pre>
         )}

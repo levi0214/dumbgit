@@ -1123,99 +1123,44 @@ body.main-grid-dragging {
   white-space: nowrap;
   min-width: 0;
 }
+/* Same palette as compare: syntax colors on muted row backgrounds; lines never wrap. */
+.diff-lines {
+  width: max-content;
+  min-width: 100%;
+  line-height: 20px;
+}
 .diff-row {
   display: grid;
   grid-template-columns: calc(4ch + 8px) calc(4ch + 8px) minmax(0, 1fr);
-  align-items: baseline;
+  background: #1f1f1f;
 }
 .diff-ln {
-  overflow: hidden;
+  position: sticky;
+  background: inherit;
   text-align: right;
   padding-right: 8px;
-  color: #6b6b6b;
+  color: var(--muted);
   font-size: 10px;
   user-select: none;
 }
+.diff-ln-old { left: 0; }
+.diff-ln-new { left: calc(4ch + 8px); }
 .diff-ln-text {
-  min-width: 0;
-  padding-left: 8px;
-  white-space: pre-wrap;
-  /* wrap at spaces; only break inside a token when it alone exceeds the line, so word-diff chips stay whole */
-  overflow-wrap: break-word;
+  padding: 0 12px 0 8px;
+  white-space: pre;
 }
-.diff-row-ctx .diff-ln-text {
-  color: #808080;
-}
-.diff-row-add {
-  color: var(--success);
-}
-.diff-row-add .diff-ln-new {
-  color: var(--success);
-}
-.diff-row-del {
-  color: var(--error);
-}
-.diff-row-del .diff-ln-old {
-  color: var(--error);
-}
-/* Changed words render as an "inverse" chip: solid line-color background with dark text (mirrors pi's terminal diff). */
-.diff-row-add .diff-word-chg {
-  background: var(--success);
-  color: #1e1e1e;
-}
-.diff-row-del .diff-word-chg {
-  background: var(--error);
-  color: #1e1e1e;
-}
+.diff-row-add { background: #24392a; }
+.diff-row-del { background: #402626; }
+.diff-word-chg { color: #f5f5f5; }
+.diff-row-add .diff-word-chg { background: #386344; }
+.diff-row-del .diff-word-chg { background: #743535; }
 .diff-row-hunk {
-  margin-top: 12px;
-  padding-top: 8px;
-  border-top: 1px dashed rgba(255, 255, 255, 0.1);
-}
-.diff-row-hunk.diff-hunk-first {
-  margin-top: 0;
-  padding-top: 0;
-  border-top: none;
-}
-.diff-hunk-nav {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  padding: 2px 0 10px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  margin-bottom: 4px;
-}
-.diff-hunk-jump {
-  font: inherit;
-  font-size: 10px;
+  margin-top: 8px;
   color: var(--muted);
-  background: #2d2d2d;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 2px 7px;
-  cursor: pointer;
-  font-variant-numeric: tabular-nums;
+  background: #252526;
 }
-.diff-hunk-jump:hover {
-  color: var(--accent);
-  border-color: var(--accent);
-  background: rgba(86, 156, 214, 0.12);
-}
-.diff-hunk-jump:focus-visible {
-  outline: 1px solid var(--accent);
-  outline-offset: 1px;
-}
-.diff-hunk-range {
-  color: var(--muted);
-  font-style: italic;
-}
-.diff-hunk-ctx {
-  color: var(--accent);
-  font-weight: 600;
-}
-.diff-row-meta {
-  color: var(--muted);
-}
+.diff-row-hunk.diff-hunk-first { margin-top: 0; }
+.diff-row-meta { color: var(--muted); }
 .diff-files-block {
   border-bottom: 1px solid var(--border);
   outline: none;
@@ -1284,7 +1229,9 @@ body.main-grid-dragging {
   padding: 0 !important;
   flex: 0 0 auto;
   min-height: 0;
-  overflow: visible !important;
+  overflow-x: auto !important;
+  overscroll-behavior-x: contain;
+  white-space: normal;
 }
 .diff-patch-error {
   color: var(--error) !important;
@@ -2484,21 +2431,6 @@ const WORKSPACE_REORDER_SCRIPT = `
     });
   });
 })();
-` +
-  `
-document.addEventListener('click', function (e) {
-  var btn = e.target && e.target.closest && e.target.closest('.diff-hunk-jump');
-  if (!btn) return;
-  e.preventDefault();
-  var row = document.getElementById('diff-hunk-' + (btn.dataset && btn.dataset.hunk));
-  if (!row) return;
-  var reduceMotion = window.matchMedia &&
-    window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  row.scrollIntoView({
-    behavior: reduceMotion ? 'auto' : 'smooth',
-    block: 'start',
-  });
-});
 `
 
 export function Layout(props: {

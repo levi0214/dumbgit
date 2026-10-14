@@ -563,9 +563,9 @@ export function WorkspaceWorktreeInspector(props: {
   )
 }
 
-export function WorkspacePatch(props: { patch: string; image?: ImagePreview }) {
+export function WorkspacePatch(props: { patch: string; path?: string; image?: ImagePreview }) {
   if (!props.patch.trim() && !props.image) {
     return <pre class="diff-body diff-patch-empty">(no diff)</pre>
   }
-  return <DiffPatchBody text={props.patch} image={props.image} />
+  return <DiffPatchBody text={props.patch} path={props.path} image={props.image} />
 }

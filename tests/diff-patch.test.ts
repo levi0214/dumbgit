@@ -158,11 +158,8 @@ describe('parseDiff', () => {
 })
 
 describe('DiffPatchBody render', () => {
-  test('renders gutters, hunk ranges, and word highlights', () => {
+  test('renders gutters and word highlights', () => {
     const html = renderToString(DiffPatchBody({ text: patch }))
-    expect(html).toContain('diff-row diff-row-hunk')
-    expect(html).toContain('diff-hunk-range')
-    expect(html).toContain('@@ -1,4 +1,4 @@')
     expect(html).toContain('diff-row diff-row-add')
     expect(html).toContain('diff-word-chg')
     expect(html).not.toContain('diff-word-same')
@@ -180,7 +177,7 @@ describe('DiffPatchBody render', () => {
     expect(html).toContain('diff-patch-empty')
   })
 
-  test('renders a jump bar for multi-hunk patches and ids hunk rows', () => {
+  test('renders later hunks as quiet dividers with the range in the tooltip', () => {
     const multiHunk = [
       '@@ -1,4 +1,4 @@',
       ' one',
@@ -192,12 +189,19 @@ describe('DiffPatchBody render', () => {
       '+six',
     ].join('\n')
     const html = renderToString(DiffPatchBody({ text: multiHunk }))
-    expect(html).toContain('class="diff-hunk-nav"')
-    expect(html).toContain('data-hunk="0"')
-    expect(html).toContain('data-hunk="1"')
-    expect(html).toContain('id="diff-hunk-0"')
-    expect(html).toContain('id="diff-hunk-1"')
-    expect(html).toContain('-1,4 +1,4')
-    expect(html).toContain('-20,3 +21,3')
+    expect(html).not.toContain('diff-hunk-nav')
+    // The first hunk has no section text, so it adds no divider.
+    expect(html.match(/diff-row-hunk/g)).toHaveLength(1)
+    expect(html).toContain('title="@@ -20,3 +21,3 @@"')
+    expect(html).toContain('<span class="diff-ln-text">ctx</span>')
+  })
+
+  test('colors code by file type and keeps word highlights', () => {
+    const html = renderToString(DiffPatchBody({
+      text: '@@ -1 +1 @@\n-const a = 1\n+const a = 2\n',
+      path: 'src/a.ts',
+    }))
+    expect(html).toMatch(/<span style="color:#[0-9A-Fa-f]+">const<\/span>/)
+    expect(html).toContain('<span class="diff-word-chg">2</span>')
   })
 })
