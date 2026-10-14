@@ -57,7 +57,7 @@ const NETWORK_GIT_TIMEOUT_MS = 45_000
 export async function spawnGit(
   args: string[],
   cwd: string = repoRoot,
-  opts?: { timeoutMs?: number; name?: string },
+  opts?: { timeoutMs?: number; name?: string; env?: Record<string, string> },
 ): Promise<{ code: number; stdout: string; stderr: string }> {
   const proc = Bun.spawn(['git', ...args], {
     stdout: 'pipe',
@@ -67,7 +67,7 @@ export async function spawnGit(
     // (git-remote-https) with it — a bare kill only removes `git` itself.
     detached: true,
     // GUI has no TTY — never block waiting for a password prompt.
-    env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
+    env: { ...process.env, ...opts?.env, GIT_TERMINAL_PROMPT: '0' },
   })
 
   const collect = (async () => {

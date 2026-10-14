@@ -820,8 +820,7 @@ app.get('/api/worktree/file', async (c) => {
       .map((s) => s.trim())
       .filter(Boolean)
       .at(-1) ?? filePath.trim()
-  // Compare reads tracked changes against a branch tip; git diff never lists untracked files.
-  const head = kind === 'untracked' ? undefined : await headInfo(repoPath).catch(() => undefined)
+  const head = await headInfo(repoPath).catch(() => undefined)
   const compareUrl = head
     ? '/compare?' + new URLSearchParams({
         repo: repoPath,

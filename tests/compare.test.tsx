@@ -95,7 +95,9 @@ test('direct branch and working tree comparisons, literal paths, rename and bina
     const updatedWork = await compare(repo, { target: 'worktree', scope: 'contracts/' })
     expect(updatedWork.files[0]).toMatchObject({ added: 2, deleted: 1 })
     expect(updatedWork.patch).toContain('+new working')
-    expect((await compare(repo, { target: 'worktree' })).files.some(f => f.path === 'untracked')).toBe(false)
+    // Untracked files appear as additions; branch comparisons stay unaffected.
+    expect((await compare(repo, { target: 'worktree' })).files.find(f => f.path === 'untracked')).toMatchObject({ status: 'A' })
+    expect((await compare(repo, { target: 'HEAD' })).files.some(f => f.path === 'untracked')).toBe(false)
     expect((await compare(repo, { scope: 'missing/' })).files).toEqual([])
     expect((await compare(repo, { file: 'binary' })).patch).toContain('Binary files')
     // Advance main separately: comparison must use its tip, not the merge base.

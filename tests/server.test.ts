@@ -196,12 +196,17 @@ test('Workspace routes repository pages and guards git fragments', async () => {
     expect(compareParams.get('file')).toBe('README.md')
     const linkedComparison = await (await request(compareHref)).text()
     expect(linkedComparison.replace(/<[^>]*>/g, '')).toContain('changed')
-    writeFileSync(path.join(repo, 'untracked.txt'), 'new\n')
+    writeFileSync(path.join(repo, 'untracked.txt'), 'brand new file\n')
     const untrackedFile = await (
       await request(`/api/worktree/file?${query}&kind=untracked&path=untracked.txt`)
     ).text()
-    // git diff never lists untracked files, so Compare could not show this one.
-    expect(untrackedFile).not.toContain('/compare?')
+    const untrackedHref = untrackedFile.match(/href="(\/compare\?[^"]+)"/)![1]!.replaceAll('&amp;', '&')
+    const untrackedComparison = await (await request(untrackedHref)).text()
+    expect(untrackedComparison).toContain('Changed files · 2')
+    expect(untrackedComparison.replace(/<[^>]*>/g, '')).toContain('brand new file')
+    // Compare lists the file through a throwaway index; the real one stays as it was.
+    expect(git(repo, ['diff', '--cached', '--name-only'])).toBe('')
+    expect(git(repo, ['ls-files', '--others'])).toBe('untracked.txt')
     rmSync(path.join(repo, 'untracked.txt'))
     expect(
       (

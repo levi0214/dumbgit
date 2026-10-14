@@ -425,7 +425,7 @@ export type WorkTreeDiffPanelProps =
       absolutePath: string
       patch: string
       image?: ImagePreview
-      /** Full-file reading of this change; absent where Compare cannot show it (untracked files). */
+      /** Full-file reading of this change in Compare. */
       compareUrl?: string
     }
   | { ok: false; stderr: string }
