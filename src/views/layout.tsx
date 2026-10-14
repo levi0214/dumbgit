@@ -671,11 +671,6 @@ body.main-grid-dragging {
   color: var(--muted);
   font-weight: 600;
 }
-/* Hover actions need the room; the tracking remote stays in the title. */
-.branch-prefix:hover .ref-peer-sep,
-.branch-prefix:hover .ref-peer {
-  display: none;
-}
 .log-row-stash {
   color: var(--muted);
 }
@@ -850,6 +845,8 @@ body.main-grid-dragging {
   pointer-events: none;
 }
 .branch-prefix:hover {
+  /* Room for the actions without hiding the name or the synced remote. */
+  max-width: 50%;
   background: rgba(156, 220, 254, 0.22);
   box-shadow: inset 0 0 0 1px rgba(156, 220, 254, 0.4);
   color: #9cdcfe;
