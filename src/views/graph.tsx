@@ -1135,7 +1135,7 @@ function HeadLine(props: { head: HeadInfo }) {
   if (props.head.kind === 'branch') {
     prefix = 'On branch:'
     label = props.head.name
-    tip = `at ${short}`
+    tip = `${props.head.name} at ${short}`
   }
   return (
     <>

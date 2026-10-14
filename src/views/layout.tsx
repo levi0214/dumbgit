@@ -316,11 +316,13 @@ body.main-grid-dragging {
   align-items: center;
 }
 .graph-head-line {
-  flex: 1;
+  /* Zero basis: a long branch name truncates in place instead of wrapping the header. */
+  flex: 1 1 0;
   min-width: 0;
   display: flex;
   align-items: baseline;
   gap: 6px;
+  white-space: nowrap;
 }
 .graph-head-actions {
   display: flex;
@@ -346,6 +348,9 @@ body.main-grid-dragging {
 .head-label {
   font-weight: 700;
   color: #ffffff;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .worktree-panel {
   border-bottom: 1px solid var(--border);
@@ -666,6 +671,11 @@ body.main-grid-dragging {
   color: var(--muted);
   font-weight: 600;
 }
+/* Hover actions need the room; the tracking remote stays in the title. */
+.branch-prefix:hover .ref-peer-sep,
+.branch-prefix:hover .ref-peer {
+  display: none;
+}
 .log-row-stash {
   color: var(--muted);
 }
@@ -734,7 +744,10 @@ body.main-grid-dragging {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  flex-shrink: 0;
+  /* Cap the pill so the subject keeps most of the row; the name truncates, hover actions included. */
+  flex-shrink: 1;
+  min-width: 0;
+  max-width: 40%;
   overflow: visible;
   white-space: nowrap;
   font-size: 12px;
