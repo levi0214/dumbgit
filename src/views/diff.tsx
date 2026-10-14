@@ -425,6 +425,8 @@ export type WorkTreeDiffPanelProps =
       absolutePath: string
       patch: string
       image?: ImagePreview
+      /** Full-file reading of this change; absent where Compare cannot show it (untracked files). */
+      compareUrl?: string
     }
   | { ok: false; stderr: string }
 
@@ -474,6 +476,15 @@ export function WorkTreeDiffPanel(props: WorkTreeDiffPanelProps) {
           <CopyButton title={`copy path for ${props.displayPath}`} />
         </div>
         <div class="worktree-head-actions">
+          {props.compareUrl ? (
+            <a
+              class="worktree-action-btn"
+              href={props.compareUrl}
+              title="Read the whole file in Compare (current branch vs working tree)"
+            >
+              compare
+            </a>
+          ) : null}
           <button
             type="button"
             class="worktree-action-btn"

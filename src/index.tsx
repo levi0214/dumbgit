@@ -820,6 +820,16 @@ app.get('/api/worktree/file', async (c) => {
       .map((s) => s.trim())
       .filter(Boolean)
       .at(-1) ?? filePath.trim()
+  // Compare reads tracked changes against a branch tip; git diff never lists untracked files.
+  const head = kind === 'untracked' ? undefined : await headInfo(repoPath).catch(() => undefined)
+  const compareUrl = head
+    ? '/compare?' + new URLSearchParams({
+        repo: repoPath,
+        base: head.kind === 'branch' ? `refs/heads/${head.name}` : 'HEAD',
+        target: 'worktree',
+        file: rel,
+      })
+    : undefined
   return c.html(
     <WorkTreeDiffPanel
       ok={true}
@@ -828,6 +838,7 @@ app.get('/api/worktree/file', async (c) => {
       absolutePath={path.resolve(repoPath, rel)}
       patch={r.patch}
       image={r.image}
+      compareUrl={compareUrl}
     />,
     200,
   )

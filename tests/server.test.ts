@@ -185,6 +185,24 @@ test('Workspace routes repository pages and guards git fragments', async () => {
       })
 
     writeFileSync(path.join(repo, 'README.md'), 'changed\n')
+    const worktreeFile = await (
+      await request(`/api/worktree/file?${query}&kind=unstaged&path=README.md`)
+    ).text()
+    const compareHref = worktreeFile.match(/href="(\/compare\?[^"]+)"/)![1]!.replaceAll('&amp;', '&')
+    const compareParams = new URL(compareHref, LOCAL_ORIGIN).searchParams
+    expect(compareParams.get('repo')).toBe(repo)
+    expect(compareParams.get('base')).toBe('refs/heads/main')
+    expect(compareParams.get('target')).toBe('worktree')
+    expect(compareParams.get('file')).toBe('README.md')
+    const linkedComparison = await (await request(compareHref)).text()
+    expect(linkedComparison.replace(/<[^>]*>/g, '')).toContain('changed')
+    writeFileSync(path.join(repo, 'untracked.txt'), 'new\n')
+    const untrackedFile = await (
+      await request(`/api/worktree/file?${query}&kind=untracked&path=untracked.txt`)
+    ).text()
+    // git diff never lists untracked files, so Compare could not show this one.
+    expect(untrackedFile).not.toContain('/compare?')
+    rmSync(path.join(repo, 'untracked.txt'))
     expect(
       (
         await post(

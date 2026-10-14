@@ -1099,6 +1099,7 @@ body.main-grid-dragging {
 .worktree-action-btn {
   font: inherit;
   font-size: 11px;
+  text-decoration: none;
   cursor: pointer;
   padding: 5px 10px;
   border: 1px solid var(--border);
