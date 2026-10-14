@@ -487,10 +487,13 @@ export function CompareView(props: CompareViewProps) {
         {renderChildren(directory, depth + 1)}
       </details>
     })}{node.files.map(file => <a class="compare-file-link" style={`padding-left: ${12 + depth * 14}px`} href={url(file.path)} hx-get={url(file.path)} hx-select="#compare-reader" hx-target="#compare-reader" hx-swap="outerHTML" hx-sync="closest .compare-page:replace" hx-push-url="true" aria-current={r?.selected?.path === file.path ? 'true' : undefined} title={compareFileTitle(file)}>
-        <span class="compare-file-path" data-status={file.status[0]}>{file.path.slice(file.path.lastIndexOf('/') + 1)}</span>
-        <span class="compare-file-stats">{file.binary ? <span class="file-num-binary">binary</span> : <>
-          {file.added !== undefined ? <span class="file-num-add">+{file.added}</span> : null}
-          {file.deleted !== undefined ? <span class="file-num-del">−{file.deleted}</span> : null}
+        <span class="compare-file-badge" data-status={file.status[0]} aria-hidden="true">{file.status[0]}</span>
+        <span class="compare-file-path" data-status={file.status[0]}>{file.path.slice(file.path.lastIndexOf('/') + 1)}
+          {file.oldPath ? <span class="compare-file-old">← {file.oldPath}</span> : null}</span>
+        <span class="compare-file-stats">{file.binary ? <span class="file-num-binary">binary</span>
+          : !file.added && !file.deleted ? <span class="file-num-binary">{({ R: 'renamed', C: 'copied', T: 'type', M: 'mode' } as Record<string, string>)[file.status[0]!] ?? 'empty'}</span> : <>
+          {file.added ? <span class="file-num-add">+{file.added}</span> : null}
+          {file.deleted ? <span class="file-num-del">−{file.deleted}</span> : null}
         </>}</span></a>)}</>
   }
   return <main class="compare-page">
